@@ -1,0 +1,15 @@
+<launch>
+    <!-- 加载传感器配置 -->
+    <rosparam command="load" 
+              file="$(find magnetic_pose_estimation)/config/sensor_config.yaml" />
+              
+    <!-- 启动可视化节点 -->
+    <node pkg="magnetic_pose_estimation" 
+          type="magnetic_field_visualizer" 
+          name="magnetic_field_visualizer" 
+          output="screen" />
+          
+    <!-- 启动 RViz -->
+    <node pkg="rviz" type="rviz" name="rviz" 
+          args="-d $(find magnetic_pose_estimation)/config/magnetic_field.rviz" />
+</launch>
