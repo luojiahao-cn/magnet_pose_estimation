@@ -2,6 +2,7 @@
 #include <visualization_msgs/MarkerArray.h>
 #include <tf2/LinearMath/Quaternion.h>
 #include <cmath>
+#include <map>
 #include "magnetic_pose_estimation/sensor_config.hpp"
 #include "magnetic_pose_estimation/MagneticField.h"
 
@@ -14,15 +15,17 @@ public:
             return;
         }
 
-        // 创建发布器
-        marker_pub_ = nh_.advertise<visualization_msgs::MarkerArray>("magnetic_field_markers", 1);
+        // 为每种类型创建单独的发布器
+        real_marker_pub_ = nh_.advertise<visualization_msgs::MarkerArray>("magnetic_field_markers/real", 100);
+        sim_marker_pub_ = nh_.advertise<visualization_msgs::MarkerArray>("magnetic_field_markers/simulation", 100);
+        pred_marker_pub_ = nh_.advertise<visualization_msgs::MarkerArray>("magnetic_field_markers/predicted", 100);
 
         // 创建订阅器
-        real_sub_ = nh_.subscribe("/magnetic_field/real", 1, 
+        real_sub_ = nh_.subscribe("/magnetic_field/real", 100, 
             &MagneticFieldVisualizer::realCallback, this);
-        sim_sub_ = nh_.subscribe("/magnetic_field/simulation", 1, 
+        sim_sub_ = nh_.subscribe("/magnetic_field/simulation", 100, 
             &MagneticFieldVisualizer::simCallback, this);
-        pred_sub_ = nh_.subscribe("/magnetic_field/predicted", 1, 
+        pred_sub_ = nh_.subscribe("/magnetic_field/predicted", 100, 
             &MagneticFieldVisualizer::predCallback, this);
 
         // 初始化标记
@@ -30,6 +33,9 @@ public:
     }
 
 private:
+    // 添加ID到索引的映射
+    std::map<int, size_t> id_to_index_;
+
     void initializeMarkers() {
         const auto& sensors = magnetic_pose_estimation::SensorConfig::getInstance().getAllSensors();
         
@@ -39,6 +45,9 @@ private:
         // 初始化每个传感器的标记
         for (size_t i = 0; i < sensors.size(); ++i) {
             const auto& sensor = sensors[i];
+            // 存储ID到索引的映射
+            id_to_index_[sensor.id] = i;
+            
             for (int j = 0; j < 3; ++j) {
                 auto& marker = sensor_markers_.markers[i * 3 + j];
                 marker.header.frame_id = magnetic_pose_estimation::SensorConfig::getInstance().getParentFrame();
@@ -76,9 +85,22 @@ private:
 
     void updateMarkers(const magnetic_pose_estimation::MagneticField::ConstPtr& msg, int source_index) {
         magnetic_pose_estimation::SensorInfo sensor;
-        // 使用 sensor_id 和 getSensorById
+
         if (magnetic_pose_estimation::SensorConfig::getInstance().getSensorById(msg->sensor_id, sensor)) {
-            auto& marker = sensor_markers_.markers[sensor.id * 3 + source_index];
+            // 使用映射获取正确的索引
+            auto it = id_to_index_.find(msg->sensor_id);
+            if (it == id_to_index_.end()) {
+                ROS_WARN("未找到传感器ID %d 的索引映射", msg->sensor_id);
+                return;
+            }
+            
+            size_t marker_index = it->second * 3 + source_index;
+            if (marker_index >= sensor_markers_.markers.size()) {
+                ROS_ERROR("标记索引越界: %zu >= %zu", marker_index, sensor_markers_.markers.size());
+                return;
+            }
+            
+            auto& marker = sensor_markers_.markers[marker_index];
             marker.header.stamp = ros::Time::now();
             
             // 设置箭头方向和长度
@@ -105,9 +127,26 @@ private:
             
             // 更新传感器位姿
             marker.pose.position = msg->sensor_pose.position;
+
+            // 设置生存时间
+            marker.lifetime = ros::Duration(0.1); 
+
+            // 创建单独的MarkerArray用于发布
+            visualization_msgs::MarkerArray current_markers;
+            current_markers.markers.push_back(marker);
             
-            // 发布更新后的标记
-            marker_pub_.publish(sensor_markers_);
+            // 根据数据源选择对应的发布器
+            switch(source_index) {
+                case 0:
+                    real_marker_pub_.publish(current_markers);
+                    break;
+                case 1:
+                    sim_marker_pub_.publish(current_markers);
+                    break;
+                case 2:
+                    pred_marker_pub_.publish(current_markers);
+                    break;
+            }
         }
     }
 
@@ -124,7 +163,7 @@ private:
     }
 
     ros::NodeHandle& nh_;
-    ros::Publisher marker_pub_;
+    ros::Publisher real_marker_pub_, sim_marker_pub_, pred_marker_pub_;  // 分别用于发布三种类型的标记
     ros::Subscriber real_sub_, sim_sub_, pred_sub_;
     visualization_msgs::MarkerArray sensor_markers_;
 };
@@ -134,8 +173,12 @@ int main(int argc, char** argv) {
     ros::init(argc, argv, "magnetic_field_visualizer");
     ros::NodeHandle nh;
 
+    // 创建异步处理器，使用3个线程
+    ros::AsyncSpinner spinner(50);
+    spinner.start(); // 启动异步处理
+
     MagneticFieldVisualizer visualizer(nh);
 
-    ros::spin();
+    ros::waitForShutdown();
     return 0;
 }

@@ -111,7 +111,7 @@ const std::vector<SensorInfo>& SensorConfig::getAllSensors() const {
     return sensors_;
 }
 
-// 重命名函数
+
 bool SensorConfig::getSensorById(int id, SensorInfo& sensor) const {
     auto it = id_index_map_.find(id);
     if (it == id_index_map_.end()) {

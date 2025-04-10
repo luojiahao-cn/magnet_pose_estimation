@@ -10,9 +10,9 @@ frames:
     orientation: [0.0, 0.0, 0.0]  # [roll, pitch, yaw] in radians
 
 sensors:
-  # - id: 1
-  #   position: [0.0, 0.4, 0.0]
-  #   orientation: [0.0, 0.0, 0.0]  # RPY格式 (单位: rad)
+  - id: 1
+    position: [0.0, 0.4, 0.0]
+    orientation: [0.0, 0.0, 0.0]  # RPY格式 (单位: rad)
   - id: 2
     position: [0.1, 0.4, 0.0]
     orientation: [0.0, 0.0, 0.0]
@@ -22,9 +22,9 @@ sensors:
   - id: 4
     position: [0.3, 0.4, 0.0]
     orientation: [0.0, 0.0, 0.0]
-  # - id: 5
-  #   position: [0.4, 0.4, 0.0]
-  #   orientation: [0.0, 0.0, 0.0]
+  - id: 5
+    position: [0.4, 0.4, 0.0]
+    orientation: [0.0, 0.0, 0.0]
   - id: 6
     position: [0.0, 0.3, 0.0]
     orientation: [0.0, 0.0, 0.0]
@@ -58,9 +58,9 @@ sensors:
   - id: 16
     position: [0.0, 0.1, 0.0]
     orientation: [0.0, 0.0, 0.0]
-  # - id: 17
-  #   position: [0.1, 0.1, 0.0]
-  #   orientation: [0.0, 0.0, 0.0]
+  - id: 17
+    position: [0.1, 0.1, 0.0]
+    orientation: [0.0, 0.0, 0.0]
   - id: 18
     position: [0.2, 0.1, 0.0]
     orientation: [0.0, 0.0, 0.0]

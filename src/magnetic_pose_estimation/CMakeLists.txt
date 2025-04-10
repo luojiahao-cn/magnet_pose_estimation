@@ -53,3 +53,9 @@ target_link_libraries(magnetic_field_visualizer
   ${catkin_LIBRARIES}
 )
 
+add_executable(test_publisher_node src/test_publisher_node.cpp)
+target_link_libraries(test_publisher_node
+  ${PROJECT_NAME}
+  ${catkin_LIBRARIES}
+)
+
