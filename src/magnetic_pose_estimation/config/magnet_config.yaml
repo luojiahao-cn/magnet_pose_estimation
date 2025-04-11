@@ -30,10 +30,23 @@ real:
 
 # 可视化参数
 visualization:
-  # 箭头标记参数
-  arrow:
-    scale: 0.1     # 箭头缩放因子
-    shaft_diameter: 0.01  # 箭头轴直径，单位：m
-    head_diameter: 0.02   # 箭头头部直径，单位：m
-    lifetime: 0.1        # 标记存活时间，单位：s
+  # 磁场箭头标记参数
+  magnetic_field_marker:
+    arrow:
+      shaft_diameter: 0.0002  # 箭头轴的直径
+      head_diameter: 0.001   # 箭头头部直径
+    field_scale: 0.001  # 磁场强度缩放因子
+    lifetime: 0.1    # 标记存活时间，单位：s
+    colors:
+      real: [1.0, 0.0, 0.0]       # 红色
+      simulation: [0.0, 1.0, 0.0]  # 绿色
+      predicted: [0.0, 0.0, 1.0]   # 蓝色
+
+  # 磁铁标记参数
+  magnet_marker:
+    scale:
+      x: 0.001  # 圆柱直径
+      y: 0.001  # 圆柱直径
+      z: 0.002  # 圆柱高度
+    color: [0.0, 0.0, 0.0, 1.0]  # 黑色，完全不透明
 
