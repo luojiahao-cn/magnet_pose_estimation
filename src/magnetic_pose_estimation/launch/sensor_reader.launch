@@ -1,0 +1,13 @@
+<launch>
+    <!-- 加载串口配置文件 -->
+    <rosparam command="load" file="$(find magnetic_pose_estimation)/config/serial_config.yaml" />
+
+    <!-- 加载传感器配置文件 -->
+    <rosparam command="load" file="$(find magnetic_pose_estimation)/config/sensor_config.yaml" />
+
+    <!-- 启动传感器读取节点 -->
+    <node name="sensor_reader" pkg="magnetic_pose_estimation" type="sensor_reader_node" output="screen">
+        <!-- 如果需要重映射话题，可以在这里添加 -->
+        <!-- <remap from="/magnetic_field/real" to="/custom_topic_name"/> -->
+    </node>
+</launch>

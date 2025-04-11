@@ -13,6 +13,7 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   tf2
   tf2_ros
+  serial
 )
 
 find_package(Eigen3 REQUIRED)
@@ -115,3 +116,9 @@ add_dependencies(magnet_pose_estimator_node
   ${catkin_EXPORTED_TARGETS}
 )
 
+# 添加新的可执行文件
+add_executable(sensor_reader_node src/sensor_reader_node.cpp)
+target_link_libraries(sensor_reader_node
+  ${catkin_LIBRARIES}
+  ${PROJECT_NAME}
+)

@@ -1,0 +1,8 @@
+serial:
+  port: "/dev/ttyUSB0"
+  baud_rate: 921600
+  timeout: 1000
+  topic: "/magnetic_field/real"
+  queue_size: 100
+  frame_id: "world"
+  sleep_time: 1  # 读取线程休眠时间(毫秒)
