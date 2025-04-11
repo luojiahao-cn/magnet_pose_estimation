@@ -1,0 +1,39 @@
+# 仿真相关配置
+simulation:
+  # 磁铁参数配置
+  magnet:
+    strength: 0.1  # 磁矩大小，单位：安培·米² (A·m²)
+    direction: [0, 0, 1]  # 磁矩方向向量，指向z轴正方向
+
+  # 运动路径参数
+  path:
+    # 矩形路径尺寸
+    width: 0.03    # 宽度，单位：m（3厘米）
+    height: 0.03   # 高度，单位：m（3厘米）
+    z: 0.01        # 平面高度，单位：m（1厘米）
+    
+    # 矩形路径中心位置
+    center:
+      x: 0.02      # x坐标，单位：m（2厘米）
+      y: 0.02      # y坐标，单位：m（2厘米）
+    
+    # 运动控制参数
+    update_rate: 10.0  # 位置更新频率，单位：Hz
+    points_per_side: 20  # 每条边的路径点数量
+
+# 实际测量相关配置
+real:
+  # 磁铁参数配置
+  magnet:
+    strength: 100.0  # 磁矩大小，单位：安培·米² (A·m²)
+    direction: [0, 0, 1]  # 磁矩方向向量，指向z轴正方向
+
+# 可视化参数
+visualization:
+  # 箭头标记参数
+  arrow:
+    scale: 0.1     # 箭头缩放因子
+    shaft_diameter: 0.01  # 箭头轴直径，单位：m
+    head_diameter: 0.02   # 箭头头部直径，单位：m
+    lifetime: 0.1        # 标记存活时间，单位：s
+

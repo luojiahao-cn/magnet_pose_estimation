@@ -12,12 +12,13 @@ find_package(catkin REQUIRED COMPONENTS
   tf2_ros
 )
 
-
+find_package(Eigen3 REQUIRED)
 
 ## Generate messages in the 'msg' folder
 add_message_files(
   FILES
   MagneticField.msg
+  MagnetPose.msg
 )
 
 ## Generate added messages and services with any dependencies listed here
@@ -40,6 +41,7 @@ catkin_package(
 include_directories(
   include
   ${catkin_INCLUDE_DIRS}
+  ${EIGEN3_INCLUDE_DIR}
 )
 
 add_library(${PROJECT_NAME}
@@ -53,9 +55,41 @@ target_link_libraries(magnetic_field_visualizer
   ${catkin_LIBRARIES}
 )
 
-add_executable(test_publisher_node src/test_publisher_node.cpp)
+add_executable(test_publisher_node test/test_publisher_node.cpp)
 target_link_libraries(test_publisher_node
   ${PROJECT_NAME}
   ${catkin_LIBRARIES}
+)
+
+# 添加可执行文件
+add_executable(simulation_node 
+  src/simulation_node.cpp
+)
+
+# 添加依赖项
+target_link_libraries(simulation_node
+  ${PROJECT_NAME}
+  ${catkin_LIBRARIES}
+)
+
+# 确保消息生成在编译之前完成
+add_dependencies(simulation_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+
+# 添加新的源文件
+add_library(magnetic_field_calculator
+  src/magnetic_field_calculator.cpp
+)
+
+# 链接依赖
+target_link_libraries(magnetic_field_calculator
+  ${catkin_LIBRARIES}
+  ${EIGEN3_LIBRARIES}
+)
+
+# 确保 simulation_node 链接新的库
+target_link_libraries(simulation_node
+  magnetic_field_calculator
+  ${catkin_LIBRARIES}
+  ${EIGEN3_LIBRARIES}
 )
 
