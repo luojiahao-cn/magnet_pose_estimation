@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.0.2)
 project(magnetic_pose_estimation)
 
+# 设置C++标准为C++17
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
@@ -91,5 +94,24 @@ target_link_libraries(simulation_node
   magnetic_field_calculator
   ${catkin_LIBRARIES}
   ${EIGEN3_LIBRARIES}
+)
+
+# 添加磁铁位置估计节点
+add_executable(magnet_pose_estimator_node 
+  src/magnet_pose_estimator_node.cpp
+)
+
+# 添加依赖项
+target_link_libraries(magnet_pose_estimator_node
+  ${PROJECT_NAME}
+  magnetic_field_calculator
+  ${catkin_LIBRARIES}
+  ${EIGEN3_LIBRARIES}
+)
+
+# 确保消息生成在编译之前完成
+add_dependencies(magnet_pose_estimator_node 
+  ${${PROJECT_NAME}_EXPORTED_TARGETS} 
+  ${catkin_EXPORTED_TARGETS}
 )
 

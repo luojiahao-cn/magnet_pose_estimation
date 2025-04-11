@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<launch>
+    <!-- 加载配置文件 -->
+    <rosparam command="load" file="$(find magnetic_pose_estimation)/config/sensor_config.yaml" />
+    <rosparam command="load" file="$(find magnetic_pose_estimation)/config/magnet_config.yaml" />
+
+    <!-- 启动仿真节点 -->
+    <node name="simulation_node" pkg="magnetic_pose_estimation" type="simulation_node"
+        output="screen" />
+
+    <!-- 启动磁铁位置估计节点 -->
+    <node name="magnet_pose_estimator" pkg="magnetic_pose_estimation"
+        type="magnet_pose_estimator_node" output="screen">
+        <param name="max_iterations" value="100" />
+        <param name="convergence_threshold" value="1e-6" />
+    </node>
+
+
+    <!-- 启动可视化节点 -->
+    <node pkg="magnetic_pose_estimation" type="magnetic_field_visualizer"
+        name="magnetic_field_visualizer"
+        output="screen" />
+
+    <!-- 启动 RViz -->
+    <node pkg="rviz" type="rviz" name="rviz" required="true"
+        args="-d $(find magnetic_pose_estimation)/config/visualization.rviz" />
+</launch>

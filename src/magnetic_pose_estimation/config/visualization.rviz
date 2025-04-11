@@ -12,7 +12,6 @@ Panels:
         - /MarkerArray3/Namespaces1
         - /MagnetMarker1
         - /TF1
-        - /TF1/Frames1
       Splitter Ratio: 0.4377880096435547
     Tree Height: 1932
   - Class: rviz/Selection
@@ -97,7 +96,9 @@ Visualization Manager:
       Frame Timeout: 15
       Frames:
         All Enabled: true
-        magnet:
+        magnet_predicted:
+          Value: true
+        magnet_simulation:
           Value: true
         sensor_1:
           Value: true
@@ -159,7 +160,9 @@ Visualization Manager:
       Show Names: true
       Tree:
         world:
-          magnet:
+          magnet_predicted:
+            {}
+          magnet_simulation:
             {}
           sensor_1:
             {}
@@ -241,7 +244,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 0.02503812499344349
+      Distance: 0.03939797729253769
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -257,9 +260,9 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.740398108959198
+      Pitch: 0.7053981423377991
       Target Frame: <Fixed Frame>
-      Yaw: 4.620411396026611
+      Yaw: 4.6804094314575195
     Saved: ~
 Window Geometry:
   Displays:
