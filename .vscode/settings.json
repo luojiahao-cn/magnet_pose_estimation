@@ -8,5 +8,6 @@
         "/home/lawkaho/workshop/magnet_pose_estimation/devel/lib/python3/dist-packages",
         "/home/lawkaho/workshop/zlab_robots/catkin_ws/devel/lib/python3/dist-packages",
         "/opt/ros/noetic/lib/python3/dist-packages"
-    ]
+    ],
+    "cmake.ignoreCMakeListsMissing": true
 }
