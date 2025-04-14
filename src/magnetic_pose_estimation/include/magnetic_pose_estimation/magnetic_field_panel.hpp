@@ -5,7 +5,9 @@
 #include <rviz/panel.h>
 #include <QPushButton>
 #include <QVBoxLayout>
+#include <QString>
 #include <magnetic_pose_estimation/MagneticField.h>
+#include <std_msgs/String.h>
 
 namespace magnetic_pose_estimation
 {
@@ -21,17 +23,12 @@ namespace magnetic_pose_estimation
         void onInitializeClicked();
         void onRestoreClicked();
 
-    protected:
-        void magneticFieldCallback(const magnetic_pose_estimation::MagneticField::ConstPtr &msg);
-
     private:
         ros::NodeHandle nh_;
-        ros::Subscriber magnetic_field_sub_;
-        std::map<int, magnetic_pose_estimation::MagneticField> initial_readings_;
 
         QPushButton *initialize_button_;
         QPushButton *restore_button_;
-        bool is_initializing_;
+
     };
 
 } // end namespace magnetic_pose_estimation

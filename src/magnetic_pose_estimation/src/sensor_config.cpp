@@ -98,7 +98,8 @@ bool SensorConfig::loadConfig(const ros::NodeHandle& nh) {
             }
         }
 
-        ROS_INFO("成功加载 %lu 个传感器的配置", sensors_.size());
+        std::string node_name = ros::this_node::getName();
+        ROS_INFO("%s 成功加载 %lu 个传感器的配置", node_name.c_str(), sensors_.size());
         return true;
     }
     catch (const std::exception& e) {

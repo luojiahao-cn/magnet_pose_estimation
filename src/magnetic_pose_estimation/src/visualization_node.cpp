@@ -147,7 +147,7 @@ private:
         geometry_msgs::TransformStamped sensor_tf;
         sensor_tf.header.stamp = ros::Time::now();
         sensor_tf.header.frame_id = "world";
-        sensor_tf.child_frame_id = "sensor_" + source + "_" + std::to_string(msg->sensor_id);
+        sensor_tf.child_frame_id = "sensor_" + std::to_string(msg->sensor_id);
         
         sensor_tf.transform.translation.x = msg->sensor_pose.position.x;
         sensor_tf.transform.translation.y = msg->sensor_pose.position.y;
