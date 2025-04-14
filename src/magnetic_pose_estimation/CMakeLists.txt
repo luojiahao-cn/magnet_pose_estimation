@@ -14,6 +14,7 @@ find_package(catkin REQUIRED COMPONENTS
   tf2
   tf2_ros
   serial
+  rviz
 )
 
 find_package(Eigen3 REQUIRED)
@@ -35,7 +36,7 @@ generate_messages(
 
 
 catkin_package(
-#  INCLUDE_DIRS include
+ INCLUDE_DIRS include
 #  LIBRARIES magnetic_pose_estimation
 #  CATKIN_DEPENDS geometry_msgs message_generation roscpp sensor_msgs std_msgs tf2 tf2_ros
 #  DEPENDS system_lib
@@ -121,4 +122,42 @@ add_executable(sensor_reader_node src/sensor_reader_node.cpp)
 target_link_libraries(sensor_reader_node
   ${catkin_LIBRARIES}
   ${PROJECT_NAME}
+)
+
+
+
+link_directories(${catkin_LIBRARY_DIRS})
+
+set(CMAKE_AUTOMOC ON)
+
+if(rviz_QT_VERSION VERSION_LESS "5")
+    message(STATUS "Using Qt4 based on the rviz_QT_VERSION: ${rviz_QT_VERSION}")
+    find_package(Qt4 ${rviz_QT_VERSION} EXACT REQUIRED QtCore QtGui)
+    ## pull in all required include dirs, define QT_LIBRARIES, etc.
+    include(${QT_USE_FILE})
+else()
+    message(STATUS "Using Qt5 based on the rviz_QT_VERSION: ${rviz_QT_VERSION}")
+    find_package(Qt5 ${rviz_QT_VERSION} EXACT REQUIRED Core Widgets)
+    ## make target_link_libraries(${QT_LIBRARIES}) pull in all required dependencies
+    set(QT_LIBRARIES Qt5::Widgets)
+endif()
+
+add_definitions(-DQT_NO_KEYWORDS)
+
+
+add_library(magnetic_field_panel 
+    src/magnetic_field_panel.cpp 
+    include/magnetic_pose_estimation/magnetic_field_panel.hpp)
+
+
+add_dependencies(magnetic_field_panel 
+    ${${PROJECT_NAME}_EXPORTED_TARGETS} 
+    ${catkin_EXPORTED_TARGETS}
+)
+
+
+
+target_link_libraries(magnetic_field_panel 
+    ${QT_LIBRARIES} 
+    ${catkin_LIBRARIES}
 )
