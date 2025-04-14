@@ -18,29 +18,9 @@ simulation:
       y: 0.02      # y坐标，单位：m（2厘米）
     
     # 运动控制参数
-    update_rate: 10.0  # 位置更新频率，单位：Hz
+    update_rate: 100.0  # 位置更新频率，单位：Hz
     points_per_side: 20  # 每条边的路径点数量
 
-# 实际测量相关配置
-real:
-  # 磁铁参数配置
-  magnet:
-    strength: 1.0  # 磁矩大小，单位：安培·米² (A·m²)
-    direction: [0, 0, 1]  # 磁矩方向向量，指向z轴正方向
 
-# 可视化参数
-visualization:
-  magnetic_field_marker:
-    color: [0.0, 0.0, 1.0, 1.0]  # RGBA 格式
-    field_scale: 0.001  # 磁场可视化比例，单位：m
-    lifetime: 0.1   # 磁场可视化持续时间，单位：秒
-    arrow:
-      shaft_diameter: 0.0001  # 箭头轴的直径，单位：m（1厘米）
-      head_diameter: 0.0005 # 箭头头部的直径，单位：m（2厘米）
-  magnet_marker:
-    scale:
-      x: 0.001  # 磁铁标记的直径，单位：m（1厘米）
-      y: 0.001  # 磁铁标记的直径，单位：m（1厘米）
-      z: 0.002  # 磁铁标记的高度，单位：m（2厘米）
-    color: [1.0, 0.0, 0.0, 1.0]  # RGBA 格式，红色
+
 

@@ -1,5 +1,8 @@
 <?xml version="1.0"?>
 <launch>
+    <!-- 定义参数，默认为true -->
+    <arg name="sim" default="true" doc="是否启动仿真节点" />
+
     <!-- 加载配置文件 -->
     <rosparam command="load" file="$(find magnetic_pose_estimation)/config/sensor_config.yaml" />
     <rosparam command="load" file="$(find magnetic_pose_estimation)/config/magnet_config.yaml" />
@@ -11,6 +14,15 @@
         <param name="convergence_threshold" value="1e-6" />
     </node>
 
+    <!-- 根据sim参数决定是否启动仿真节点 -->
+    <group if="$(arg sim)">
+        <node name="simulation_node" pkg="magnetic_pose_estimation" type="simulation_node"
+            output="screen" />
+    </group>
+    <group unless="$(arg sim)">
+        <node name="real_sensor_node" pkg="magnetic_pose_estimation" type="real_sensor_node"
+            output="screen" />
+    </group>
 
     <!-- 启动可视化节点 -->
     <node pkg="magnetic_pose_estimation" type="magnetic_field_visualizer"

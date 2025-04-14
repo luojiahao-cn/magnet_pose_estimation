@@ -27,6 +27,8 @@ public:
     
     // 根据ID获取单个传感器信息
     bool getSensorById(int id, SensorInfo& sensor) const;  
+
+    int getSensorCount() const { return sensors_.size(); }
     
     // 获取坐标系信息
     std::string getParentFrame() const { return parent_frame_; }
