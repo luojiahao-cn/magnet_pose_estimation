@@ -27,7 +27,7 @@ public:
         nh.param<std::string>("serial/port", port, "/dev/ttyUSB0");
         nh.param<int>("serial/baud_rate", baud_rate, 921600);
         nh.param<int>("serial/timeout", timeout, 1000);
-        nh.param<std::string>("serial/topic", topic, "/magnetic_field/real");
+        nh.param<std::string>("serial/topic", topic, "/magnetic_field/raw_data");
         nh.param<int>("serial/queue_size", queue_size, 100);
         nh.param<std::string>("serial/frame_id", frame_id, "world");
         nh.param<int>("serial/sleep_time", sleep_time, 1);

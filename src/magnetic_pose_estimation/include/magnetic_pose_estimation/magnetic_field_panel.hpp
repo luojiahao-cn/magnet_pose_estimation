@@ -20,15 +20,16 @@ namespace magnetic_pose_estimation
         virtual ~MagneticFieldPanel();
 
     protected Q_SLOTS:
-        void onInitializeClicked();
+        void onCalibrateClicked();
         void onRestoreClicked();
 
     private:
         ros::NodeHandle nh_;
 
-        QPushButton *initialize_button_;
+        QPushButton *calibrate_button_;
         QPushButton *restore_button_;
-
+        ros::ServiceClient calibrate_client_;
+        ros::ServiceClient reset_client_;
     };
 
 } // end namespace magnetic_pose_estimation

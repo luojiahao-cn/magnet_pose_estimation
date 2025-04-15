@@ -1,5 +1,5 @@
 # 仿真相关配置
-simulation:
+simulation_config:
   # 磁铁参数配置
   magnet:
     strength: 0.1  # 磁矩大小，单位：安培·米² (A·m²)
@@ -18,7 +18,7 @@ simulation:
       y: 0.02      # y坐标，单位：m（2厘米）
     
     # 运动控制参数
-    update_rate: 100.0  # 位置更新频率，单位：Hz
+    update_rate: 20.0  # 位置更新频率，单位：Hz
     points_per_side: 20  # 每条边的路径点数量
 
 

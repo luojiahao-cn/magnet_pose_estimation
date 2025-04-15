@@ -69,8 +69,8 @@ private:
 
         // 从参数服务器读取箭头参数
         double shaft_diameter, head_diameter;
-        nh_.getParam("/visualization/magnetic_field_marker/arrow/shaft_diameter", shaft_diameter);
-        nh_.getParam("/visualization/magnetic_field_marker/arrow/head_diameter", head_diameter);
+        nh_.getParam("/visualization_config/magnetic_field_marker/arrow/shaft_diameter", shaft_diameter);
+        nh_.getParam("/visualization_config/magnetic_field_marker/arrow/head_diameter", head_diameter);
 
         sensor_marker_template_.scale.x = shaft_diameter;
         sensor_marker_template_.scale.y = head_diameter;
@@ -78,7 +78,7 @@ private:
         
         // 读取箭头颜色
         std::vector<double> color;
-        nh_.getParam("/visualization/magnetic_field_marker/color", color);
+        nh_.getParam("/visualization_config/magnetic_field_marker/color", color);
         sensor_marker_template_.color.r = color[0];
         sensor_marker_template_.color.g = color[1];
         sensor_marker_template_.color.b = color[2];
@@ -97,11 +97,11 @@ private:
         
         // 从参数服务器读取磁铁标记参数
         std::vector<double> scale, color;
-        nh_.getParam("/visualization/magnet_marker/scale/x", magnet_marker_.scale.x);
-        nh_.getParam("/visualization/magnet_marker/scale/y", magnet_marker_.scale.y);
-        nh_.getParam("/visualization/magnet_marker/scale/z", magnet_marker_.scale.z);
-        
-        nh_.getParam("/visualization/magnet_marker/color", color);
+        nh_.getParam("/visualization_config/magnet_marker/scale/x", magnet_marker_.scale.x);
+        nh_.getParam("/visualization_config/magnet_marker/scale/y", magnet_marker_.scale.y);
+        nh_.getParam("/visualization_config/magnet_marker/scale/z", magnet_marker_.scale.z);
+
+        nh_.getParam("/visualization_config/magnet_marker/color", color);
         magnet_marker_.color.r = color[0];
         magnet_marker_.color.g = color[1];
         magnet_marker_.color.b = color[2];
@@ -126,8 +126,8 @@ private:
         
         // 从参数服务器读取磁场缩放因子和标记存活时间
         double field_scale, lifetime;
-        nh_.getParam("/visualization/magnetic_field_marker/field_scale", field_scale);
-        nh_.getParam("/visualization/magnetic_field_marker/lifetime", lifetime);
+        nh_.getParam("/visualization_config/magnetic_field_marker/field_scale", field_scale);
+        nh_.getParam("/visualization_config/magnetic_field_marker/lifetime", lifetime);
 
         marker.points.resize(2);
         marker.points[0].x = marker.points[0].y = marker.points[0].z = 0.0;

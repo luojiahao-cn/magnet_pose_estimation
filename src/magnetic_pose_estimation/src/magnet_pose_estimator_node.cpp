@@ -25,10 +25,15 @@ MagnetPoseEstimator::MagnetPoseEstimator(ros::NodeHandle& nh) : nh_(nh)
     magnet_pose_pub_ = nh_.advertise<MagnetPose>("/magnet_pose/predicted", 10);
     magnetic_field_sub_ = nh_.subscribe("/magnetic_field_data/raw_data", 100,
                                       &MagnetPoseEstimator::magneticFieldCallback, this);
+    magnetic_field_processed_pub_ = nh_.advertise<MagneticField>("/magnetic_field_data/processed", 100);
     
     // 添加地磁场校准服务
     calibrate_service_ = nh_.advertiseService("/magnet_pose/calibrate_earth_field",
                                              &MagnetPoseEstimator::calibrateServiceCallback, this);
+
+    // 添加重置参数服务
+    reset_service_ = nh_.advertiseService("/magnet_pose/reset_to_initial",
+        &MagnetPoseEstimator::resetServiceCallback, this);
 
     ROS_INFO("磁铁位置估计器已初始化，将通过优化估计磁铁参数");
     ROS_INFO("使用 'rosservice call /magnet_pose/calibrate_earth_field' 命令可以校准地磁场");
@@ -44,6 +49,9 @@ void MagnetPoseEstimator::loadParameters()
     nh_.param("estimator_config/magnet/position", position_vec, std::vector<double>{0.01, 0.01, 0.05});
     nh_.param("estimator_config/magnet/direction", direction_vec, std::vector<double>{0, 0, 1});
     nh_.param<double>("estimator_config/magnet/strength", initial_strength_, 1.0);
+
+    // 判断是否需要优化strength
+    optimize_strength_ = (initial_strength_ == 0.0);
 
     // 设置初始参数
     initial_position_ = Eigen::Vector3d(position_vec[0], position_vec[1], position_vec[2]);
@@ -63,10 +71,11 @@ void MagnetPoseEstimator::loadParameters()
     nh_.param<double>("estimator_config/optimization/convergence_threshold", convergence_threshold_, 1e-6);
     nh_.param<double>("estimator_config/optimization/lambda_damping", lambda_damping_, 1e5);
 
-    ROS_INFO("预测参数已加载 - 位置: [%.3f, %.3f, %.3f], 方向: [%.3f, %.3f, %.3f], 强度: %.3f", 
+    ROS_INFO("预测参数已加载 - 位置: [%.3f, %.3f, %.3f], 方向: [%.3f, %.3f, %.3f], 强度: %.3f%s", 
              initial_position_[0], initial_position_[1], initial_position_[2],
              initial_direction_[0], initial_direction_[1], initial_direction_[2], 
-             initial_strength_);
+             initial_strength_,
+             optimize_strength_ ? " (将优化strength)" : "");
     ROS_INFO("优化参数已加载 - \n最大位置变化: %.3f, \n最大误差阈值: %.3f, \n最小改善: %.1f%%, \n最大迭代次数: %d, \n收敛阈值: %.1e, \n阻尼系数: %.1e",
              max_position_change_, max_error_threshold_, min_improvement_ * 100, max_iterations_, convergence_threshold_,lambda_damping_);
     ROS_INFO("参数加载完成");
@@ -137,6 +146,9 @@ void MagnetPoseEstimator::magneticFieldCallback(const MagneticField::ConstPtr& m
     corrected_msg.mag_x = corrected_field.x();
     corrected_msg.mag_y = corrected_field.y();
     corrected_msg.mag_z = corrected_field.z();
+
+    // 发布校正后的磁场数据
+    magnetic_field_processed_pub_.publish(corrected_msg);
     
     // 收集足够的测量数据再进行估计
     measurements_[msg->sensor_id] = corrected_msg;
@@ -173,10 +185,12 @@ void MagnetPoseEstimator::estimateMagnetPose()
     Eigen::Vector3d backup_position = current_position_;
     Eigen::Vector3d backup_direction = magnetic_direction_;
     
-    // 构建状态向量 - 只包含位置(3)和方向(3)共6个参数，不包含强度
-    Eigen::VectorXd state(6);
+    // 构建状态向量
+    int state_dim = optimize_strength_ ? 7 : 6;
+    Eigen::VectorXd state(state_dim);
     state.segment<3>(0) = current_position_;
     state.segment<3>(3) = magnetic_direction_;
+    if (optimize_strength_) state(6) = magnet_strength_;
 
     // Gauss-Newton迭代
     double initial_error = 0.0;
@@ -190,12 +204,12 @@ void MagnetPoseEstimator::estimateMagnetPose()
         // 从状态向量中提取参数
         Eigen::Vector3d position = state.segment<3>(0);
         Eigen::Vector3d direction = state.segment<3>(3);
-        // 归一化方向向量
         direction.normalize();
+        double strength = optimize_strength_ ? state(6) : magnet_strength_;
 
-        // 计算预测的磁场 - 使用固定的磁场强度
+        // 计算预测的磁场
         Eigen::MatrixXd predicted_fields = MagneticFieldCalculator::calculateMagneticField(
-            sensor_positions, position, direction, magnet_strength_);
+            sensor_positions, position, direction, strength);
 
         // 计算残差
         Eigen::MatrixXd residuals = measured_fields - predicted_fields;
@@ -214,11 +228,12 @@ void MagnetPoseEstimator::estimateMagnetPose()
             best_state = state;
         }
 
-        // 计算Jacobian矩阵 - 只考虑6个参数（位置和方向）
-        Eigen::MatrixXd J = calculateJacobian(sensor_positions, position, direction);
+        // 计算Jacobian矩阵
+        Eigen::MatrixXd J = calculateJacobian(sensor_positions, position, direction, strength);
 
         // 使用带阻尼的最小二乘法计算增量
-        Eigen::VectorXd delta = (J.transpose() * J + lambda_damping_ * Eigen::MatrixXd::Identity(6, 6)).ldlt()
+        Eigen::MatrixXd I = Eigen::MatrixXd::Identity(state_dim, state_dim);
+        Eigen::VectorXd delta = (J.transpose() * J + lambda_damping_ * I).ldlt()
                                 .solve(J.transpose() * residuals_vector);
 
         // 检查增量是否合理
@@ -233,6 +248,7 @@ void MagnetPoseEstimator::estimateMagnetPose()
         
         // 强制归一化方向向量
         state.segment<3>(3).normalize();
+        if (optimize_strength_ && state(6) < 0) state(6) = 0.01; // 强度不能为负
 
         // 检查收敛
         if (std::abs(error - last_error) < convergence_threshold_) {
@@ -254,6 +270,7 @@ void MagnetPoseEstimator::estimateMagnetPose()
         // 更新当前参数为最佳状态
         current_position_ = best_state.segment<3>(0);
         magnetic_direction_ = best_state.segment<3>(3).normalized();
+        if (optimize_strength_) magnet_strength_ = best_state(6);
         
         // 检查优化结果是否显著改善了误差
         double error_improvement = (initial_error - best_error) / initial_error;
@@ -294,11 +311,13 @@ void MagnetPoseEstimator::estimateMagnetPose()
 Eigen::MatrixXd MagnetPoseEstimator::calculateJacobian(
     const Eigen::MatrixXd& sensor_positions,
     const Eigen::Vector3d& position,
-    const Eigen::Vector3d& direction)
+    const Eigen::Vector3d& direction,
+    double strength)
 {
     const double delta = 1e-6;
     const int num_sensors = sensor_positions.rows();
-    Eigen::MatrixXd J(num_sensors * 3, 6); // 每个传感器3个分量，总共6个参数（不包括强度）
+    int param_dim = optimize_strength_ ? 7 : 6;
+    Eigen::MatrixXd J(num_sensors * 3, param_dim);
 
     // 计算位置的雅可比矩阵（前3列）
     for (int i = 0; i < 3; ++i)
@@ -307,10 +326,10 @@ Eigen::MatrixXd MagnetPoseEstimator::calculateJacobian(
         pos_plus(i) += delta;
 
         Eigen::MatrixXd field_plus = MagneticFieldCalculator::calculateMagneticField(
-            sensor_positions, pos_plus, direction, magnet_strength_);
+            sensor_positions, pos_plus, direction, strength);
 
         Eigen::MatrixXd field_center = MagneticFieldCalculator::calculateMagneticField(
-            sensor_positions, position, direction, magnet_strength_);
+            sensor_positions, position, direction, strength);
 
         Eigen::MatrixXd difference = field_plus - field_center;
         J.col(i) = Eigen::Map<Eigen::VectorXd>(difference.data(), difference.size()) / delta;
@@ -324,13 +343,23 @@ Eigen::MatrixXd MagnetPoseEstimator::calculateJacobian(
         dir_plus.normalize(); // 保持为单位向量
 
         Eigen::MatrixXd field_plus = MagneticFieldCalculator::calculateMagneticField(
-            sensor_positions, position, dir_plus, magnet_strength_);
+            sensor_positions, position, dir_plus, strength);
 
         Eigen::MatrixXd field_center = MagneticFieldCalculator::calculateMagneticField(
-            sensor_positions, position, direction, magnet_strength_);
+            sensor_positions, position, direction, strength);
 
         Eigen::MatrixXd difference = field_plus - field_center;
         J.col(i + 3) = Eigen::Map<Eigen::VectorXd>(difference.data(), difference.size()) / delta;
+    }
+
+    // 如果需要优化strength，计算第7列
+    if (optimize_strength_) {
+        Eigen::MatrixXd field_plus = MagneticFieldCalculator::calculateMagneticField(
+            sensor_positions, position, direction, strength + delta);
+        Eigen::MatrixXd field_center = MagneticFieldCalculator::calculateMagneticField(
+            sensor_positions, position, direction, strength);
+        Eigen::MatrixXd difference = field_plus - field_center;
+        J.col(6) = Eigen::Map<Eigen::VectorXd>(difference.data(), difference.size()) / delta;
     }
 
     return J;
@@ -428,6 +457,14 @@ Eigen::Vector3d MagnetPoseEstimator::removeEarthMagneticField(const Eigen::Vecto
 bool MagnetPoseEstimator::calibrateServiceCallback(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res)
 {
     calibrateEarthMagneticField();
+    return true;
+}
+
+bool MagnetPoseEstimator::resetServiceCallback(std_srvs::Empty::Request&, std_srvs::Empty::Response&) {
+    // 重置地磁场校准状态
+    earth_magnetic_field_calibrated_ = false;
+    earth_magnetic_field_.clear();
+    
     return true;
 }
 

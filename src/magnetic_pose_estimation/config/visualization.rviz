@@ -8,10 +8,9 @@ Panels:
         - /Status1
         - /MarkerArray1
         - /MarkerArray2
-        - /MarkerArray3
-        - /MarkerArray3/Namespaces1
+        - /MarkerArray2/Namespaces1
         - /MagnetMarker1
-        - /TF1
+        - /TF1/Tree1/world1
       Splitter Ratio: 0.4377880096435547
     Tree Height: 1789
   - Class: rviz/Selection
@@ -60,27 +59,19 @@ Visualization Manager:
       Reference Frame: <Fixed Frame>
       Value: true
     - Class: rviz/MarkerArray
-      Enabled: true
-      Marker Topic: /magnetic_field_markers/predicted
+      Enabled: false
+      Marker Topic: /magnet_marker/simulation
       Name: MarkerArray
       Namespaces:
         {}
       Queue Size: 100
-      Value: true
+      Value: false
     - Class: rviz/MarkerArray
       Enabled: true
-      Marker Topic: /magnetic_field_markers/real
+      Marker Topic: /magnetic_field_markers/raw_data
       Name: MarkerArray
       Namespaces:
-        {}
-      Queue Size: 100
-      Value: true
-    - Class: rviz/MarkerArray
-      Enabled: true
-      Marker Topic: /magnetic_field_markers/simulation
-      Name: MarkerArray
-      Namespaces:
-        simulation: true
+        raw_data: true
       Queue Size: 100
       Value: true
     - Class: rviz/MarkerArray
@@ -100,55 +91,55 @@ Visualization Manager:
         All Enabled: true
         magnet_simulation:
           Value: true
-        sensor_simulation_1:
+        sensor_1:
           Value: true
-        sensor_simulation_10:
+        sensor_10:
           Value: true
-        sensor_simulation_11:
+        sensor_11:
           Value: true
-        sensor_simulation_12:
+        sensor_12:
           Value: true
-        sensor_simulation_13:
+        sensor_13:
           Value: true
-        sensor_simulation_14:
+        sensor_14:
           Value: true
-        sensor_simulation_15:
+        sensor_15:
           Value: true
-        sensor_simulation_16:
+        sensor_16:
           Value: true
-        sensor_simulation_17:
+        sensor_17:
           Value: true
-        sensor_simulation_18:
+        sensor_18:
           Value: true
-        sensor_simulation_19:
+        sensor_19:
           Value: true
-        sensor_simulation_2:
+        sensor_2:
           Value: true
-        sensor_simulation_20:
+        sensor_20:
           Value: true
-        sensor_simulation_21:
+        sensor_21:
           Value: true
-        sensor_simulation_22:
+        sensor_22:
           Value: true
-        sensor_simulation_23:
+        sensor_23:
           Value: true
-        sensor_simulation_24:
+        sensor_24:
           Value: true
-        sensor_simulation_25:
+        sensor_25:
           Value: true
-        sensor_simulation_3:
+        sensor_3:
           Value: true
-        sensor_simulation_4:
+        sensor_4:
           Value: true
-        sensor_simulation_5:
+        sensor_5:
           Value: true
-        sensor_simulation_6:
+        sensor_6:
           Value: true
-        sensor_simulation_7:
+        sensor_7:
           Value: true
-        sensor_simulation_8:
+        sensor_8:
           Value: true
-        sensor_simulation_9:
+        sensor_9:
           Value: true
         world:
           Value: true
@@ -162,55 +153,55 @@ Visualization Manager:
         world:
           magnet_simulation:
             {}
-          sensor_simulation_1:
+          sensor_1:
             {}
-          sensor_simulation_10:
+          sensor_10:
             {}
-          sensor_simulation_11:
+          sensor_11:
             {}
-          sensor_simulation_12:
+          sensor_12:
             {}
-          sensor_simulation_13:
+          sensor_13:
             {}
-          sensor_simulation_14:
+          sensor_14:
             {}
-          sensor_simulation_15:
+          sensor_15:
             {}
-          sensor_simulation_16:
+          sensor_16:
             {}
-          sensor_simulation_17:
+          sensor_17:
             {}
-          sensor_simulation_18:
+          sensor_18:
             {}
-          sensor_simulation_19:
+          sensor_19:
             {}
-          sensor_simulation_2:
+          sensor_2:
             {}
-          sensor_simulation_20:
+          sensor_20:
             {}
-          sensor_simulation_21:
+          sensor_21:
             {}
-          sensor_simulation_22:
+          sensor_22:
             {}
-          sensor_simulation_23:
+          sensor_23:
             {}
-          sensor_simulation_24:
+          sensor_24:
             {}
-          sensor_simulation_25:
+          sensor_25:
             {}
-          sensor_simulation_3:
+          sensor_3:
             {}
-          sensor_simulation_4:
+          sensor_4:
             {}
-          sensor_simulation_5:
+          sensor_5:
             {}
-          sensor_simulation_6:
+          sensor_6:
             {}
-          sensor_simulation_7:
+          sensor_7:
             {}
-          sensor_simulation_8:
+          sensor_8:
             {}
-          sensor_simulation_9:
+          sensor_9:
             {}
       Update Interval: 0
       Value: true
@@ -242,7 +233,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 0.03939797729253769
+      Distance: 0.04596354067325592
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -258,9 +249,9 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.7053981423377991
+      Pitch: 0.7297962307929993
       Target Frame: <Fixed Frame>
-      Yaw: 4.6804094314575195
+      Yaw: 4.770408630371094
     Saved: ~
 Window Geometry:
   Displays:

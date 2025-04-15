@@ -62,12 +62,14 @@ private:
      * @param sensor_positions 传感器位置矩阵
      * @param position 磁铁位置
      * @param direction 磁铁方向
+     * @param strength 磁铁强度
      * @return 雅可比矩阵
      */
     Eigen::MatrixXd calculateJacobian(
         const Eigen::MatrixXd& sensor_positions,
         const Eigen::Vector3d& position,
-        const Eigen::Vector3d& direction);
+        const Eigen::Vector3d& direction,
+        double strength);
 
     /**
      * @brief 发布磁铁位姿消息
@@ -98,13 +100,20 @@ private:
      */
     bool calibrateServiceCallback(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res);
 
+    /**
+     * @brief 重置服务回调函数
+     */
+    bool resetServiceCallback(std_srvs::Empty::Request&, std_srvs::Empty::Response&);
+
     // ROS通信相关
     ros::NodeHandle& nh_;
     ros::Publisher magnet_pose_pub_;
+    ros::Publisher magnetic_field_processed_pub_;
     ros::Subscriber magnetic_field_sub_;
 
     // 校准服务
     ros::ServiceServer calibrate_service_;
+    ros::ServiceServer reset_service_;
     
     // 测量数据存储
     std::map<int, magnetic_pose_estimation::MagneticField> measurements_;
@@ -138,6 +147,9 @@ private:
     
     // 用于校准的临时存储
     std::map<int, std::vector<Eigen::Vector3d>> calibration_data_;
+
+    // 是否优化strength
+    bool optimize_strength_ = false;
 };
 
 } // namespace magnetic_pose_estimation

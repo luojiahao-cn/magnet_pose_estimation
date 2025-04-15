@@ -37,25 +37,25 @@ public:
 private:
     void loadParameters() {
         // 加载磁铁参数
-        nh_.param<double>("simulation/magnet/strength", magnet_strength_, 100.0);
+        nh_.param<double>("simulation_config/magnet/strength", magnet_strength_, 100.0);
         std::vector<double> direction;
-        nh_.param("simulation/magnet/direction", direction, std::vector<double>{0, 0, 1});
+        nh_.param("simulation_config/magnet/direction", direction, std::vector<double>{0, 0, 1});
         magnetic_direction_ = Eigen::Vector3d(direction[0], direction[1], direction[2]);
         
         // 加载路径参数
-        nh_.param<double>("simulation/path/width", rect_width_, 0.2);
-        nh_.param<double>("simulation/path/height", rect_height_, 0.2);
-        nh_.param<double>("simulation/path/z", rect_z_, 0.1);
-        nh_.param<double>("simulation/path/center/x", x_center_, 0.2);
-        nh_.param<double>("simulation/path/center/y", y_center_, 0.2);
-        nh_.param<double>("simulation/path/update_rate", update_rate_, 10.0);
-        nh_.param<int>("simulation/path/points_per_side", points_per_side_, 20);
+        nh_.param<double>("simulation_config/path/width", rect_width_, 0.2);
+        nh_.param<double>("simulation_config/path/height", rect_height_, 0.2);
+        nh_.param<double>("simulation_config/path/z", rect_z_, 0.1);
+        nh_.param<double>("simulation_config/path/center/x", x_center_, 0.2);
+        nh_.param<double>("simulation_config/path/center/y", y_center_, 0.2);
+        nh_.param<double>("simulation_config/path/update_rate", update_rate_, 10.0);
+        nh_.param<int>("simulation_config/path/points_per_side", points_per_side_, 20);
     }
 
     void initializeNode() {
         // 创建发布器
         magnet_pose_pub_ = nh_.advertise<magnetic_pose_estimation::MagnetPose>("/magnet_pose/simulation", 100);
-        magnetic_field_pub_ = nh_.advertise<magnetic_pose_estimation::MagneticField>("/magnetic_field/simulation", 100);
+        magnetic_field_pub_ = nh_.advertise<magnetic_pose_estimation::MagneticField>("/magnetic_field/raw_data", 100);
 
         // 生成路径
         generateRectPath();
@@ -122,7 +122,6 @@ private:
         // 发布磁铁位姿
         magnetic_pose_estimation::MagnetPose magnet_pose;
         magnet_pose.header.stamp = ros::Time::now();
-        magnet_pose.header.frame_id = "world";
         magnet_pose.position = path_points_[current_point_index_];
         magnet_pose.orientation.w = 1.0;  // 默认朝向
         magnet_pose.magnetic_strength = magnet_strength_;
@@ -160,7 +159,6 @@ private:
         for (size_t i = 0; i < sensors.size(); ++i) {
             magnetic_pose_estimation::MagneticField field_msg;
             field_msg.header.stamp = ros::Time::now();
-            field_msg.header.frame_id = "sensor_array";
             field_msg.sensor_id = sensors[i].id;
             field_msg.sensor_pose = sensors[i].pose;
             field_msg.mag_x = magnetic_fields(i, 0);
