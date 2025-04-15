@@ -67,10 +67,10 @@ Visualization Manager:
       Value: false
     - Class: rviz/MarkerArray
       Enabled: true
-      Marker Topic: /magnetic_field_markers/raw_data
+      Marker Topic: /magnetic_field_markers/processed
       Name: MarkerArray
       Namespaces:
-        raw_data: true
+        processed: true
       Queue Size: 100
       Value: true
     - Class: rviz/MarkerArray
@@ -88,9 +88,27 @@ Visualization Manager:
       Frame Timeout: 15
       Frames:
         All Enabled: true
-        magnet_predicted:
+        frrobot_base0_link:
           Value: true
-        magnet_simulation:
+        frrobot_base1_link:
+          Value: true
+        frrobot_base2_link:
+          Value: true
+        frrobot_j1_link:
+          Value: true
+        frrobot_j2_link:
+          Value: true
+        frrobot_j3_link:
+          Value: true
+        frrobot_j4_link:
+          Value: true
+        frrobot_j5_link:
+          Value: true
+        frrobot_j6_link:
+          Value: true
+        frrobot_tool_link:
+          Value: true
+        magnet_predicted:
           Value: true
         sensor_1:
           Value: true
@@ -152,9 +170,18 @@ Visualization Manager:
       Show Names: true
       Tree:
         world:
+          frrobot_base0_link:
+            frrobot_base1_link:
+              frrobot_base2_link:
+                frrobot_j1_link:
+                  frrobot_j2_link:
+                    frrobot_j3_link:
+                      frrobot_j4_link:
+                        frrobot_j5_link:
+                          frrobot_j6_link:
+                            frrobot_tool_link:
+                              {}
           magnet_predicted:
-            {}
-          magnet_simulation:
             {}
           sensor_1:
             {}
@@ -275,4 +302,4 @@ Window Geometry:
     collapsed: false
   Width: 3072
   X: 748
-  Y: 108
+  Y: 54

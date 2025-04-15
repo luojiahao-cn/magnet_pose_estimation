@@ -30,6 +30,8 @@ MagnetPoseEstimator::MagnetPoseEstimator(ros::NodeHandle& nh) : nh_(nh)
     magnet_pose_pub_ = nh_.advertise<MagnetPose>("/magnet_pose/predicted", 10);
     magnetic_field_sub_ = nh_.subscribe("/magnetic_field/processed", 25,
                                         &MagnetPoseEstimator::magneticFieldCallback, this);
+    reset_localization_service_ = nh_.advertiseService("/magnet_pose/reset_localization",
+        &MagnetPoseEstimator::resetServiceCallback, this);
 
     ROS_INFO("磁铁位置估计器已初始化，将通过优化估计磁铁参数");
 }
@@ -233,17 +235,18 @@ void MagnetPoseEstimator::estimateMagnetPose()
         }
 
         // 如果优化结果不合理或误差没有显著改善，恢复到之前的参数
-        if (!position_reasonable || best_error > max_error_threshold_ || error_improvement < min_improvement_) {
-            ROS_WARN_THROTTLE(0.1, "优化结果不满足要求（误差:%.3f，改善:%.1f%%），恢复到之前的参数",
-                         best_error, error_improvement * 100);
-            current_position_ = backup_position;
-            magnetic_direction_ = backup_direction;
-        } else {
-            ROS_INFO_THROTTLE(2.0, "优化成功，误差从%.3f减小到%.3f（改善:%.1f%%）",
-                         initial_error, best_error, error_improvement * 100);
-        }
+        // if (!position_reasonable || best_error > max_error_threshold_ || error_improvement < min_improvement_) {
+        //     ROS_WARN_THROTTLE(0.1, "优化结果不满足要求（误差:%.3f，改善:%.1f%%），恢复到之前的参数",
+        //                  best_error, error_improvement * 100);
+        //     current_position_ = backup_position;
+        //     magnetic_direction_ = backup_direction;
+        // } else {
+        //     ROS_INFO_THROTTLE(2.0, "优化成功，误差从%.3f减小到%.3f（改善:%.1f%%）",
+        //                  initial_error, best_error, error_improvement * 100);
+        // }
     } else {
         // 优化失败，恢复到之前的参数
+        ROS_WARN_THROTTLE(0.1, "优化失败，恢复到之前的参数");
         current_position_ = backup_position;
         magnetic_direction_ = backup_direction;
     }
@@ -387,6 +390,27 @@ void MagnetPoseEstimator::publishMagnetPose(
     pose_msg.magnetic_strength = strength;
 
     magnet_pose_pub_.publish(pose_msg);
+}
+
+/**
+ * @brief 定位重置服务回调，将参数重置为初始值
+ */
+bool MagnetPoseEstimator::resetServiceCallback(std_srvs::Empty::Request&, std_srvs::Empty::Response&)
+{
+    resetToInitialParameters();
+    ROS_INFO("已将参数重置为初始值");
+    return true;
+}
+
+/**
+ * @brief 重置所有参数为初始值
+ */
+void MagnetPoseEstimator::resetToInitialParameters()
+{
+    current_position_ = initial_position_;
+    magnetic_direction_ = initial_direction_;
+    magnet_strength_ = initial_strength_;
+    ROS_INFO("参数已重置为初始值");
 }
 
 } // namespace magnetic_pose_estimation

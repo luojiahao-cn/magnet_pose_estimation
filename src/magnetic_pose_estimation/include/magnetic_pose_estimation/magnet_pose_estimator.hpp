@@ -33,12 +33,6 @@ public:
      */
     ~MagnetPoseEstimator() = default;
 
-    /**
-     * @brief 校准地磁场
-     * 收集10轮数据作为地磁场基准值
-     */
-    void calibrateEarthMagneticField();
-
 private:
     /**
      * @brief 从参数服务器加载配置参数
@@ -88,20 +82,7 @@ private:
     void resetToInitialParameters();
 
     /**
-     * @brief 从原始数据中去除地磁场
-     * @param raw_field 原始磁场数据
-     * @param sensor_id 传感器ID
-     * @return Eigen::Vector3d 校正后的磁场数据
-     */
-    Eigen::Vector3d removeEarthMagneticField(const Eigen::Vector3d& raw_field, int sensor_id);
-
-    /**
-     * @brief 校准服务回调函数
-     */
-    bool calibrateServiceCallback(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res);
-
-    /**
-     * @brief 重置服务回调函数
+     * @brief 重置服务回调函数，将参数重置为初始值
      */
     bool resetServiceCallback(std_srvs::Empty::Request&, std_srvs::Empty::Response&);
 
@@ -109,11 +90,8 @@ private:
     ros::NodeHandle& nh_;
     ros::Publisher magnet_pose_pub_;
     ros::Subscriber magnetic_field_sub_;
+    ros::ServiceServer reset_localization_service_;
 
-    // 校准服务
-    ros::ServiceServer calibrate_service_;
-    ros::ServiceServer reset_service_;
-    
     // 测量数据存储
     std::map<int, magnetic_pose_estimation::MagneticField> measurements_;
     
@@ -134,18 +112,6 @@ private:
     int max_iterations_;
     double convergence_threshold_;
     double lambda_damping_;
-
-    // 地磁场相关变量
-    bool earth_magnetic_field_calibrated_ = false;
-    std::map<int, Eigen::Vector3d> earth_magnetic_field_;
-    int calibration_sample_count_ = 0;
-    const int required_calibration_samples_ = 10;
-    
-    // 是否正在进行校准
-    bool is_calibrating_ = false;
-    
-    // 用于校准的临时存储
-    std::map<int, std::vector<Eigen::Vector3d>> calibration_data_;
 
     // 是否优化strength
     bool optimize_strength_ = false;
