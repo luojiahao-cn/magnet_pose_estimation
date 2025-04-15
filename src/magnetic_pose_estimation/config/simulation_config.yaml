@@ -2,7 +2,7 @@
 simulation_config:
   # 磁铁参数配置
   magnet:
-    strength: 0.1  # 磁矩大小，单位：安培·米² (A·m²)
+    strength: 13000  # 磁矩大小，单位：安培·米² (A·m²)
     direction: [0, 0, 1]  # 磁矩方向向量，指向z轴正方向
 
   # 运动路径参数
@@ -19,7 +19,7 @@ simulation_config:
     
     # 运动控制参数
     update_rate: 20.0  # 位置更新频率，单位：Hz
-    points_per_side: 20  # 每条边的路径点数量
+    points_per_side: 50  # 每条边的路径点数量
 
 
 

@@ -5,7 +5,8 @@
 
     <!-- 加载配置文件 -->
     <rosparam command="load" file="$(find magnetic_pose_estimation)/config/sensor_config.yaml" />
-    <rosparam command="load" file="$(find magnetic_pose_estimation)/config/magnet_config.yaml" />
+    
+    <rosparam command="load" file="$(find magnetic_pose_estimation)/config/estimation_config.yaml" />
 
     <!-- 启动磁铁位置估计节点 -->
     <node name="magnet_pose_estimator" pkg="magnetic_pose_estimation"
@@ -16,20 +17,11 @@
 
     <!-- 根据sim参数决定是否启动仿真节点 -->
     <group if="$(arg sim)">
-        <node name="simulation_node" pkg="magnetic_pose_estimation" type="simulation_node"
-            output="screen" />
+        <include file="$(find magnetic_pose_estimation)/launch/simulation.launch" />
     </group>
     <group unless="$(arg sim)">
-        <node name="real_sensor_node" pkg="magnetic_pose_estimation" type="real_sensor_node"
-            output="screen" />
+        <include file="$(find magnetic_pose_estimation)/launch/sensor_reader.launch" />
     </group>
 
-    <!-- 启动可视化节点 -->
-    <node pkg="magnetic_pose_estimation" type="magnetic_field_visualizer"
-        name="magnetic_field_visualizer"
-        output="screen" />
-
-    <!-- 启动 RViz -->
-    <node pkg="rviz" type="rviz" name="rviz" required="true"
-        args="-d $(find magnetic_pose_estimation)/config/visualization.rviz" />
+        
 </launch>

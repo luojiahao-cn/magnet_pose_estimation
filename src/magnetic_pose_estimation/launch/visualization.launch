@@ -9,5 +9,6 @@
 
     <!-- 启动 RViz -->
     <node pkg="rviz" type="rviz" name="rviz" required="true"
+        output="screen"
         args="-d $(find magnetic_pose_estimation)/config/visualization.rviz" />
 </launch>

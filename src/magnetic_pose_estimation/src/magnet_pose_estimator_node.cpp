@@ -6,6 +6,7 @@
 #include <magnetic_pose_estimation/sensor_config.hpp>
 #include <magnetic_pose_estimation/magnetic_field_calculator.hpp>
 #include <magnetic_pose_estimation/magnet_pose_estimator.hpp>
+#include <chrono>
 
 namespace magnetic_pose_estimation {
 
@@ -23,9 +24,9 @@ MagnetPoseEstimator::MagnetPoseEstimator(ros::NodeHandle& nh) : nh_(nh)
 
     // 创建发布器和订阅器
     magnet_pose_pub_ = nh_.advertise<MagnetPose>("/magnet_pose/predicted", 10);
-    magnetic_field_sub_ = nh_.subscribe("/magnetic_field_data/raw_data", 100,
+    magnetic_field_sub_ = nh_.subscribe("/magnetic_field/raw_data", 25,
                                       &MagnetPoseEstimator::magneticFieldCallback, this);
-    magnetic_field_processed_pub_ = nh_.advertise<MagneticField>("/magnetic_field_data/processed", 100);
+    magnetic_field_processed_pub_ = nh_.advertise<MagneticField>("/magnetic_field/processed", 100);
     
     // 添加地磁场校准服务
     calibrate_service_ = nh_.advertiseService("/magnet_pose/calibrate_earth_field",
@@ -48,7 +49,7 @@ void MagnetPoseEstimator::loadParameters()
     // 从预测配置中加载初始参数
     nh_.param("estimator_config/magnet/position", position_vec, std::vector<double>{0.01, 0.01, 0.05});
     nh_.param("estimator_config/magnet/direction", direction_vec, std::vector<double>{0, 0, 1});
-    nh_.param<double>("estimator_config/magnet/strength", initial_strength_, 1.0);
+    nh_.param<double>("estimator_config/magnet/strength", initial_strength_, 2.0);
 
     // 判断是否需要优化strength
     optimize_strength_ = (initial_strength_ == 0.0);
@@ -88,11 +89,13 @@ void MagnetPoseEstimator::magneticFieldCallback(const MagneticField::ConstPtr& m
     Eigen::Vector3d raw_field(msg->mag_x, msg->mag_y, msg->mag_z);
     
     // 如果正在校准中，收集校准数据
-    if (is_calibrating_) {
-        if (calibration_data_.find(msg->sensor_id) == calibration_data_.end()) {
+    if (is_calibrating_) 
+    {
+        if (calibration_data_.find(msg->sensor_id) == calibration_data_.end())
+        {
             calibration_data_[msg->sensor_id] = std::vector<Eigen::Vector3d>();
         }
-        
+
         calibration_data_[msg->sensor_id].push_back(raw_field);
         
         // 检查是否所有传感器都收集到了足够的样本
@@ -120,11 +123,11 @@ void MagnetPoseEstimator::magneticFieldCallback(const MagneticField::ConstPtr& m
                 }
                 earth_magnetic_field_[sensor_id] = sum / samples.size();
                 
-                ROS_INFO("传感器 %d 的地磁场值: [%.6f, %.6f, %.6f] mT", 
-                    sensor_id, 
-                    earth_magnetic_field_[sensor_id].x(),
-                    earth_magnetic_field_[sensor_id].y(),
-                    earth_magnetic_field_[sensor_id].z());
+                // ROS_INFO("传感器 %d 的地磁场值: [%.6f, %.6f, %.6f] mT", 
+                    // sensor_id, 
+                    // earth_magnetic_field_[sensor_id].x(),
+                    // earth_magnetic_field_[sensor_id].y(),
+                    // earth_magnetic_field_[sensor_id].z());
             }
             
             // 标记校准完成
@@ -162,6 +165,9 @@ void MagnetPoseEstimator::magneticFieldCallback(const MagneticField::ConstPtr& m
 
 void MagnetPoseEstimator::estimateMagnetPose()
 {
+    // 记录优化开始时间
+    auto t_start = std::chrono::steady_clock::now();
+
     // 构建测量矩阵和传感器位置矩阵
     int n = measurements_.size();
     Eigen::MatrixXd sensor_positions(n, 3);
@@ -286,7 +292,7 @@ void MagnetPoseEstimator::estimateMagnetPose()
         
         // 如果优化结果不合理或误差没有显著改善，恢复到之前的参数
         if (!position_reasonable || best_error > max_error_threshold_ || error_improvement < min_improvement_) {
-            ROS_WARN_THROTTLE(2.0, "优化结果不满足要求（误差:%.3f，改善:%.1f%%），恢复到之前的参数",
+            ROS_WARN_THROTTLE(0.1, "优化结果不满足要求（误差:%.3f，改善:%.1f%%），恢复到之前的参数",
                          best_error, error_improvement * 100);
             current_position_ = backup_position;
             magnetic_direction_ = backup_direction;
@@ -306,6 +312,11 @@ void MagnetPoseEstimator::estimateMagnetPose()
                       magnet_strength_);
 
     publishMagnetPose(current_position_, magnetic_direction_, magnet_strength_);
+
+    // 记录优化结束时间并输出耗时
+    auto t_end = std::chrono::steady_clock::now();
+    double elapsed_ms = std::chrono::duration<double, std::milli>(t_end - t_start).count();
+    // ROS_INFO("本轮优化耗时: %.2f ms", elapsed_ms);
 }
 
 Eigen::MatrixXd MagnetPoseEstimator::calculateJacobian(
