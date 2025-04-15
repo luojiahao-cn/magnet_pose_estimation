@@ -18,11 +18,12 @@ public:
         // 初始化标记
         initializeMarkerTemplates();
 
+        // 等待1s钟以确保所有话题都已发布
+        ros::Duration(1.0).sleep();
+        
         // 订阅主题并设置回调
         subscribeToTopics();
 
-        // 定时器检查新话题
-        topic_check_timer_ = nh_.createTimer(ros::Duration(1.0), &MagneticFieldVisualizer::checkNewTopics, this);
     }
 
 private:
@@ -64,28 +65,7 @@ private:
         }
     }
 
-    void checkNewTopics(const ros::TimerEvent&) {
-        ros::master::V_TopicInfo topic_info;
-        ros::master::getTopics(topic_info);
 
-        for (const auto& topic : topic_info) {
-            if (topic.name.find("/magnetic_field/") == 0) {
-                std::string source = topic.name.substr(std::string("/magnetic_field/").length());
-                // 如果还没有订阅该source，则添加订阅
-                if (magnetic_field_subs_.find(source) == magnetic_field_subs_.end()) {
-                    magnetic_field_pubs_[source] = nh_.advertise<visualization_msgs::MarkerArray>(
-                        "magnetic_field_markers/" + source, 100);
-
-                    magnetic_field_subs_[source] = nh_.subscribe<magnetic_pose_estimation::MagneticField>(
-                        topic.name, 100,
-                        boost::bind(&MagneticFieldVisualizer::magneticFieldCallback, this, _1, source));
-
-                    ROS_INFO("动态订阅磁场话题: %s", topic.name.c_str());
-                }
-            }
-            // 你也可以用类似方式动态订阅 /magnet_pose/ 下的话题
-        }
-    }
 
     void initializeMarkerTemplates() {
         // 初始化传感器标记模板
@@ -218,7 +198,6 @@ private:
     visualization_msgs::Marker sensor_marker_template_;  // 传感器标记模板
     visualization_msgs::Marker magnet_marker_;          // 磁铁标记模板
     tf2_ros::TransformBroadcaster tf_broadcaster_;
-    ros::Timer topic_check_timer_;                      // 定时器用于检查新话题
 };
 
 int main(int argc, char **argv) {

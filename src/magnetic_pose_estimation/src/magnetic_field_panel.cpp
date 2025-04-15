@@ -25,8 +25,8 @@ MagneticFieldPanel::MagneticFieldPanel(QWidget *parent)
     connect(restore_button_, SIGNAL(clicked()), this, SLOT(onRestoreClicked()));
 
     // 创建服务客户端
-    calibrate_client_ = nh_.serviceClient<std_srvs::Empty>("/magnet_pose/calibrate_earth_field");
-    reset_client_ = nh_.serviceClient<std_srvs::Empty>("/magnet_pose/reset_to_initial");
+    calibrate_client_ = nh_.serviceClient<std_srvs::Empty>("/magnetic_field/calibrate_earth_field");
+    reset_client_ = nh_.serviceClient<std_srvs::Empty>("/magnetic_field/reset_to_initial");
 }
 
 MagneticFieldPanel::~MagneticFieldPanel()

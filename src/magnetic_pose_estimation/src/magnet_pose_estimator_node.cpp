@@ -10,6 +10,10 @@
 
 namespace magnetic_pose_estimation {
 
+/**
+ * @brief 构造函数，初始化磁铁位姿估计器
+ * @param nh ROS节点句柄
+ */
 MagnetPoseEstimator::MagnetPoseEstimator(ros::NodeHandle& nh) : nh_(nh)
 {
     // 加载传感器配置
@@ -24,29 +28,21 @@ MagnetPoseEstimator::MagnetPoseEstimator(ros::NodeHandle& nh) : nh_(nh)
 
     // 创建发布器和订阅器
     magnet_pose_pub_ = nh_.advertise<MagnetPose>("/magnet_pose/predicted", 10);
-    magnetic_field_sub_ = nh_.subscribe("/magnetic_field/raw_data", 25,
-                                      &MagnetPoseEstimator::magneticFieldCallback, this);
-    magnetic_field_processed_pub_ = nh_.advertise<MagneticField>("/magnetic_field/processed", 100);
-    
-    // 添加地磁场校准服务
-    calibrate_service_ = nh_.advertiseService("/magnet_pose/calibrate_earth_field",
-                                             &MagnetPoseEstimator::calibrateServiceCallback, this);
-
-    // 添加重置参数服务
-    reset_service_ = nh_.advertiseService("/magnet_pose/reset_to_initial",
-        &MagnetPoseEstimator::resetServiceCallback, this);
+    magnetic_field_sub_ = nh_.subscribe("/magnetic_field/processed", 25,
+                                        &MagnetPoseEstimator::magneticFieldCallback, this);
 
     ROS_INFO("磁铁位置估计器已初始化，将通过优化估计磁铁参数");
-    ROS_INFO("使用 'rosservice call /magnet_pose/calibrate_earth_field' 命令可以校准地磁场");
 }
 
+/**
+ * @brief 从参数服务器加载估计器和优化相关参数
+ */
 void MagnetPoseEstimator::loadParameters()
 {
-    // 加载参数文件中的初始值和配置
     std::vector<double> position_vec;
     std::vector<double> direction_vec;
 
-    // 从预测配置中加载初始参数
+    // 加载磁铁初始参数
     nh_.param("estimator_config/magnet/position", position_vec, std::vector<double>{0.01, 0.01, 0.05});
     nh_.param("estimator_config/magnet/direction", direction_vec, std::vector<double>{0, 0, 1});
     nh_.param<double>("estimator_config/magnet/strength", initial_strength_, 2.0);
@@ -57,13 +53,11 @@ void MagnetPoseEstimator::loadParameters()
     // 设置初始参数
     initial_position_ = Eigen::Vector3d(position_vec[0], position_vec[1], position_vec[2]);
     initial_direction_ = Eigen::Vector3d(direction_vec[0], direction_vec[1], direction_vec[2]);
-    initial_direction_.normalize();  // 确保是单位向量
-    
-    // 初始化当前参数
+    initial_direction_.normalize();
     current_position_ = initial_position_;
     magnetic_direction_ = initial_direction_;
     magnet_strength_ = initial_strength_;
-    
+
     // 加载优化参数
     nh_.param<double>("estimator_config/optimization/max_position_change", max_position_change_, 0.5);
     nh_.param<double>("estimator_config/optimization/max_error_threshold", max_error_threshold_, 10.0);
@@ -77,85 +71,29 @@ void MagnetPoseEstimator::loadParameters()
              initial_direction_[0], initial_direction_[1], initial_direction_[2], 
              initial_strength_,
              optimize_strength_ ? " (将优化strength)" : "");
-    ROS_INFO("优化参数已加载 - \n最大位置变化: %.3f, \n最大误差阈值: %.3f, \n最小改善: %.1f%%, \n最大迭代次数: %d, \n收敛阈值: %.1e, \n阻尼系数: %.1e",
+    ROS_INFO("优化参数已加载 - 最大位置变化: %.3f, 最大误差阈值: %.3f, 最小改善: %.1f%%, 最大迭代次数: %d, 收敛阈值: %.1e, 阻尼系数: %.1e",
              max_position_change_, max_error_threshold_, min_improvement_ * 100, max_iterations_, convergence_threshold_,lambda_damping_);
     ROS_INFO("参数加载完成");
-
 }
 
+/**
+ * @brief 磁场数据回调函数，收集传感器数据并触发位姿估计
+ * @param msg 磁场测量消息
+ */
 void MagnetPoseEstimator::magneticFieldCallback(const MagneticField::ConstPtr& msg)
 {
-    // 构建原始磁场向量
+    // 直接使用已处理的磁场数据
     Eigen::Vector3d raw_field(msg->mag_x, msg->mag_y, msg->mag_z);
-    
-    // 如果正在校准中，收集校准数据
-    if (is_calibrating_) 
-    {
-        if (calibration_data_.find(msg->sensor_id) == calibration_data_.end())
-        {
-            calibration_data_[msg->sensor_id] = std::vector<Eigen::Vector3d>();
-        }
 
-        calibration_data_[msg->sensor_id].push_back(raw_field);
-        
-        // 检查是否所有传感器都收集到了足够的样本
-        bool all_sensors_ready = true;
-        for (const auto& sensor : magnetic_pose_estimation::SensorConfig::getInstance().getAllSensors()) {
-            if (calibration_data_.find(sensor.id) == calibration_data_.end() || 
-                calibration_data_[sensor.id].size() < required_calibration_samples_) {
-                all_sensors_ready = false;
-                break;
-            }
-        }
-        
-        // 如果收集了足够的数据，计算平均值作为地磁场
-        if (all_sensors_ready) {
-            earth_magnetic_field_.clear();
-            
-            for (const auto& data_pair : calibration_data_) {
-                int sensor_id = data_pair.first;
-                const auto& samples = data_pair.second;
-                
-                // 计算平均值
-                Eigen::Vector3d sum = Eigen::Vector3d::Zero();
-                for (const auto& sample : samples) {
-                    sum += sample;
-                }
-                earth_magnetic_field_[sensor_id] = sum / samples.size();
-                
-                // ROS_INFO("传感器 %d 的地磁场值: [%.6f, %.6f, %.6f] mT", 
-                    // sensor_id, 
-                    // earth_magnetic_field_[sensor_id].x(),
-                    // earth_magnetic_field_[sensor_id].y(),
-                    // earth_magnetic_field_[sensor_id].z());
-            }
-            
-            // 标记校准完成
-            earth_magnetic_field_calibrated_ = true;
-            is_calibrating_ = false;
-            calibration_data_.clear();
-            
-            ROS_INFO("地磁场校准完成！");
-        }
-        
-        return; // 校准期间不进行位置估计
-    }
-    
-    // 获取校正后的磁场值
-    Eigen::Vector3d corrected_field = removeEarthMagneticField(raw_field, msg->sensor_id);
-    
-    // 更新消息中的磁场数据为校正后的值
     MagneticField corrected_msg = *msg;
-    corrected_msg.mag_x = corrected_field.x();
-    corrected_msg.mag_y = corrected_field.y();
-    corrected_msg.mag_z = corrected_field.z();
+    corrected_msg.mag_x = raw_field.x();
+    corrected_msg.mag_y = raw_field.y();
+    corrected_msg.mag_z = raw_field.z();
 
-    // 发布校正后的磁场数据
-    magnetic_field_processed_pub_.publish(corrected_msg);
-    
-    // 收集足够的测量数据再进行估计
+    // 收集测量数据
     measurements_[msg->sensor_id] = corrected_msg;
-    
+
+    // 当收集到所有传感器的数据后，进行磁铁位姿估计
     if (measurements_.size() >= SensorConfig::getInstance().getSensorCount())
     { 
         estimateMagnetPose();
@@ -163,6 +101,10 @@ void MagnetPoseEstimator::magneticFieldCallback(const MagneticField::ConstPtr& m
     }
 }
 
+/**
+ * @brief 估计磁铁的位置、方向和强度（如需）并发布结果
+ *        使用高斯-牛顿法最小化测量磁场与预测磁场的误差
+ */
 void MagnetPoseEstimator::estimateMagnetPose()
 {
     // 记录优化开始时间
@@ -172,7 +114,7 @@ void MagnetPoseEstimator::estimateMagnetPose()
     int n = measurements_.size();
     Eigen::MatrixXd sensor_positions(n, 3);
     Eigen::MatrixXd measured_fields(n, 3);
-    
+
     int i = 0;
     for (const auto& measurement : measurements_)
     {
@@ -180,7 +122,7 @@ void MagnetPoseEstimator::estimateMagnetPose()
         sensor_positions(i, 0) = msg.sensor_pose.position.x;
         sensor_positions(i, 1) = msg.sensor_pose.position.y;
         sensor_positions(i, 2) = msg.sensor_pose.position.z;
-        
+
         measured_fields(i, 0) = msg.mag_x;
         measured_fields(i, 1) = msg.mag_y;
         measured_fields(i, 2) = msg.mag_z;
@@ -190,7 +132,7 @@ void MagnetPoseEstimator::estimateMagnetPose()
     // 备份当前参数，以便在优化失败时恢复
     Eigen::Vector3d backup_position = current_position_;
     Eigen::Vector3d backup_direction = magnetic_direction_;
-    
+
     // 构建状态向量
     int state_dim = optimize_strength_ ? 7 : 6;
     Eigen::VectorXd state(state_dim);
@@ -220,14 +162,14 @@ void MagnetPoseEstimator::estimateMagnetPose()
         // 计算残差
         Eigen::MatrixXd residuals = measured_fields - predicted_fields;
         Eigen::VectorXd residuals_vector = Eigen::Map<Eigen::VectorXd>(residuals.data(), residuals.size());
-        
-        double error = residuals_vector.norm() / std::sqrt(residuals_vector.size()); // 平均每个元素的误差
-        
+
+        double error = residuals_vector.norm() / std::sqrt(residuals_vector.size()); // 均方根误差
+
         // 记录初始误差
         if (iter == 0) {
             initial_error = error;
         }
-        
+
         // 记录最佳状态
         if (error < best_error) {
             best_error = error;
@@ -251,7 +193,7 @@ void MagnetPoseEstimator::estimateMagnetPose()
 
         // 更新状态向量
         state += delta;
-        
+
         // 强制归一化方向向量
         state.segment<3>(3).normalize();
         if (optimize_strength_ && state(6) < 0) state(6) = 0.01; // 强度不能为负
@@ -260,14 +202,14 @@ void MagnetPoseEstimator::estimateMagnetPose()
         if (std::abs(error - last_error) < convergence_threshold_) {
             break;
         }
-        
+
         // 检查异常情况
         if (std::isnan(error) || std::isinf(error)) {
             ROS_ERROR("优化过程中出现NaN或Inf，恢复到初始参数");
             optimization_failed = true;
             break;
         }
-        
+
         last_error = error;
     }
 
@@ -277,19 +219,19 @@ void MagnetPoseEstimator::estimateMagnetPose()
         current_position_ = best_state.segment<3>(0);
         magnetic_direction_ = best_state.segment<3>(3).normalized();
         if (optimize_strength_) magnet_strength_ = best_state(6);
-        
+
         // 检查优化结果是否显著改善了误差
         double error_improvement = (initial_error - best_error) / initial_error;
-        
+
         // 检查结果是否合理
         bool position_reasonable = true;
         for (int i = 0; i < 3; ++i) {
-            if (std::abs(current_position_(i)) > 1.0) { // 假设有效范围在±1米内
+            if (std::abs(current_position_(i)) > 1.0) { // 有效范围假设为±1米
                 position_reasonable = false;
                 break;
             }
         }
-        
+
         // 如果优化结果不合理或误差没有显著改善，恢复到之前的参数
         if (!position_reasonable || best_error > max_error_threshold_ || error_improvement < min_improvement_) {
             ROS_WARN_THROTTLE(0.1, "优化结果不满足要求（误差:%.3f，改善:%.1f%%），恢复到之前的参数",
@@ -319,6 +261,14 @@ void MagnetPoseEstimator::estimateMagnetPose()
     // ROS_INFO("本轮优化耗时: %.2f ms", elapsed_ms);
 }
 
+/**
+ * @brief 计算磁铁参数对各传感器磁场的雅可比矩阵
+ * @param sensor_positions 传感器位置矩阵
+ * @param position 磁铁位置
+ * @param direction 磁铁方向
+ * @param strength 磁铁强度
+ * @return 雅可比矩阵
+ */
 Eigen::MatrixXd MagnetPoseEstimator::calculateJacobian(
     const Eigen::MatrixXd& sensor_positions,
     const Eigen::Vector3d& position,
@@ -376,6 +326,12 @@ Eigen::MatrixXd MagnetPoseEstimator::calculateJacobian(
     return J;
 }
 
+/**
+ * @brief 发布磁铁位姿消息
+ * @param position 磁铁位置
+ * @param direction 磁铁方向
+ * @param strength 磁铁强度
+ */
 void MagnetPoseEstimator::publishMagnetPose(
     const Eigen::Vector3d& position,
     const Eigen::Vector3d& direction,
@@ -433,54 +389,11 @@ void MagnetPoseEstimator::publishMagnetPose(
     magnet_pose_pub_.publish(pose_msg);
 }
 
-void MagnetPoseEstimator::resetToInitialParameters() 
-{
-    current_position_ = initial_position_;
-    magnetic_direction_ = initial_direction_;
-    magnet_strength_ = initial_strength_;
-    
-    ROS_WARN("参数已重置为初始值");
-}
-
-void MagnetPoseEstimator::calibrateEarthMagneticField()
-{
-    ROS_INFO("开始地磁场校准，请确保磁铁远离传感器...");
-    
-    // 重置校准数据
-    calibration_data_.clear();
-    calibration_sample_count_ = 0;
-    is_calibrating_ = true;
-    
-    ROS_INFO("校准开始，将收集10轮数据，请保持环境稳定...");
-}
-
-Eigen::Vector3d MagnetPoseEstimator::removeEarthMagneticField(const Eigen::Vector3d& raw_field, int sensor_id)
-{
-    if (!earth_magnetic_field_calibrated_ || earth_magnetic_field_.find(sensor_id) == earth_magnetic_field_.end()) {
-        // 未校准或无此传感器的地磁场数据，直接返回原始值
-        return raw_field;
-    }
-    
-    // 从原始值中减去地磁场
-    return raw_field - earth_magnetic_field_[sensor_id];
-}
-
-bool MagnetPoseEstimator::calibrateServiceCallback(std_srvs::Empty::Request& req, std_srvs::Empty::Response& res)
-{
-    calibrateEarthMagneticField();
-    return true;
-}
-
-bool MagnetPoseEstimator::resetServiceCallback(std_srvs::Empty::Request&, std_srvs::Empty::Response&) {
-    // 重置地磁场校准状态
-    earth_magnetic_field_calibrated_ = false;
-    earth_magnetic_field_.clear();
-    
-    return true;
-}
-
 } // namespace magnetic_pose_estimation
 
+/**
+ * @brief 主函数，初始化ROS节点并启动磁铁位姿估计器
+ */
 int main(int argc, char **argv)
 {
     setlocale(LC_ALL, "zh_CN.UTF-8");

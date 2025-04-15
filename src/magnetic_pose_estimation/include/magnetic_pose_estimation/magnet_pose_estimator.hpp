@@ -108,7 +108,6 @@ private:
     // ROS通信相关
     ros::NodeHandle& nh_;
     ros::Publisher magnet_pose_pub_;
-    ros::Publisher magnetic_field_processed_pub_;
     ros::Subscriber magnetic_field_sub_;
 
     // 校准服务

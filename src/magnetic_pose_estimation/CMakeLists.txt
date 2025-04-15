@@ -156,3 +156,9 @@ target_link_libraries(magnetic_field_panel
     ${QT_LIBRARIES} 
     ${catkin_LIBRARIES}
 )
+
+add_executable(earth_field_processor_node src/earth_field_processor_node.cpp)
+target_link_libraries(earth_field_processor_node
+  ${catkin_LIBRARIES}
+)
+add_dependencies(earth_field_processor_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
