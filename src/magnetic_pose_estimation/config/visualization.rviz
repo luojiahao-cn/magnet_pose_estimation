@@ -58,13 +58,14 @@ Visualization Manager:
       Reference Frame: <Fixed Frame>
       Value: true
     - Class: rviz/MarkerArray
-      Enabled: false
-      Marker Topic: /magnet_marker/simulation
+      Enabled: true
+      Marker Topic: /magnet_marker/predicted
       Name: MarkerArray
       Namespaces:
-        {}
+        magnet_predicted: true
+        magnet_predicted_traj: true
       Queue Size: 100
-      Value: false
+      Value: true
     - Class: rviz/MarkerArray
       Enabled: true
       Marker Topic: /magnetic_field_markers/processed
@@ -263,7 +264,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 0.04596354067325592
+      Distance: 0.11380402743816376
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -301,5 +302,5 @@ Window Geometry:
   Views:
     collapsed: false
   Width: 3072
-  X: 748
-  Y: 54
+  X: 381
+  Y: 84

@@ -172,10 +172,41 @@ private:
         magnet_marker_.pose.position = msg->position;
         magnet_marker_.pose.orientation = msg->orientation;
 
+        // 轨迹可视化
+        visualization_msgs::Marker &traj_marker = magnet_trajectories_[frame_id];
+        traj_marker.header.stamp = msg->header.stamp;
+        traj_marker.header.frame_id = "world";
+        traj_marker.ns = frame_id + "_traj";
+        traj_marker.id = 0;
+        traj_marker.type = visualization_msgs::Marker::LINE_STRIP;
+        traj_marker.action = visualization_msgs::Marker::ADD;
+        traj_marker.scale.x = 0.0002; // 轨迹线宽
+        traj_marker.color.r = 1.0;
+        traj_marker.color.g = 0.0;
+        traj_marker.color.b = 0.0;
+        traj_marker.color.a = 1.0;
+        traj_marker.pose.orientation.w = 1.0;
+        traj_marker.pose.orientation.x = 0.0;
+        traj_marker.pose.orientation.y = 0.0;
+        traj_marker.pose.orientation.z = 0.0;
+        traj_marker.lifetime = ros::Duration(60); // 轨迹存活时间
+
+        // 追加当前点
+        traj_marker.points.push_back(msg->position);
+
+        // 可选：限制轨迹长度
+        size_t max_traj_length = 500;
+        if (traj_marker.points.size() > max_traj_length) {
+            traj_marker.points.erase(traj_marker.points.begin(), traj_marker.points.begin() + (traj_marker.points.size() - max_traj_length));
+        }
+
+        // 发布轨迹
         visualization_msgs::MarkerArray magnet_markers;
         magnet_markers.markers.push_back(magnet_marker_);
+        magnet_markers.markers.push_back(traj_marker);
         publisher.publish(magnet_markers);
 
+        // 发布TF
         geometry_msgs::TransformStamped transform;
         transform.header.stamp = msg->header.stamp;
         transform.header.frame_id = "world";
@@ -194,6 +225,7 @@ private:
     std::map<std::string, ros::Publisher> magnet_marker_pubs_;
     std::map<std::string, ros::Subscriber> magnetic_field_subs_;
     std::map<std::string, ros::Subscriber> magnet_pose_subs_;
+    std::map<std::string, visualization_msgs::Marker> magnet_trajectories_; // 存储每个磁铁的轨迹标记
     
     visualization_msgs::Marker sensor_marker_template_;  // 传感器标记模板
     visualization_msgs::Marker magnet_marker_;          // 磁铁标记模板
