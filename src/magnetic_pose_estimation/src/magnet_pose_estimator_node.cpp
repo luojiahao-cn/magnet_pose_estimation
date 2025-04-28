@@ -211,8 +211,13 @@ void MagnetPoseEstimator::estimateMagnetPose()
 
         // 强制归一化方向向量
         state.segment<3>(3).normalize();
-        if (optimize_strength_ && state(6) < 0) state(6) = 0.01; // 强度不能为负
 
+        if (optimize_strength_) 
+            state(6) = std::max(strength_min_, std::min(state(6), strength_max_));
+
+        if (optimize_strength_ && state(6) < 0)
+            state(6) = 0.01; // 强度不能为负
+            
         // 检查收敛
         if (std::abs(error - last_error) < convergence_threshold_) {
             break;
@@ -233,11 +238,7 @@ void MagnetPoseEstimator::estimateMagnetPose()
         // 更新当前参数为最佳状态
         current_position_ = best_state.segment<3>(0);
         magnetic_direction_ = best_state.segment<3>(3).normalized();
-        if (optimize_strength_) 
-        {
-            magnet_strength_ = best_state(6);
-            magnet_strength_ = std::max(strength_min_, std::min(magnet_strength_, strength_max_));
-        }
+        if (optimize_strength_) magnet_strength_ = best_state(6);
 
         // 检查优化结果是否显著改善了误差
         double error_improvement = (initial_error - best_error) / initial_error;
