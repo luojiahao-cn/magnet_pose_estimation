@@ -48,9 +48,21 @@ void MagnetPoseEstimator::loadParameters()
     nh_.param("estimator_config/magnet/position", position_vec, std::vector<double>{0.01, 0.01, 0.05});
     nh_.param("estimator_config/magnet/direction", direction_vec, std::vector<double>{0, 0, 1});
     nh_.param<double>("estimator_config/magnet/strength", initial_strength_, 2.0);
+    nh_.param<double>("estimator_config/magnet/strength_delta", strength_delta_, 0.0);
 
     // 判断是否需要优化strength
-    optimize_strength_ = (initial_strength_ == 0.0);
+    if (strength_delta_ == 0.0)
+    {
+        optimize_strength_ = false;
+        strength_min_ = initial_strength_;
+        strength_max_ = initial_strength_;
+    }
+    else
+    {
+        optimize_strength_ = true;
+        strength_min_ = initial_strength_ - strength_delta_;
+        strength_max_ = initial_strength_ + strength_delta_;
+    }
 
     // 设置初始参数
     initial_position_ = Eigen::Vector3d(position_vec[0], position_vec[1], position_vec[2]);
@@ -68,11 +80,12 @@ void MagnetPoseEstimator::loadParameters()
     nh_.param<double>("estimator_config/optimization/convergence_threshold", convergence_threshold_, 1e-6);
     nh_.param<double>("estimator_config/optimization/lambda_damping", lambda_damping_, 1e5);
 
-    ROS_INFO("预测参数已加载 - 位置: [%.3f, %.3f, %.3f], 方向: [%.3f, %.3f, %.3f], 强度: %.3f%s", 
+    ROS_INFO("预测参数已加载 - 位置: [%.3f, %.3f, %.3f], 方向: [%.3f, %.3f, %.3f], 强度: %.3f, 允许波动: %.3f, 优化: %s, 范围: [%.3f, %.3f]",
              initial_position_[0], initial_position_[1], initial_position_[2],
-             initial_direction_[0], initial_direction_[1], initial_direction_[2], 
-             initial_strength_,
-             optimize_strength_ ? " (将优化strength)" : "");
+             initial_direction_[0], initial_direction_[1], initial_direction_[2],
+             initial_strength_, strength_delta_,
+             optimize_strength_ ? "是" : "否",
+             strength_min_, strength_max_);
     ROS_INFO("优化参数已加载 - 最大位置变化: %.3f, 最大误差阈值: %.3f, 最小改善: %.1f%%, 最大迭代次数: %d, 收敛阈值: %.1e, 阻尼系数: %.1e",
              max_position_change_, max_error_threshold_, min_improvement_ * 100, max_iterations_, convergence_threshold_,lambda_damping_);
     ROS_INFO("参数加载完成");
@@ -220,7 +233,11 @@ void MagnetPoseEstimator::estimateMagnetPose()
         // 更新当前参数为最佳状态
         current_position_ = best_state.segment<3>(0);
         magnetic_direction_ = best_state.segment<3>(3).normalized();
-        if (optimize_strength_) magnet_strength_ = best_state(6);
+        if (optimize_strength_) 
+        {
+            magnet_strength_ = best_state(6);
+            magnet_strength_ = std::max(strength_min_, std::min(magnet_strength_, strength_max_));
+        }
 
         // 检查优化结果是否显著改善了误差
         double error_improvement = (initial_error - best_error) / initial_error;

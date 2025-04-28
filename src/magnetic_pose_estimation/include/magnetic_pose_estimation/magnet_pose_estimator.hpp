@@ -113,8 +113,10 @@ private:
     double convergence_threshold_;
     double lambda_damping_;
 
-    // 是否优化strength
     bool optimize_strength_ = false;
+    double strength_delta_;
+    double strength_min_;
+    double strength_max_;
 };
 
 } // namespace magnetic_pose_estimation
