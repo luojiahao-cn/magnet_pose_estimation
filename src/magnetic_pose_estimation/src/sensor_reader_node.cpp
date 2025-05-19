@@ -4,6 +4,7 @@
 #include <vector>
 #include <mutex>
 #include <sstream>
+#include <chrono>
 #include "magnetic_pose_estimation/MagneticField.h"
 #include "magnetic_pose_estimation/sensor_config.hpp"
 
@@ -81,6 +82,9 @@ private:
 
     void readAndProcessData()
     {
+        int msg_count = 0;
+        auto start_time = std::chrono::steady_clock::now();
+        double freq_stat_period = 5.0;
         while (ros::ok())
         {
             if (serial_.available())
@@ -105,6 +109,18 @@ private:
                             msg.sensor_pose = sensor_info.pose;
 
                             magnetic_field_pub_.publish(msg);
+
+                            // 统计消息数量
+                            ++msg_count;
+                            auto now = std::chrono::steady_clock::now();
+                            double elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - start_time).count();
+                            if (elapsed >= freq_stat_period)
+                            {
+                                ROS_INFO("磁场数据发布频率: %.2f Hz", msg_count / elapsed /25);
+                                // 重置计数和起始时间
+                                msg_count = 0;
+                                start_time = now;
+                            }
                         }
                     }
                 }

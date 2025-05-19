@@ -1,8 +1,8 @@
 estimator_config:
   # 磁铁参数配置
   magnet:
-    strength: 165  # 磁矩大小，单位：安培·米² (A·m²)
-    strength_delta: 15  # 允许波动范围，单位：安培·米² (A·m²)
+    strength: 13000  # 磁矩大小，单位：安培·米² (A·m²)
+    strength_delta: 10000  # 允许波动范围，单位：安培·米² (A·m²)
     direction: [0, 0, 1]  # 磁矩方向向量，指向z轴正方向
     position: [0.01, 0.01, 0.01]  # 初始位置假设，单位：m
 

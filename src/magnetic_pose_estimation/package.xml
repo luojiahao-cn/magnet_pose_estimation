@@ -22,6 +22,7 @@
     <build_depend>eigen</build_depend>  <!-- Eigen 矩阵运算库 -->
     <build_depend>serial</build_depend>  <!-- 串口通信库 -->
     <build_depend>rviz</build_depend>
+    <build_depend>std_srvs</build_depend>
 
     <!-- 导出依赖项（其他包构建时需要的依赖） -->
     <build_export_depend>geometry_msgs</build_export_depend>
@@ -33,6 +34,7 @@
     <build_export_depend>eigen</build_export_depend>
     <build_export_depend>serial</build_export_depend>  <!-- 串口通信库 -->
     <build_export_depend>rviz</build_export_depend>
+    <build_export_depend>std_srvs</build_export_depend>
 
     <!-- 运行时依赖项 -->
     <exec_depend>geometry_msgs</exec_depend>
@@ -44,11 +46,10 @@
     <exec_depend>eigen</exec_depend>
     <exec_depend>serial</exec_depend>  <!-- 串口通信库 -->
     <exec_depend>rviz</exec_depend>
+    <exec_depend>message_runtime</exec_depend> <!-- 添加此行 -->
+    <exec_depend>std_srvs</exec_depend>
 
-    <!-- The export tag contains other, unspecified, tags -->
     <export>
-        <!-- Other tools can request additional information be placed here -->
         <rviz plugin="${prefix}/plugin_description.xml" />
     </export>
-
 </package>

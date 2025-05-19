@@ -18,8 +18,8 @@ simulation_config:
       y: 0.02      # y坐标，单位：m（2厘米）
     
     # 运动控制参数
-    update_rate: 20.0  # 位置更新频率，单位：Hz
-    points_per_side: 50  # 每条边的路径点数量
+    update_rate: 100.0  # 位置更新频率，单位：Hz
+    points_per_side: 500  # 每条边的路径点数量
 
 
 

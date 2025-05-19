@@ -1,5 +1,5 @@
 # 坐标系配置
-frames:
+sensor_frames:
   # 传感器阵列的父坐标系
   parent_frame: "world"
   # 传感器阵列的基准坐标系

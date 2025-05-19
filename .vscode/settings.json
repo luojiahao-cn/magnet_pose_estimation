@@ -97,6 +97,7 @@
         "typeinfo": "cpp",
         "valarray": "cpp",
         "variant": "cpp",
-        "qvboxlayout": "cpp"
+        "qvboxlayout": "cpp",
+        "dense": "cpp"
     }
 }

@@ -6,19 +6,21 @@ namespace magnetic_pose_estimation {
 bool SensorConfig::loadConfig(const ros::NodeHandle& nh) {
     try {
         // 读取坐标系配置
-        if (!nh.getParam("frames/parent_frame", parent_frame_)) {
+        if (!nh.getParam("sensor_frames/parent_frame", parent_frame_)) {
             ROS_ERROR("未找到 parent_frame 参数");
             return false;
         }
-        if (!nh.getParam("frames/array_frame", array_frame_)) {
+        if (!nh.getParam("sensor_frames/array_frame", array_frame_))
+        {
             ROS_ERROR("未找到 array_frame 参数");
             return false;
         }
 
         // 读取传感器阵列位姿
         std::vector<double> position, orientation;
-        if (!nh.getParam("frames/array_pose/position", position) || 
-            !nh.getParam("frames/array_pose/orientation", orientation)) {
+        if (!nh.getParam("sensor_frames/array_pose/position", position) ||
+            !nh.getParam("sensor_frames/array_pose/orientation", orientation))
+        {
             ROS_ERROR("未找到阵列位姿参数");
             return false;
         }

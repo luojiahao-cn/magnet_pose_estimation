@@ -118,7 +118,7 @@ private:
 
         // 更新当前位置
         current_point_index_ = (current_point_index_ + 1) % path_points_.size();
-        
+
         // 发布磁铁位姿
         magnetic_pose_estimation::MagnetPose magnet_pose;
         magnet_pose.header.stamp = ros::Time::now();
@@ -127,7 +127,6 @@ private:
         magnet_pose.magnetic_strength = magnet_strength_;
         magnet_pose_pub_.publish(magnet_pose);
 
-        // 计算并发布每个传感器的磁场数据
         // 获取所有传感器
         const auto& sensors = magnetic_pose_estimation::SensorConfig::getInstance().getAllSensors();
         

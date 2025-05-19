@@ -17,7 +17,7 @@ public:
         calibrate_srv_ = nh_.advertiseService("/magnetic_field/calibrate_earth_field", &EarthFieldProcessor::calibrateSrv, this);
         reset_srv_ = nh_.advertiseService("/magnetic_field/reset_to_initial", &EarthFieldProcessor::resetSrv, this);
 
-        ROS_INFO("地磁场处理节点已启动");
+        ROS_INFO("地磁场处理节点启动成功");
     }
 
 private:

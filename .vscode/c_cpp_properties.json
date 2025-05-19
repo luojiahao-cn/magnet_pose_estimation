@@ -6,12 +6,12 @@
                 "limitSymbolsToIncludedHeaders": false
             },
             "includePath": [
+              "${workspaceFolder}/src/**/include/**",
               "/usr/include/**",
               "/opt/ros/noetic/include/**",
               "/opt/ros/noetic/share/**",
               "/opt/ros/noetic/lib/**",
-              "${workspaceFolder}/devel/include/**",
-              "${workspaceFolder}/src/**/include/**"
+              "${workspaceFolder}/devel/include/**"
             ],
             "name": "ROS",
             "intelliSenseMode": "gcc-x64",
