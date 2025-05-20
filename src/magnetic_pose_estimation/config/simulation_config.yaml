@@ -2,7 +2,7 @@
 simulation_config:
   # 磁铁参数配置
   magnet:
-    strength: 13000  # 磁矩大小，单位：安培·米² (A·m²)
+    strength: 1300  # 磁矩大小，单位：安培·米² (A·m²)
     direction: [0, 0, 1]  # 磁矩方向向量，指向z轴正方向
 
   # 运动路径参数
@@ -21,6 +21,13 @@ simulation_config:
     update_rate: 100.0  # 位置更新频率，单位：Hz
     points_per_side: 500  # 每条边的路径点数量
 
+  # 噪声参数
+  noise:
+    enable: false          # 是否添加噪声
+    type: gaussian         # 噪声类型，可选: gaussian, uniform
+    mean: 0.0              # 均值
+    stddev: 1000.0         # 标准差（高斯噪声用）
+    amplitude: 1.0         # 幅值（均匀噪声用）
 
 
 

@@ -5,6 +5,7 @@
 #include <magnetic_pose_estimation/MagneticField.h>
 #include <magnetic_pose_estimation/MagnetPose.h>
 #include <magnetic_pose_estimation/magnetic_field_calculator.hpp>
+#include <random>
 
 
 class SimulationNode {
@@ -50,6 +51,13 @@ private:
         nh_.param<double>("simulation_config/path/center/y", y_center_, 0.2);
         nh_.param<double>("simulation_config/path/update_rate", update_rate_, 10.0);
         nh_.param<int>("simulation_config/path/points_per_side", points_per_side_, 20);
+
+        // 加载噪声参数
+        nh_.param<bool>("simulation_config/noise/enable", noise_enable_, false);
+        nh_.param<std::string>("simulation_config/noise/type", noise_type_, std::string("gaussian"));
+        nh_.param<double>("simulation_config/noise/mean", noise_mean_, 0.0);
+        nh_.param<double>("simulation_config/noise/stddev", noise_stddev_, 1.0);
+        nh_.param<double>("simulation_config/noise/amplitude", noise_amplitude_, 1.0);
     }
 
     void initializeNode() {
@@ -154,15 +162,33 @@ private:
         Eigen::MatrixXd magnetic_fields = magnetic_pose_estimation::MagneticFieldCalculator::calculateMagneticField(
             sensor_positions, magnetic_position, magnetic_direction_, magnet_strength_);
 
-        // 发布每个传感器的磁场数据
+        // 噪声生成器
+        std::default_random_engine generator(std::random_device{}());
+        std::normal_distribution<double> gaussian_dist(noise_mean_, noise_stddev_);
+        std::uniform_real_distribution<double> uniform_dist(-noise_amplitude_, noise_amplitude_);
+
         for (size_t i = 0; i < sensors.size(); ++i) {
             magnetic_pose_estimation::MagneticField field_msg;
             field_msg.header.stamp = ros::Time::now();
             field_msg.sensor_id = sensors[i].id;
             field_msg.sensor_pose = sensors[i].pose;
-            field_msg.mag_x = magnetic_fields(i, 0);
-            field_msg.mag_y = magnetic_fields(i, 1);
-            field_msg.mag_z = magnetic_fields(i, 2);
+
+            double nx = 0, ny = 0, nz = 0;
+            if (noise_enable_) {
+                if (noise_type_ == "gaussian") {
+                    nx = gaussian_dist(generator);
+                    ny = gaussian_dist(generator);
+                    nz = gaussian_dist(generator);
+                } else if (noise_type_ == "uniform") {
+                    nx = uniform_dist(generator);
+                    ny = uniform_dist(generator);
+                    nz = uniform_dist(generator);
+                }
+            }
+
+            field_msg.mag_x = magnetic_fields(i, 0) + nx;
+            field_msg.mag_y = magnetic_fields(i, 1) + ny;
+            field_msg.mag_z = magnetic_fields(i, 2) + nz;
             magnetic_field_pub_.publish(field_msg);
         }
     }
@@ -184,6 +210,12 @@ private:
     double x_center_;    // 添加中心x坐标
     double y_center_;    // 添加中心y坐标
     Eigen::Vector3d magnetic_direction_;
+
+    bool noise_enable_;
+    std::string noise_type_;
+    double noise_mean_;
+    double noise_stddev_;
+    double noise_amplitude_;
 };
 
 /**

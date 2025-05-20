@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <launch>
-    <arg name="sim" default="false" doc="是否启动仿真节点" />
+    <arg name="sim" default="true" doc="是否启动仿真节点" />
 
     <!-- 加载配置文件 -->
     <rosparam command="load" file="$(find magnetic_pose_estimation)/config/sensor_config.yaml" />

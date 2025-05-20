@@ -32,20 +32,20 @@ def analyze_magnetic_field(bag_file):
             mean_x = np.mean(data[:, 0])
             mean_y = np.mean(data[:, 1])
             mean_z = np.mean(data[:, 2])
-            var_x = np.var(data[:, 0])
-            var_y = np.var(data[:, 1])
-            var_z = np.var(data[:, 2])
+            std_x = np.std(data[:, 0])
+            std_y = np.std(data[:, 1])
+            std_z = np.std(data[:, 2])
             range_x = np.max(data[:, 0]) - np.min(data[:, 0])
             range_y = np.max(data[:, 1]) - np.min(data[:, 1])
             range_z = np.max(data[:, 2]) - np.min(data[:, 2])
             summary.append([
                 sensor_id, mean_x, mean_y, mean_z,
-                var_x, var_y, var_z,
+                std_x, std_y, std_z,
                 range_x, range_y, range_z
             ])
-            var_x_list.append(var_x)
-            var_y_list.append(var_y)
-            var_z_list.append(var_z)
+            var_x_list.append(std_x)
+            var_y_list.append(std_y)
+            var_z_list.append(std_z)
             range_x_list.append(range_x)
             range_y_list.append(range_y)
             range_z_list.append(range_z)
@@ -56,15 +56,15 @@ def analyze_magnetic_field(bag_file):
         summary,
         headers=[
             "传感器ID", "X均值", "Y均值", "Z均值",
-            "X方差", "Y方差", "Z方差",
+            "X标准差", "Y标准差", "Z标准差",
             "X极值差", "Y极值差", "Z极值差"
         ],
         tablefmt="github",
         floatfmt=".6f"
     ))
     if var_x_list:
-        output.append("\n各通道平均方差和极值差：")
-        output.append(f"X方差均值: {np.mean(var_x_list):.6f}，Y方差均值: {np.mean(var_y_list):.6f}，Z方差均值: {np.mean(var_z_list):.6f}")
+        output.append("\n各通道平均标准差和极值差：")
+        output.append(f"X标准差均值: {np.mean(np.sqrt(var_x_list)):.6f}，Y标准差均值: {np.mean(np.sqrt(var_y_list)):.6f}，Z标准差均值: {np.mean(np.sqrt(var_z_list)):.6f}")
         output.append(f"X极值差均值: {np.mean(range_x_list):.6f}，Y极值差均值: {np.mean(range_y_list):.6f}，Z极值差均值: {np.mean(range_z_list):.6f}")
     output.append("-" * 100 + "\n")
     return "\n".join(output)

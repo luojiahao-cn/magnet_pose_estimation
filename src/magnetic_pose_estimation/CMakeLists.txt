@@ -50,6 +50,7 @@ include_directories(
 add_library(${PROJECT_NAME}
   src/sensor_config.cpp
   src/magnet_pose_estimator_optimization.cpp
+  src/magnet_pose_estimator_kalman.cpp 
   # 可在此处添加其它核心源文件
 )
 
