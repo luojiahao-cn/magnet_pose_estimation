@@ -16,7 +16,15 @@ MagneticFieldPanel::MagneticFieldPanel(QWidget *parent)
     layout->addWidget(calibrate_button_);
     layout->addWidget(restore_button_);
     layout->addWidget(reset_localization_button_);
-    setLayout(layout);
+
+    // 在按钮下方增加一个垂直布局用于显示数值
+    QVBoxLayout *main_layout = new QVBoxLayout;
+    main_layout->addLayout(layout);
+
+    QWidget *sensor_widget = new QWidget;
+    QVBoxLayout *sensor_layout = new QVBoxLayout(sensor_widget);
+    main_layout->addWidget(sensor_widget);
+    setLayout(main_layout);
 
     // 连接按钮信号
     connect(calibrate_button_, SIGNAL(clicked()), this, SLOT(onCalibrateClicked()));
@@ -27,6 +35,9 @@ MagneticFieldPanel::MagneticFieldPanel(QWidget *parent)
     calibrate_client_ = nh_.serviceClient<std_srvs::Empty>("/magnetic_field/calibrate_earth_field");
     reset_client_ = nh_.serviceClient<std_srvs::Empty>("/magnetic_field/reset_to_initial");
     reset_localization_client_ = nh_.serviceClient<std_srvs::Empty>("/magnet_pose/reset_localization");
+
+    // 订阅磁场话题
+    magnetic_field_sub_ = nh_.subscribe("/magnetic_field", 10, &MagneticFieldPanel::onMagneticFieldMsg, this);
 }
 
 MagneticFieldPanel::~MagneticFieldPanel()
@@ -67,6 +78,20 @@ void MagneticFieldPanel::onResetLocalizationClicked()
     {
         ROS_ERROR("定位重置服务调用失败！");
     }
+}
+
+void MagneticFieldPanel::onMagneticFieldMsg(const magnetic_pose_estimation::MagneticField::ConstPtr& msg)
+{
+    int id = msg->sensor_id;
+    QString text = QString("传感器%1: [%.3f, %.3f, %.3f]").arg(id).arg(msg->mag_x).arg(msg->mag_y).arg(msg->mag_z);
+
+    if (!sensor_value_labels_.contains(id)) {
+        QLabel *label = new QLabel;
+        sensor_value_labels_[id] = label;
+        // 假设 sensor_layout_ 是你在构造函数中保存的 QVBoxLayout*
+        sensor_layout_->addWidget(label);
+    }
+    sensor_value_labels_[id]->setText(text);
 }
 
 } // end namespace magnetic_pose_estimation
