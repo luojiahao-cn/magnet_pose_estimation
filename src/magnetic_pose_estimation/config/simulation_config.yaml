@@ -2,7 +2,7 @@
 simulation_config:
   # 磁铁参数配置
   magnet:
-    strength: 1300  # 磁矩大小，单位：安培·米² (A·m²)
+    strength: 130  # 磁矩大小，单位：安培·米² (A·m²)
     direction: [0, 0, 1]  # 磁矩方向向量，指向z轴正方向
 
   # 运动路径参数
