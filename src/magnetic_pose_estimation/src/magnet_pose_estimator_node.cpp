@@ -7,10 +7,11 @@ int main(int argc, char **argv)
 {
     setlocale(LC_ALL, "zh_CN.UTF-8");
     ros::init(argc, argv, "magnet_pose_estimator");
-    ros::NodeHandle nh("~");
+    ros::NodeHandle nh; // 全局参数服务器
 
     std::string estimator_type;
-    nh.param<std::string>("estimator_type", estimator_type, "kalman");
+    // 读取 /estimator_config/estimator_type
+    nh.param<std::string>("/estimator_config/estimator_type", estimator_type, std::string("optimization"));
 
     std::unique_ptr<magnetic_pose_estimation::BaseMagnetPoseEstimator> estimator;
 

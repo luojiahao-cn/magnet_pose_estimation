@@ -1,4 +1,7 @@
 estimator_config:
+  # 基础配置
+  estimator_type: kalman  # 可选值：optimization/kalman/nn
+
   # 磁铁参数配置
   magnet:
     strength: 130 # 磁矩大小，单位：安培·米² (A·m²)
@@ -14,3 +17,6 @@ estimator_config:
     max_iterations: 100 # 最大迭代次数
     convergence_threshold: 1.0e-6 # 收敛阈值
     lambda_damping: 1.0e4 # 阻尼因子
+
+  # 卡尔曼滤波参数配置
+

@@ -13,6 +13,9 @@
 #include <std_msgs/String.h>
 #include <std_srvs/Empty.h>
 #include <pluginlib/class_list_macros.h>
+#include <QLabel>
+#include <ros/ros.h>
+#include <magnetic_pose_estimation/MagnetPose.h>
 
 namespace magnetic_pose_estimation
 {
@@ -43,6 +46,10 @@ namespace magnetic_pose_estimation
         ros::Subscriber magnetic_field_sub_; // 订阅磁场话题
         QVBoxLayout *sensor_layout_;         // 用于保存传感器数值标签的布局
         void onMagneticFieldMsg(const magnetic_pose_estimation::MagneticField::ConstPtr &msg);
+
+        ros::Subscriber magnet_pose_sub_;
+        QLabel *pose_value_labels_[7]; // 每个位姿分量和强度一个数值框
+        void onMagnetPoseMsg(const magnetic_pose_estimation::MagnetPose::ConstPtr &msg);
     };
 
 } // end namespace magnetic_pose_estimation
