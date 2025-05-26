@@ -6,13 +6,13 @@ sensor_frames:
   array_frame: "sensor_array"
   # 传感器阵列相对于父坐标系的位姿
   array_pose:
-    position: [0.0, 0.0, 0.0]  # [x, y, z]
-    orientation: [0.0, 0.0, 0.0]  # [roll, pitch, yaw] in radians
+    position: [0.0, 0.0, 0.0] # [x, y, z]
+    orientation: [0.0, 0.0, 0.0] # [roll, pitch, yaw] in radians
 
 sensors:
   - id: 1
     position: [0.00, 0.04, 0.00]
-    orientation: [0.0, 0.0, 0.0]  # RPY格式 (单位: rad)
+    orientation: [0.0, 0.0, 0.0] # RPY格式 (单位: rad)
   - id: 2
     position: [0.01, 0.04, 0.00]
     orientation: [0.0, 0.0, 0.0]

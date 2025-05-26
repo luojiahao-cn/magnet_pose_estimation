@@ -1,7 +1,7 @@
 <launch>
     <!-- 可选参数，默认true -->
     <arg name="enable_visualization" default="true" />
-    
+
     <!-- 加载串口配置文件 -->
     <rosparam command="load" file="$(find magnetic_pose_estimation)/config/serial_config.yaml" />
 
@@ -12,6 +12,5 @@
     <node name="sensor_reader" pkg="magnetic_pose_estimation" type="sensor_reader_node" output="screen"/>
 
     <!-- 条件启动 visualization.launch -->
-    <include if="$(arg enable_visualization)"
-        file="$(find magnetic_pose_estimation)/launch/visualization.launch" />
+    <include if="$(arg enable_visualization)" file="$(find magnetic_pose_estimation)/launch/visualization.launch" />
 </launch>

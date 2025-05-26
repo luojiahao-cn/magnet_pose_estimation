@@ -5,4 +5,4 @@ serial:
   topic: "/magnetic_field/raw_data"
   queue_size: 100
   frame_id: "world"
-  sleep_time: 1  # 读取线程休眠时间(毫秒)
+  sleep_time: 1 # 读取线程休眠时间(毫秒)

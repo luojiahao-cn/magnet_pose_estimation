@@ -12,15 +12,15 @@
     <buildtool_depend>catkin</buildtool_depend>
 
     <!-- 编译时依赖项 -->
-    <build_depend>geometry_msgs</build_depend>  <!-- 几何消息类型 -->
-    <build_depend>message_generation</build_depend>  <!-- ROS 消息生成 -->
-    <build_depend>roscpp</build_depend>  <!-- ROS C++ 库 -->
-    <build_depend>sensor_msgs</build_depend>  <!-- 传感器消息类型 -->
-    <build_depend>std_msgs</build_depend>  <!-- 标准消息类型 -->
-    <build_depend>tf2</build_depend>  <!-- TF2 坐标变换库 -->
-    <build_depend>tf2_ros</build_depend>  <!-- TF2 ROS 接口 -->
-    <build_depend>eigen</build_depend>  <!-- Eigen 矩阵运算库 -->
-    <build_depend>serial</build_depend>  <!-- 串口通信库 -->
+    <build_depend>geometry_msgs</build_depend>    <!-- 几何消息类型 -->
+    <build_depend>message_generation</build_depend>    <!-- ROS 消息生成 -->
+    <build_depend>roscpp</build_depend>    <!-- ROS C++ 库 -->
+    <build_depend>sensor_msgs</build_depend>    <!-- 传感器消息类型 -->
+    <build_depend>std_msgs</build_depend>    <!-- 标准消息类型 -->
+    <build_depend>tf2</build_depend>    <!-- TF2 坐标变换库 -->
+    <build_depend>tf2_ros</build_depend>    <!-- TF2 ROS 接口 -->
+    <build_depend>eigen</build_depend>    <!-- Eigen 矩阵运算库 -->
+    <build_depend>serial</build_depend>    <!-- 串口通信库 -->
     <build_depend>rviz</build_depend>
     <build_depend>std_srvs</build_depend>
 
@@ -32,7 +32,7 @@
     <build_export_depend>tf2</build_export_depend>
     <build_export_depend>tf2_ros</build_export_depend>
     <build_export_depend>eigen</build_export_depend>
-    <build_export_depend>serial</build_export_depend>  <!-- 串口通信库 -->
+    <build_export_depend>serial</build_export_depend>    <!-- 串口通信库 -->
     <build_export_depend>rviz</build_export_depend>
     <build_export_depend>std_srvs</build_export_depend>
 
@@ -44,9 +44,9 @@
     <exec_depend>tf2</exec_depend>
     <exec_depend>tf2_ros</exec_depend>
     <exec_depend>eigen</exec_depend>
-    <exec_depend>serial</exec_depend>  <!-- 串口通信库 -->
+    <exec_depend>serial</exec_depend>    <!-- 串口通信库 -->
     <exec_depend>rviz</exec_depend>
-    <exec_depend>message_runtime</exec_depend> <!-- 添加此行 -->
+    <exec_depend>message_runtime</exec_depend>    <!-- 添加此行 -->
     <exec_depend>std_srvs</exec_depend>
 
     <export>

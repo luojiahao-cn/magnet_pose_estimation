@@ -39,10 +39,10 @@ namespace magnetic_pose_estimation
         ros::ServiceClient reset_client_;
         ros::ServiceClient reset_localization_client_;
 
-        QVector<QLabel*> sensor_value_labels_;
-        ros::Subscriber magnetic_field_sub_;     // 订阅磁场话题
-        QVBoxLayout *sensor_layout_; // 用于保存传感器数值标签的布局
-        void onMagneticFieldMsg(const magnetic_pose_estimation::MagneticField::ConstPtr& msg);
+        QVector<QLabel *> sensor_value_labels_;
+        ros::Subscriber magnetic_field_sub_; // 订阅磁场话题
+        QVBoxLayout *sensor_layout_;         // 用于保存传感器数值标签的布局
+        void onMagneticFieldMsg(const magnetic_pose_estimation::MagneticField::ConstPtr &msg);
     };
 
 } // end namespace magnetic_pose_estimation

@@ -23,7 +23,7 @@ public:
         // 从参数服务器读取串口配置
         std::string port, topic, frame_id;
         int baud_rate, timeout, queue_size, sleep_time;
-        
+
         // 读取所有配置参数
         nh.param<std::string>("serial/port", port, "/dev/ttyUSB0");
         nh.param<int>("serial/baud_rate", baud_rate, 921600);
@@ -116,7 +116,7 @@ private:
                             double elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - start_time).count();
                             if (elapsed >= freq_stat_period)
                             {
-                                ROS_INFO("磁场数据发布频率: %.2f Hz", msg_count / elapsed /25);
+                                ROS_INFO("磁场数据发布频率: %.2f Hz", msg_count / elapsed / 25);
                                 // 重置计数和起始时间
                                 msg_count = 0;
                                 start_time = now;

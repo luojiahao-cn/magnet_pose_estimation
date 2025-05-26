@@ -8,7 +8,7 @@
 class EarthFieldProcessor
 {
 public:
-    EarthFieldProcessor(ros::NodeHandle& nh)
+    EarthFieldProcessor(ros::NodeHandle &nh)
         : nh_(nh)
     {
         raw_sub_ = nh_.subscribe("/magnetic_field/raw_data", 50, &EarthFieldProcessor::rawCallback, this);
@@ -33,26 +33,32 @@ private:
     int calibration_samples_ = 10;
     bool is_calibrating_ = false;
 
-    void rawCallback(const magnetic_pose_estimation::MagneticField::ConstPtr& msg)
+    void rawCallback(const magnetic_pose_estimation::MagneticField::ConstPtr &msg)
     {
         Eigen::Vector3d raw(msg->mag_x, msg->mag_y, msg->mag_z);
 
         // 校准流程
-        if (is_calibrating_) {
+        if (is_calibrating_)
+        {
             calibration_data_[msg->sensor_id].push_back(raw);
 
             bool ready = true;
-            for (const auto& pair : calibration_data_) {
-                if (pair.second.size() < calibration_samples_) {
+            for (const auto &pair : calibration_data_)
+            {
+                if (pair.second.size() < calibration_samples_)
+                {
                     ready = false;
                     break;
                 }
             }
-            if (ready) {
+            if (ready)
+            {
                 earth_field_.clear();
-                for (const auto& pair : calibration_data_) {
+                for (const auto &pair : calibration_data_)
+                {
                     Eigen::Vector3d sum = Eigen::Vector3d::Zero();
-                    for (const auto& v : pair.second) sum += v;
+                    for (const auto &v : pair.second)
+                        sum += v;
                     earth_field_[pair.first] = sum / pair.second.size();
                 }
                 earth_field_calibrated_ = true;
@@ -65,7 +71,8 @@ private:
 
         // 地磁场处理
         magnetic_pose_estimation::MagneticField out = *msg;
-        if (earth_field_calibrated_ && earth_field_.count(msg->sensor_id)) {
+        if (earth_field_calibrated_ && earth_field_.count(msg->sensor_id))
+        {
             Eigen::Vector3d corrected = raw - earth_field_[msg->sensor_id];
             out.mag_x = corrected.x();
             out.mag_y = corrected.y();
@@ -74,7 +81,7 @@ private:
         processed_pub_.publish(out);
     }
 
-    bool calibrateSrv(std_srvs::Empty::Request&, std_srvs::Empty::Response&)
+    bool calibrateSrv(std_srvs::Empty::Request &, std_srvs::Empty::Response &)
     {
         calibration_data_.clear();
         is_calibrating_ = true;
@@ -82,7 +89,7 @@ private:
         return true;
     }
 
-    bool resetSrv(std_srvs::Empty::Request&, std_srvs::Empty::Response&)
+    bool resetSrv(std_srvs::Empty::Request &, std_srvs::Empty::Response &)
     {
         earth_field_calibrated_ = false;
         earth_field_.clear();
@@ -91,7 +98,7 @@ private:
     }
 };
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
     setlocale(LC_ALL, "zh_CN.UTF-8");
     ros::init(argc, argv, "earth_field_processor_node");

@@ -78,8 +78,7 @@ Visualization Manager:
       Enabled: false
       Marker Topic: /magnet_marker
       Name: MagnetMarker
-      Namespaces:
-        {}
+      Namespaces: {}
       Queue Size: 100
       Value: false
     - Class: rviz/TF
@@ -180,60 +179,33 @@ Visualization Manager:
                       frrobot_j4_link:
                         frrobot_j5_link:
                           frrobot_j6_link:
-                            frrobot_tool_link:
-                              {}
-          magnet_predicted:
-            {}
-          sensor_1:
-            {}
-          sensor_10:
-            {}
-          sensor_11:
-            {}
-          sensor_12:
-            {}
-          sensor_13:
-            {}
-          sensor_14:
-            {}
-          sensor_15:
-            {}
-          sensor_16:
-            {}
-          sensor_17:
-            {}
-          sensor_18:
-            {}
-          sensor_19:
-            {}
-          sensor_2:
-            {}
-          sensor_20:
-            {}
-          sensor_21:
-            {}
-          sensor_22:
-            {}
-          sensor_23:
-            {}
-          sensor_24:
-            {}
-          sensor_25:
-            {}
-          sensor_3:
-            {}
-          sensor_4:
-            {}
-          sensor_5:
-            {}
-          sensor_6:
-            {}
-          sensor_7:
-            {}
-          sensor_8:
-            {}
-          sensor_9:
-            {}
+                            frrobot_tool_link: {}
+          magnet_predicted: {}
+          sensor_1: {}
+          sensor_10: {}
+          sensor_11: {}
+          sensor_12: {}
+          sensor_13: {}
+          sensor_14: {}
+          sensor_15: {}
+          sensor_16: {}
+          sensor_17: {}
+          sensor_18: {}
+          sensor_19: {}
+          sensor_2: {}
+          sensor_20: {}
+          sensor_21: {}
+          sensor_22: {}
+          sensor_23: {}
+          sensor_24: {}
+          sensor_25: {}
+          sensor_3: {}
+          sensor_4: {}
+          sensor_5: {}
+          sensor_6: {}
+          sensor_7: {}
+          sensor_8: {}
+          sensor_9: {}
       Update Interval: 0
       Value: true
   Enabled: true

@@ -8,10 +8,8 @@
     <rosparam command="load" file="$(find magnetic_pose_estimation)/config/sensor_config.yaml" />
 
     <!-- 启动仿真节点 -->
-    <node name="simulation_node" pkg="magnetic_pose_estimation" type="simulation_node"
-        output="screen" />
+    <node name="simulation_node" pkg="magnetic_pose_estimation" type="simulation_node" output="screen" />
 
-<!-- 条件启动 visualization.launch -->
-    <include if="$(arg enable_visualization)"
-        file="$(find magnetic_pose_estimation)/launch/visualization.launch" />
+    <!-- 条件启动 visualization.launch -->
+    <include if="$(arg enable_visualization)" file="$(find magnetic_pose_estimation)/launch/visualization.launch" />
 </launch>

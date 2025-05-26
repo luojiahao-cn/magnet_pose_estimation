@@ -14,16 +14,23 @@ int main(int argc, char **argv)
 
     std::unique_ptr<magnetic_pose_estimation::BaseMagnetPoseEstimator> estimator;
 
-    if (estimator_type == "optimization") {
+    if (estimator_type == "optimization")
+    {
         ROS_INFO("使用优化算法进行磁场姿态估计");
         estimator.reset(new magnetic_pose_estimation::OptimizationMagnetPoseEstimator(nh));
-    } else if (estimator_type == "nn") {
+    }
+    else if (estimator_type == "nn")
+    {
         ROS_INFO("使用神经网络进行磁场姿态估计");
         // estimator.reset(new magnetic_pose_estimation::NNMagnetPoseEstimator(nh));
-    } else if (estimator_type == "kalman") {
+    }
+    else if (estimator_type == "kalman")
+    {
         ROS_INFO("使用卡尔曼滤波器进行磁场姿态估计");
         estimator.reset(new magnetic_pose_estimation::KalmanMagnetPoseEstimator(nh));
-    } else {
+    }
+    else
+    {
         ROS_ERROR("未知的estimator_type: %s", estimator_type.c_str());
         return 1;
     }

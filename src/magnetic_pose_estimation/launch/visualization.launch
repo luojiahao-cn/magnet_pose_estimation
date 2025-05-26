@@ -3,11 +3,8 @@
     <rosparam command="load" file="$(find magnetic_pose_estimation)/config/visualization_config.yaml" />
 
     <!-- 启动可视化节点 -->
-    <node pkg="magnetic_pose_estimation" type="magnetic_field_visualizer"
-        name="magnetic_field_visualizer"
-        output="screen" />
+    <node pkg="magnetic_pose_estimation" type="magnetic_field_visualizer" name="magnetic_field_visualizer" output="screen" />
 
     <!-- 启动 RViz -->
-    <node pkg="rviz" type="rviz" name="rviz" required="true"
-        args="-d $(find magnetic_pose_estimation)/config/visualization.rviz" />
+    <node pkg="rviz" type="rviz" name="rviz" required="true" args="-d $(find magnetic_pose_estimation)/config/visualization.rviz" />
 </launch>
