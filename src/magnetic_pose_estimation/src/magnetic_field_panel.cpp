@@ -225,7 +225,7 @@ namespace magnetic_pose_estimation
         pose_value_labels_[3]->setText(QString::number(roll, 'f', 3));
         pose_value_labels_[4]->setText(QString::number(pitch, 'f', 3));
         pose_value_labels_[5]->setText(QString::number(yaw, 'f', 3));
-        pose_value_labels_[6]->setText(QString::number(strength, 'f', 2));
+        pose_value_labels_[6]->setText(QString::number(strength, 'f', 5));
     }
 
 } // end namespace magnetic_pose_estimation

@@ -33,9 +33,20 @@ private:
     int calibration_samples_ = 10;
     bool is_calibrating_ = false;
 
+    // 原始整数转毫特斯拉
+    inline double rawToMilliTesla(int16_t raw_value)
+    {
+        return (static_cast<double>(raw_value) / 32767.0) * 3.2;
+    }
+
     void rawCallback(const magnetic_pose_estimation::MagneticField::ConstPtr &msg)
     {
-        Eigen::Vector3d raw(msg->mag_x, msg->mag_y, msg->mag_z);
+        // 原始整数转mT
+        double mag_x = rawToMilliTesla(static_cast<int16_t>(msg->mag_x));
+        double mag_y = rawToMilliTesla(static_cast<int16_t>(msg->mag_y));
+        double mag_z = rawToMilliTesla(static_cast<int16_t>(msg->mag_z));
+
+        Eigen::Vector3d raw(mag_x, mag_y, mag_z);
 
         // 校准流程
         if (is_calibrating_)
@@ -77,6 +88,12 @@ private:
             out.mag_x = corrected.x();
             out.mag_y = corrected.y();
             out.mag_z = corrected.z();
+        }
+        else
+        {
+            out.mag_x = mag_x;
+            out.mag_y = mag_y;
+            out.mag_z = mag_z;
         }
         processed_pub_.publish(out);
     }

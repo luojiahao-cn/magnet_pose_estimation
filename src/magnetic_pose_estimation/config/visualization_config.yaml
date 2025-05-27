@@ -2,11 +2,11 @@
 visualization_config:
   magnetic_field_marker:
     color: [1.0, 1.0, 0.0, 1.0] # RGBA 格式
-    field_scale: 0.001 # 磁场可视化比例，单位：m
+    field_scale: 0.005 # 单位：m，箭头长度固定为5mm
     lifetime: 0.1 # 磁场可视化持续时间，单位：秒
     arrow:
-      shaft_diameter: 0.0005 # 箭头轴的直径，单位：m（1厘米）
-      head_diameter: 0.0025 # 箭头头部的直径，单位：m（2厘米）
+      shaft_diameter: 0.0003 # 箭头轴的直径，单位：m（1厘米）
+      head_diameter: 0.0010 # 箭头头部的直径，单位：m（2厘米）
 
   magnet_marker:
     scale:
@@ -14,3 +14,7 @@ visualization_config:
       y: 0.001 # 磁铁标记的直径，单位：m（1厘米）
       z: 0.002 # 磁铁标记的高度，单位：m（2厘米）
     color: [1.0, 0.0, 0.0, 1.0] # RGBA 格式，红色
+
+color_map:
+  max: 1
+  type: "blue-green-red" # 可选

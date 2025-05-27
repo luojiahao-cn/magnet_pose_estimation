@@ -6,6 +6,8 @@
 #include "magnetic_pose_estimation/sensor_config.hpp"
 #include "magnetic_pose_estimation/MagneticField.h"
 #include "magnetic_pose_estimation/MagnetPose.h"
+#include <Eigen/Dense>
+#include <algorithm>
 
 class MagneticFieldVisualizer
 {
@@ -17,6 +19,11 @@ public:
             ROS_ERROR("无法加载传感器配置");
             return;
         }
+
+        // 初始化可视化参数
+        nh_.param("/visualization_config/magnetic_field_marker/field_scale", field_scale_, 0.005);
+        nh_.param("/visualization_config/magnetic_field_marker/lifetime", lifetime_, 0.1);
+        nh_.param("/color_map/max", color_max_, 3.2);
 
         // 初始化标记
         initializeMarkerTemplates();
@@ -45,10 +52,10 @@ private:
 
                 // 为每个源创建发布器
                 magnetic_field_pubs_[source] = nh_.advertise<visualization_msgs::MarkerArray>(
-                    "magnetic_field_markers/" + source, 100);
+                    "magnetic_field_markers/" + source, 25);
 
                 magnetic_field_subs_[source] = nh_.subscribe<magnetic_pose_estimation::MagneticField>(
-                    topic_name, 100,
+                    topic_name, 25,
                     boost::bind(&MagneticFieldVisualizer::magneticFieldCallback, this, _1, source));
 
                 ROS_INFO("订阅磁场话题: %s", topic_name.c_str());
@@ -78,18 +85,18 @@ private:
         sensor_marker_template_.type = visualization_msgs::Marker::ARROW;
         sensor_marker_template_.action = visualization_msgs::Marker::ADD;
 
-        // 从参数服务器读取箭头参数
-        double shaft_diameter, head_diameter;
-        nh_.getParam("/visualization_config/magnetic_field_marker/arrow/shaft_diameter", shaft_diameter);
-        nh_.getParam("/visualization_config/magnetic_field_marker/arrow/head_diameter", head_diameter);
+        // 读取箭头参数
+        double shaft_diameter = 0.0005, head_diameter = 0.0025;
+        nh_.param("/visualization_config/magnetic_field_marker/arrow/shaft_diameter", shaft_diameter, 0.0005);
+        nh_.param("/visualization_config/magnetic_field_marker/arrow/head_diameter", head_diameter, 0.0025);
 
         sensor_marker_template_.scale.x = shaft_diameter;
         sensor_marker_template_.scale.y = head_diameter;
         sensor_marker_template_.scale.z = head_diameter;
 
         // 读取箭头颜色
-        std::vector<double> color;
-        nh_.getParam("/visualization_config/magnetic_field_marker/color", color);
+        std::vector<double> color{1.0, 1.0, 0.0, 1.0};
+        nh_.param("/visualization_config/magnetic_field_marker/color", color, color);
         sensor_marker_template_.color.r = color[0];
         sensor_marker_template_.color.g = color[1];
         sensor_marker_template_.color.b = color[2];
@@ -107,13 +114,17 @@ private:
         magnet_marker_.type = visualization_msgs::Marker::CYLINDER;
         magnet_marker_.action = visualization_msgs::Marker::ADD;
 
-        // 从参数服务器读取磁铁标记参数
-        std::vector<double> scale, color;
-        nh_.getParam("/visualization_config/magnet_marker/scale/x", magnet_marker_.scale.x);
-        nh_.getParam("/visualization_config/magnet_marker/scale/y", magnet_marker_.scale.y);
-        nh_.getParam("/visualization_config/magnet_marker/scale/z", magnet_marker_.scale.z);
+        // 读取磁铁标记参数
+        double scale_x = 0.001, scale_y = 0.001, scale_z = 0.002;
+        nh_.param("/visualization_config/magnet_marker/scale/x", scale_x, 0.001);
+        nh_.param("/visualization_config/magnet_marker/scale/y", scale_y, 0.001);
+        nh_.param("/visualization_config/magnet_marker/scale/z", scale_z, 0.002);
+        magnet_marker_.scale.x = scale_x;
+        magnet_marker_.scale.y = scale_y;
+        magnet_marker_.scale.z = scale_z;
 
-        nh_.getParam("/visualization_config/magnet_marker/color", color);
+        std::vector<double> color{1.0, 0.0, 0.0, 1.0};
+        nh_.param("/visualization_config/magnet_marker/color", color, color);
         magnet_marker_.color.r = color[0];
         magnet_marker_.color.g = color[1];
         magnet_marker_.color.b = color[2];
@@ -132,27 +143,46 @@ private:
         updateMagnetMarker(msg, magnet_marker_pubs_[source], "magnet_" + source);
     }
 
+
     void updateMarkers(const magnetic_pose_estimation::MagneticField::ConstPtr &msg, const std::string &source)
     {
-        visualization_msgs::Marker marker = sensor_marker_template_; // 使用模板创建新标记
+        visualization_msgs::Marker marker = sensor_marker_template_;
         marker.header.stamp = ros::Time::now();
         marker.ns = source;
         marker.id = msg->sensor_id;
 
-        // 从参数服务器读取磁场缩放因子和标记存活时间
-        double field_scale, lifetime;
-        nh_.getParam("/visualization_config/magnetic_field_marker/field_scale", field_scale);
-        nh_.getParam("/visualization_config/magnetic_field_marker/lifetime", lifetime);
-
+        // 统一长度，方向归一化
+        Eigen::Vector3d field(msg->mag_x, msg->mag_y, msg->mag_z);
+        Eigen::Vector3d direction = field.norm() > 1e-6 ? field.normalized() : Eigen::Vector3d(1, 0, 0);
         marker.points.resize(2);
         marker.points[0].x = marker.points[0].y = marker.points[0].z = 0.0;
-        marker.points[1].x = msg->mag_x * field_scale;
-        marker.points[1].y = msg->mag_y * field_scale;
-        marker.points[1].z = msg->mag_z * field_scale;
+        marker.points[1].x = direction.x() * field_scale_;
+        marker.points[1].y = direction.y() * field_scale_;
+        marker.points[1].z = direction.z() * field_scale_;
 
         marker.pose.position = msg->sensor_pose.position;
         marker.pose.orientation = msg->sensor_pose.orientation;
-        marker.lifetime = ros::Duration(lifetime);
+        marker.lifetime = ros::Duration(lifetime_);
+
+        // 颜色映射（仅上界）
+        double norm_val = std::min(field.norm(), color_max_);
+        double ratio = norm_val / color_max_; // 归一化到0~1
+
+        if (ratio <= 0.5)
+        {
+            // 蓝到绿
+            marker.color.r = 0.0;
+            marker.color.g = ratio * 2.0;
+            marker.color.b = 1.0 - ratio * 2.0;
+        }
+        else
+        {
+            // 绿到红
+            marker.color.r = (ratio - 0.5) * 2.0;
+            marker.color.g = 1.0 - (ratio - 0.5) * 2.0;
+            marker.color.b = 0.0;
+        }
+        marker.color.a = 1.0;
 
         visualization_msgs::MarkerArray current_markers;
         current_markers.markers.push_back(marker);
@@ -241,6 +271,10 @@ private:
     visualization_msgs::Marker sensor_marker_template_; // 传感器标记模板
     visualization_msgs::Marker magnet_marker_;          // 磁铁标记模板
     tf2_ros::TransformBroadcaster tf_broadcaster_;
+
+    double field_scale_ = 0.005;
+    double lifetime_ = 0.1;
+    double color_max_ = 3.2;
 };
 
 int main(int argc, char **argv)
