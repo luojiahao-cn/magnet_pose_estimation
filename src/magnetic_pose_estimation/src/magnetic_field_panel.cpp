@@ -15,8 +15,9 @@ namespace magnetic_pose_estimation
         calibrate_button_ = new QPushButton("地磁场校准");
         restore_button_ = new QPushButton("恢复原始数据");
         reset_localization_button_ = new QPushButton("定位重置");
+        switch_topic_button_ = new QPushButton("切换到已处理数据");
 
-        QHBoxLayout *layout = new QHBoxLayout;
+        QHBoxLayout *layout = new QHBoxLayout; // 先初始化
         layout->addWidget(calibrate_button_);
         layout->addWidget(restore_button_);
         layout->addWidget(reset_localization_button_);
@@ -103,16 +104,24 @@ namespace magnetic_pose_estimation
         sensor_widget->setMaximumHeight(300);
         main_layout->addWidget(sensor_widget);
 
+        // 新增：将切换按钮放到最右下角
+        QHBoxLayout *switch_layout = new QHBoxLayout;
+        switch_layout->addStretch(); // 左侧弹性空间
+        switch_layout->addWidget(switch_topic_button_);
+        main_layout->addLayout(switch_layout);
+
         setLayout(main_layout);
 
         connect(calibrate_button_, SIGNAL(clicked()), this, SLOT(onCalibrateClicked()));
         connect(restore_button_, SIGNAL(clicked()), this, SLOT(onRestoreClicked()));
         connect(reset_localization_button_, SIGNAL(clicked()), this, SLOT(onResetLocalizationClicked()));
+        connect(switch_topic_button_, SIGNAL(clicked()), this, SLOT(onSwitchTopicClicked()));
 
         calibrate_client_ = nh_.serviceClient<std_srvs::Empty>("/magnetic_field/calibrate_earth_field");
         reset_client_ = nh_.serviceClient<std_srvs::Empty>("/magnetic_field/reset_to_initial");
         reset_localization_client_ = nh_.serviceClient<std_srvs::Empty>("/magnet_pose/reset_localization");
 
+        // 初始化订阅
         magnetic_field_sub_ = nh_.subscribe("/magnetic_field/raw_data", 30, &MagneticFieldPanel::onMagneticFieldMsg, this);
         magnet_pose_sub_ = nh_.subscribe("/magnet_pose/predicted", 10, &MagneticFieldPanel::onMagnetPoseMsg, this);
     }
@@ -151,14 +160,33 @@ namespace magnetic_pose_estimation
             ROS_ERROR("定位重置服务调用失败！");
     }
 
+    void MagneticFieldPanel::onSwitchTopicClicked()
+    {
+        magnetic_field_sub_.shutdown();
+        if (current_topic_ == "/magnetic_field/raw_data") {
+            current_topic_ = "/magnetic_field/processed";
+            switch_topic_button_->setText("切换到原始数据");
+        } else {
+            current_topic_ = "/magnetic_field/raw_data";
+            switch_topic_button_->setText("切换到已处理数据");
+        }
+        magnetic_field_sub_ = nh_.subscribe(current_topic_.toStdString(), 30, &MagneticFieldPanel::onMagneticFieldMsg, this);
+    }
+
     void MagneticFieldPanel::onMagneticFieldMsg(const magnetic_pose_estimation::MagneticField::ConstPtr &msg)
     {
         int idx = static_cast<int>(msg->sensor_id) - 1;
         if (idx >= 0 && idx < 25)
         {
-            sensor_value_labels_[idx * 3 + 0]->setText(QString("%1").arg(static_cast<int>(msg->mag_x)));
-            sensor_value_labels_[idx * 3 + 1]->setText(QString("%1").arg(static_cast<int>(msg->mag_y)));
-            sensor_value_labels_[idx * 3 + 2]->setText(QString("%1").arg(static_cast<int>(msg->mag_z)));
+            if (current_topic_ == "/magnetic_field/raw_data") {
+                sensor_value_labels_[idx * 3 + 0]->setText(QString("%1").arg(static_cast<int>(msg->mag_x)));
+                sensor_value_labels_[idx * 3 + 1]->setText(QString("%1").arg(static_cast<int>(msg->mag_y)));
+                sensor_value_labels_[idx * 3 + 2]->setText(QString("%1").arg(static_cast<int>(msg->mag_z)));
+            } else {
+                sensor_value_labels_[idx * 3 + 0]->setText(QString::number(msg->mag_x, 'f', 6));
+                sensor_value_labels_[idx * 3 + 1]->setText(QString::number(msg->mag_y, 'f', 6));
+                sensor_value_labels_[idx * 3 + 2]->setText(QString::number(msg->mag_z, 'f', 6));
+            }
         }
     }
 
