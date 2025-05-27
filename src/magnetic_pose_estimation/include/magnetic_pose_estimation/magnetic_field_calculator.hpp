@@ -22,6 +22,13 @@ namespace magnetic_pose_estimation
             const Eigen::Vector3d &magnetic_position,
             const Eigen::Vector3d &magnetic_direction,
             double magnetic_moment_size);
+
+        template <typename T>
+        static Eigen::Matrix<T, 3, 1> calculateMagneticFieldT(
+            const Eigen::Matrix<T, 3, 1> &sensor_pos,
+            const Eigen::Matrix<T, 3, 1> &position,
+            const Eigen::Matrix<T, 3, 1> &direction,
+            T strength);
     };
 
 } // namespace magnetic_pose_estimation

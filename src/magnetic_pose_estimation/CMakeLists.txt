@@ -19,6 +19,7 @@ find_package(catkin REQUIRED COMPONENTS
   rviz
 )
 find_package(Eigen3 REQUIRED)
+find_package(Ceres REQUIRED)
 
 # 消息定义
 add_message_files(
@@ -44,6 +45,7 @@ include_directories(
   include
   ${catkin_INCLUDE_DIRS}
   ${EIGEN3_INCLUDE_DIR}
+  ${CERES_INCLUDE_DIRS}
 )
 
 # 主库，包含核心功能
@@ -64,6 +66,7 @@ target_link_libraries(${PROJECT_NAME}
   magnetic_field_calculator
   ${catkin_LIBRARIES}
   ${EIGEN3_LIBRARIES}
+  ${CERES_LIBRARIES}
 )
 
 # 可执行文件：磁铁位置估计节点
@@ -73,6 +76,7 @@ target_link_libraries(magnet_pose_estimator_node
   magnetic_field_calculator
   ${catkin_LIBRARIES}
   ${EIGEN3_LIBRARIES}
+  ${CERES_LIBRARIES}
 )
 add_dependencies(magnet_pose_estimator_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
@@ -83,6 +87,7 @@ target_link_libraries(simulation_node
   magnetic_field_calculator
   ${catkin_LIBRARIES}
   ${EIGEN3_LIBRARIES}
+  ${CERES_LIBRARIES}
 )
 add_dependencies(simulation_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 

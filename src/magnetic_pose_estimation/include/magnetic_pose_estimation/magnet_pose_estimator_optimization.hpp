@@ -11,6 +11,52 @@
 #include <magnetic_pose_estimation/magnetic_field_calculator.hpp>
 #include <chrono>
 
+namespace magnetic_pose_estimation {
+
+struct MagnetFieldResidual {
+    MagnetFieldResidual(const Eigen::Vector3d &sensor_pos, const Eigen::Vector3d &measured_field, double strength)
+        : sensor_pos_(sensor_pos), measured_field_(measured_field), strength_(strength) {}
+
+    template <typename T>
+    bool operator()(const T *const position, const T *const direction, T *residuals) const
+    {
+        Eigen::Matrix<T, 3, 1> pos(position[0], position[1], position[2]);
+        Eigen::Matrix<T, 3, 1> dir(direction[0], direction[1], direction[2]);
+        dir.normalize();
+        Eigen::Matrix<T, 3, 1> pred_field = MagneticFieldCalculator::calculateMagneticFieldT<T>(sensor_pos_.cast<T>(), pos, dir, T(strength_));
+        for (int i = 0; i < 3; ++i)
+            residuals[i] = pred_field(i) - T(measured_field_(i));
+        return true;
+    }
+
+    const Eigen::Vector3d sensor_pos_;
+    const Eigen::Vector3d measured_field_;
+    const double strength_;
+};
+
+struct MagnetFieldResidualWithStrength {
+    MagnetFieldResidualWithStrength(const Eigen::Vector3d &sensor_pos, const Eigen::Vector3d &measured_field)
+        : sensor_pos_(sensor_pos), measured_field_(measured_field) {}
+
+    template <typename T>
+    bool operator()(const T *const position, const T *const direction, const T *const strength, T *residuals) const
+    {
+        Eigen::Matrix<T, 3, 1> pos(position[0], position[1], position[2]);
+        Eigen::Matrix<T, 3, 1> dir(direction[0], direction[1], direction[2]);
+        dir.normalize();
+        Eigen::Matrix<T, 3, 1> pred_field = MagneticFieldCalculator::calculateMagneticFieldT<T>(
+            sensor_pos_.cast<T>(), pos, dir, *strength);
+        for (int i = 0; i < 3; ++i)
+            residuals[i] = pred_field(i) - T(measured_field_(i));
+        return true;
+    }
+
+    const Eigen::Vector3d sensor_pos_;
+    const Eigen::Vector3d measured_field_;
+};
+
+}
+
 namespace magnetic_pose_estimation
 {
 
@@ -26,12 +72,6 @@ namespace magnetic_pose_estimation
         void loadParameters();
         void estimateMagnetPose();
 
-        // 数值微分法计算雅可比矩阵
-        Eigen::MatrixXd calculateJacobian(const Eigen::MatrixXd &sensor_positions,
-                                          const Eigen::Vector3d &position,
-                                          const Eigen::Vector3d &direction,
-                                          double strength);
-
         // 发布磁铁位姿消息
         void publishMagnetPose(const Eigen::Vector3d &position,
                                const Eigen::Vector3d &direction,
@@ -43,18 +83,13 @@ namespace magnetic_pose_estimation
         // 构建测量矩阵和传感器位置矩阵
         void buildMeasurementMatrices(Eigen::MatrixXd &sensor_positions, Eigen::MatrixXd &measured_fields);
 
-        // 初始化状态向量
-        void initializeStateVector(Eigen::VectorXd &state, Eigen::VectorXd &best_state, int state_dim);
-
-        // 优化单步
-        double optimizeStep(const Eigen::MatrixXd &sensor_positions,
-                            const Eigen::MatrixXd &measured_fields,
-                            Eigen::VectorXd &state,
-                            Eigen::VectorXd &best_state,
-                            double &best_error,
-                            double &initial_error,
-                            int iter,
-                            int state_dim);
+        // 新的Ceres优化配置参数
+        int max_iterations_;
+        double function_tolerance_;
+        double gradient_tolerance_;
+        double parameter_tolerance_;
+        int num_threads_;
+        bool minimizer_progress_to_stdout_;
 
         ros::NodeHandle nh_;
         ros::Publisher magnet_pose_pub_;
@@ -73,13 +108,6 @@ namespace magnetic_pose_estimation
         Eigen::Vector3d current_position_;
         Eigen::Vector3d magnetic_direction_;
         double magnet_strength_;
-
-        double max_position_change_;
-        double max_error_threshold_;
-        double min_improvement_;
-        int max_iterations_;
-        double convergence_threshold_;
-        double lambda_damping_;
     };
 
 } // namespace magnetic_pose_estimation

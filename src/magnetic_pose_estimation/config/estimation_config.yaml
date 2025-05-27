@@ -5,18 +5,18 @@ estimator_config:
   # 磁铁参数配置
   magnet:
     strength: 0.009 # 磁矩大小，单位：安培·米² (A·m²)
-    strength_delta: 0 # 允许波动范围，单位：安培·米² (A·m²)
+    strength_delta: 0.02 # 允许波动范围，单位：安培·米² (A·m²)
     direction: [0, 0, 1] # 磁矩方向向量，指向z轴正方向
     position: [0.01, 0.01, 0.01] # 初始位置假设，单位：m
 
   # 优化参数配置
   optimization:
-    max_position_change: 0.5 # 最大位置变化（米）
-    max_error_threshold: 10.0 # 最大可接受误差（毫特斯拉）
-    min_improvement: 0.1 # 最小改善比例(0.1表示10%)
-    max_iterations: 100 # 最大迭代次数
-    convergence_threshold: 1.0e-6 # 收敛阈值
-    lambda_damping: 1.0e4 # 阻尼因子
+    max_iterations: 100           # 最大迭代次数
+    function_tolerance: 1.0e-8    # 目标函数收敛阈值
+    gradient_tolerance: 1.0e-10   # 梯度收敛阈值
+    parameter_tolerance: 1.0e-8   # 参数收敛阈值
+    num_threads: 4                # 并行线程数
+    minimizer_progress_to_stdout: false # 是否输出优化过程
 
   # 卡尔曼滤波参数配置
 
