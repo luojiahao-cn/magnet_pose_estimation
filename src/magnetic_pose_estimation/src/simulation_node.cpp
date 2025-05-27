@@ -6,6 +6,7 @@
 #include <magnetic_pose_estimation/MagnetPose.h>
 #include <magnetic_pose_estimation/magnetic_field_calculator.hpp>
 #include <random>
+#include <tf2/LinearMath/Quaternion.h>
 
 /**
  * @brief 磁场仿真节点
@@ -154,7 +155,19 @@ private:
         magnetic_pose_estimation::MagnetPose magnet_pose;
         magnet_pose.header.stamp = ros::Time::now();
         magnet_pose.position = path_points_[current_point_index_];
-        magnet_pose.orientation.w = 1.0; // 默认朝向
+
+        // 先绕x轴偏转pitch，再绕z轴旋转yaw
+        double pitch = 0.5; // x轴偏转角度（弧度），可自定义
+        double omega_rad_per_step = 0.1; // z轴每步旋转角速度
+        double yaw = current_point_index_ * omega_rad_per_step;
+
+        tf2::Quaternion q;
+        q.setRPY(0, pitch, yaw); // RPY顺序为(roll, pitch, yaw)，roll为x轴，pitch为y轴，yaw为z轴
+        magnet_pose.orientation.x = q.x();
+        magnet_pose.orientation.y = q.y();
+        magnet_pose.orientation.z = q.z();
+        magnet_pose.orientation.w = q.w();
+
         magnet_pose.magnetic_strength = magnet_strength_;
         magnet_pose_pub_.publish(magnet_pose);
 
@@ -177,9 +190,9 @@ private:
         Eigen::Matrix<double, Eigen::Dynamic, 3> sensor_positions(sensors.size(), 3);
         for (size_t i = 0; i < sensors.size(); ++i)
         {
-            sensor_positions(i, 0) = sensors[i].pose.position.x; // 单位: m
-            sensor_positions(i, 1) = sensors[i].pose.position.y; // 单位: m
-            sensor_positions(i, 2) = sensors[i].pose.position.z; // 单位: m
+            sensor_positions(i, 0) = sensors[i].pose.position.x;
+            sensor_positions(i, 1) = sensors[i].pose.position.y;
+            sensor_positions(i, 2) = sensors[i].pose.position.z;
         }
 
         // 构建磁铁位置，单位: m
@@ -188,9 +201,20 @@ private:
             magnet_pose.position.y,
             magnet_pose.position.z);
 
+        // 由magnet_pose.orientation计算当前磁铁方向
+        Eigen::Quaterniond q(
+            magnet_pose.orientation.w,
+            magnet_pose.orientation.x,
+            magnet_pose.orientation.y,
+            magnet_pose.orientation.z
+        );
+        // 假设初始磁铁方向为(0, 0, 1)
+        Eigen::Vector3d base_direction(0, 0, 1);
+        Eigen::Vector3d current_direction = q * base_direction;
+
         // 计算磁场，单位: mT
         Eigen::MatrixXd magnetic_fields = magnetic_pose_estimation::MagneticFieldCalculator::calculateMagneticField(
-            sensor_positions, magnetic_position, magnetic_direction_, magnet_strength_);
+            sensor_positions, magnetic_position, current_direction, magnet_strength_);
 
         // 噪声生成器
         std::default_random_engine generator(std::random_device{}());
