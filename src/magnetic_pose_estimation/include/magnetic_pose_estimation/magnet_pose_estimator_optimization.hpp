@@ -25,14 +25,36 @@ namespace magnetic_pose_estimation
     private:
         void loadParameters();
         void estimateMagnetPose();
+
+        // 数值微分法计算雅可比矩阵
         Eigen::MatrixXd calculateJacobian(const Eigen::MatrixXd &sensor_positions,
                                           const Eigen::Vector3d &position,
                                           const Eigen::Vector3d &direction,
                                           double strength);
+
+        // 发布磁铁位姿消息
         void publishMagnetPose(const Eigen::Vector3d &position,
                                const Eigen::Vector3d &direction,
                                double strength);
+
+        // 重置参数为初始值
         void resetToInitialParameters();
+
+        // 构建测量矩阵和传感器位置矩阵
+        void buildMeasurementMatrices(Eigen::MatrixXd &sensor_positions, Eigen::MatrixXd &measured_fields);
+
+        // 初始化状态向量
+        void initializeStateVector(Eigen::VectorXd &state, Eigen::VectorXd &best_state, int state_dim);
+
+        // 优化单步
+        double optimizeStep(const Eigen::MatrixXd &sensor_positions,
+                            const Eigen::MatrixXd &measured_fields,
+                            Eigen::VectorXd &state,
+                            Eigen::VectorXd &best_state,
+                            double &best_error,
+                            double &initial_error,
+                            int iter,
+                            int state_dim);
 
         ros::NodeHandle nh_;
         ros::Publisher magnet_pose_pub_;
