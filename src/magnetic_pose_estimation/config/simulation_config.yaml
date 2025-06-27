@@ -10,7 +10,7 @@ simulation_config:
     # 矩形路径尺寸
     width: 0.03 # 宽度，单位：m（3厘米）
     height: 0.03 # 高度，单位：m（3厘米）
-    z: 0.03 # 平面高度，单位：m（1厘米）
+    z: 0.03 # 平面高度，单位：m（3厘米）
 
     # 矩形路径中心位置
     center:
@@ -20,6 +20,21 @@ simulation_config:
     # 运动控制参数
     update_rate: 100.0 # 位置更新频率，单位：Hz
     points_per_side: 500 # 每条边的路径点数量
+
+  # 磁铁运动模式配置
+  motion:
+    mode: "translate_only"  # 运动模式: "translate_and_rotate", "translate_only", "rotate_only", "static"
+    
+    # 旋转参数（仅在rotate_only或translate_and_rotate模式下有效）
+    axis: "z"              # 旋转轴: "x", "y", "z", "xyz"
+    angular_velocity: 5  # 角速度，单位：rad/step
+    initial_pitch: 0.5     # 初始俯仰角，单位：rad
+    initial_roll: 0.0      # 初始滚转角，单位：rad
+    initial_yaw: 0.0       # 初始偏航角，单位：rad
+      
+    # 静态模式参数（仅在static模式下有效）
+    static_position: [0.02, 0.02, 0.03]  # 固定位置 [x, y, z]，单位：m
+    static_orientation: [0.0, 0.5, 0.0]  # 固定朝向 [roll, pitch, yaw]，单位：rad
 
   # 噪声参数
   noise:

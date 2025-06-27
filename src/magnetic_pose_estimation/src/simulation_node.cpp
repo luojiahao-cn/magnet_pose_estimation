@@ -18,13 +18,6 @@ public:
     /**
      * @brief 模拟节点构造函数
      * @param nh ROS节点句柄
-     *
-     * 初始化模拟节点，包括：
-     * - 加载传感器配置
-     * - 设置磁铁和路径参数
-     * - 创建发布器
-     * - 生成矩形运动路径
-     * - 启动定时器
      */
     SimulationNode(ros::NodeHandle &nh) : nh_(nh)
     {
@@ -44,31 +37,80 @@ public:
 
 private:
     /**
-     * @brief 加载仿真参数，包括磁铁参数、路径参数、噪声参数
+     * @brief 加载仿真参数，包括磁铁参数、路径参数、运动模式参数、噪声参数
      */
     void loadParameters()
     {
         // 加载磁铁参数
-        nh_.param<double>("simulation_config/magnet/strength", magnet_strength_, 100.0); // 单位: A·m²
+        nh_.param<double>("simulation_config/magnet/strength", magnet_strength_, 100.0);
         std::vector<double> direction;
-        nh_.param("simulation_config/magnet/direction", direction, std::vector<double>{0, 0, 1}); // 单位: 无量纲
+        nh_.param("simulation_config/magnet/direction", direction, std::vector<double>{0, 0, 1});
         magnetic_direction_ = Eigen::Vector3d(direction[0], direction[1], direction[2]);
 
         // 加载路径参数
-        nh_.param<double>("simulation_config/path/width", rect_width_, 0.2);         // 单位: m
-        nh_.param<double>("simulation_config/path/height", rect_height_, 0.2);       // 单位: m
-        nh_.param<double>("simulation_config/path/z", rect_z_, 0.1);                 // 单位: m
-        nh_.param<double>("simulation_config/path/center/x", x_center_, 0.2);        // 单位: m
-        nh_.param<double>("simulation_config/path/center/y", y_center_, 0.2);        // 单位: m
-        nh_.param<double>("simulation_config/path/update_rate", update_rate_, 10.0); // 单位: Hz
+        nh_.param<double>("simulation_config/path/width", rect_width_, 0.2);
+        nh_.param<double>("simulation_config/path/height", rect_height_, 0.2);
+        nh_.param<double>("simulation_config/path/z", rect_z_, 0.1);
+        nh_.param<double>("simulation_config/path/center/x", x_center_, 0.2);
+        nh_.param<double>("simulation_config/path/center/y", y_center_, 0.2);
+        nh_.param<double>("simulation_config/path/update_rate", update_rate_, 10.0);
         nh_.param<int>("simulation_config/path/points_per_side", points_per_side_, 20);
+
+        // 加载运动模式参数
+        nh_.param<std::string>("simulation_config/motion/mode", motion_mode_, std::string("translate_only"));
+        
+        // 旋转参数（仅在需要旋转时加载）
+        nh_.param<std::string>("simulation_config/motion/axis", rotation_axis_, std::string("z"));
+        nh_.param<double>("simulation_config/motion/angular_velocity", angular_velocity_, 0.1);
+        nh_.param<double>("simulation_config/motion/initial_pitch", initial_pitch_, 0.5);
+        nh_.param<double>("simulation_config/motion/initial_roll", initial_roll_, 0.0);
+        nh_.param<double>("simulation_config/motion/initial_yaw", initial_yaw_, 0.0);
+        
+        // 静态模式参数
+        std::vector<double> static_pos, static_orient;
+        nh_.param("simulation_config/motion/static_position", static_pos, std::vector<double>{0.02, 0.02, 0.03});
+        nh_.param("simulation_config/motion/static_orientation", static_orient, std::vector<double>{0.0, 0.5, 0.0});
+        static_position_ = Eigen::Vector3d(static_pos[0], static_pos[1], static_pos[2]);
+        static_orientation_ = Eigen::Vector3d(static_orient[0], static_orient[1], static_orient[2]);
+
+        // 根据运动模式设置启用标志
+        updateMotionParameters();
 
         // 加载噪声参数
         nh_.param<bool>("simulation_config/noise/enable", noise_enable_, false);
         nh_.param<std::string>("simulation_config/noise/type", noise_type_, std::string("gaussian"));
-        nh_.param<double>("simulation_config/noise/mean", noise_mean_, 0.0);           // 单位: mT
-        nh_.param<double>("simulation_config/noise/stddev", noise_stddev_, 1.0);       // 单位: mT
-        nh_.param<double>("simulation_config/noise/amplitude", noise_amplitude_, 1.0); // 单位: mT
+        nh_.param<double>("simulation_config/noise/mean", noise_mean_, 0.0);
+        nh_.param<double>("simulation_config/noise/stddev", noise_stddev_, 1.0);
+        nh_.param<double>("simulation_config/noise/amplitude", noise_amplitude_, 1.0);
+    }
+
+    /**
+     * @brief 根据运动模式设置启用标志
+     */
+    void updateMotionParameters()
+    {
+        if (motion_mode_ == "translate_and_rotate") {
+            translation_enable_ = true;
+            rotation_enable_ = true;
+            follow_path_ = true;
+        } else if (motion_mode_ == "translate_only") {
+            translation_enable_ = true;
+            rotation_enable_ = false;
+            follow_path_ = true;
+        } else if (motion_mode_ == "rotate_only") {
+            translation_enable_ = false;
+            rotation_enable_ = true;
+            follow_path_ = false;
+        } else if (motion_mode_ == "static") {
+            translation_enable_ = false;
+            rotation_enable_ = false;
+            follow_path_ = false;
+        }
+        
+        ROS_INFO("运动模式: %s, 位移: %s, 旋转: %s", 
+                 motion_mode_.c_str(),
+                 translation_enable_ ? "启用" : "禁用",
+                 rotation_enable_ ? "启用" : "禁用");
     }
 
     /**
@@ -89,11 +131,6 @@ private:
 
     /**
      * @brief 生成矩形运动路径
-     *
-     * 根据设定的宽度和高度参数生成一个矩形路径：
-     * - 计算矩形四个顶点坐标
-     * - 在顶点之间进行插值，生成密集的路径点
-     * - 每条边默认生成points_per_side_个路径点
      */
     void generateRectPath()
     {
@@ -129,57 +166,121 @@ private:
     /**
      * @brief 定时器回调函数，用于更新和发布磁铁位置及磁场数据
      * @param event 定时器事件
-     *
-     * 该函数定期执行以下操作：
-     * 1. 更新磁铁在预设矩形路径上的位置
-     * 2. 发布磁铁的当前位姿信息，包括：
-     *    - 位置（来自路径点）
-     *    - 朝向（默认为z轴正方向）
-     *    - 磁场强度
-     * 3. 获取所有传感器的位置信息
-     * 4. 计算每个传感器位置处的磁场：
-     *    - 构建传感器位置矩阵
-     *    - 计算磁铁位置和方向向量
-     *    - 使用 MagneticFieldCalculator 计算磁场
-     * 5. 发布每个传感器检测到的磁场数据
      */
     void timerCallback(const ros::TimerEvent &)
     {
-        if (path_points_.empty())
+        // 对于纯旋转模式或静态模式，不需要路径点
+        if (path_points_.empty() && (motion_mode_ == "translate_only" || motion_mode_ == "translate_and_rotate"))
             return;
-
-        // 更新当前位置
-        current_point_index_ = (current_point_index_ + 1) % path_points_.size();
 
         // 发布磁铁位姿
         magnetic_pose_estimation::MagnetPose magnet_pose;
         magnet_pose.header.stamp = ros::Time::now();
-        magnet_pose.position = path_points_[current_point_index_];
-
-        // 先绕x轴偏转pitch，再绕z轴旋转yaw
-        double pitch = 0.5; // x轴偏转角度（弧度），可自定义
-        double omega_rad_per_step = 0.1; // z轴每步旋转角速度
-        double yaw = current_point_index_ * omega_rad_per_step;
-
-        tf2::Quaternion q;
-        q.setRPY(0, pitch, yaw); // RPY顺序为(roll, pitch, yaw)，roll为x轴，pitch为y轴，yaw为z轴
-        magnet_pose.orientation.x = q.x();
-        magnet_pose.orientation.y = q.y();
-        magnet_pose.orientation.z = q.z();
-        magnet_pose.orientation.w = q.w();
-
+        
+        // 根据运动模式设置位置和朝向
+        updateMagnetPose(magnet_pose);
+        
         magnet_pose.magnetic_strength = magnet_strength_;
         magnet_pose_pub_.publish(magnet_pose);
 
         // 获取所有传感器
         const auto &sensors = magnetic_pose_estimation::SensorConfig::getInstance().getAllSensors();
 
-        // 发布每个传感器的磁场数据
+        // 发布每个传感器的磁场数据（保留原有功能）
         publishMagneticFields(sensors, magnet_pose);
     }
 
     /**
-     * @brief 计算并发布所有传感器的磁场数据
+     * @brief 根据运动模式更新磁铁位姿
+     * @param magnet_pose 磁铁位姿消息
+     */
+    void updateMagnetPose(magnetic_pose_estimation::MagnetPose &magnet_pose)
+    {
+        // 更新位置
+        if (motion_mode_ == "static") {
+            // 静态模式：使用固定位置
+            magnet_pose.position.x = static_position_.x();
+            magnet_pose.position.y = static_position_.y();
+            magnet_pose.position.z = static_position_.z();
+        } else if (translation_enable_ && follow_path_ && !path_points_.empty()) {
+            // 沿路径移动（保留原有逻辑）
+            current_point_index_ = (current_point_index_ + 1) % path_points_.size();
+            magnet_pose.position = path_points_[current_point_index_];
+        } else if (translation_enable_) {
+            // 其他位移模式
+            magnet_pose.position = path_points_.empty() ? 
+                geometry_msgs::Point() : path_points_[0];
+        } else {
+            // 不移动，保持在路径中心或固定位置
+            magnet_pose.position.x = x_center_;
+            magnet_pose.position.y = y_center_;
+            magnet_pose.position.z = rect_z_;
+        }
+
+        // 更新朝向
+        updateMagnetOrientation(magnet_pose);
+    }
+
+    /**
+     * @brief 更新磁铁朝向
+     * @param magnet_pose 磁铁位姿消息
+     */
+    void updateMagnetOrientation(magnetic_pose_estimation::MagnetPose &magnet_pose)
+    {
+        double roll, pitch, yaw;
+        
+        if (motion_mode_ == "static") {
+            // 静态模式：使用固定朝向
+            roll = static_orientation_.x();
+            pitch = static_orientation_.y();
+            yaw = static_orientation_.z();
+        } else if (rotation_enable_) {
+            // 旋转模式：基于时间计算动态朝向
+            static ros::Time start_time = ros::Time::now();
+            double elapsed_time = (ros::Time::now() - start_time).toSec();
+            double rotation_angle = elapsed_time * angular_velocity_;
+            
+            // 设置初始朝向
+            roll = initial_roll_;
+            pitch = initial_pitch_;
+            yaw = initial_yaw_;
+            
+            // 根据旋转轴应用旋转
+            if (rotation_axis_ == "x" || rotation_axis_ == "xyz") {
+                roll += rotation_angle;
+            }
+            if (rotation_axis_ == "y" || rotation_axis_ == "xyz") {
+                pitch += rotation_angle;
+            }
+            if (rotation_axis_ == "z" || rotation_axis_ == "xyz") {
+                yaw += rotation_angle;
+            }
+            
+        } else {
+            // 不旋转：保持初始朝向
+            roll = initial_roll_;
+            pitch = initial_pitch_;
+            yaw = initial_yaw_;
+        }
+
+        // 设置四元数
+        tf2::Quaternion q;
+        q.setRPY(roll, pitch, yaw);
+        magnet_pose.orientation.x = q.x();
+        magnet_pose.orientation.y = q.y();
+        magnet_pose.orientation.z = q.z();
+        magnet_pose.orientation.w = q.w();
+        
+        // 调试输出
+        static size_t debug_counter = 0;
+        if (++debug_counter % 100 == 0) {
+            ROS_INFO("磁铁朝向 - 模式: %s, Roll: %.3f, Pitch: %.3f, Yaw: %.3f", 
+                     motion_mode_.c_str(), roll, pitch, yaw);
+        }
+    }
+
+    /**
+     * @brief 计算并发布所有传感器的磁场数据（保留原有功能）
      * @param sensors 传感器信息列表
      * @param magnet_pose 当前磁铁位姿
      */
@@ -253,6 +354,7 @@ private:
         }
     }
 
+    // 原有成员变量
     ros::NodeHandle nh_;                ///< ROS节点句柄
     ros::Publisher magnet_pose_pub_;    ///< 磁铁位姿发布器
     ros::Publisher magnetic_field_pub_; ///< 磁场数据发布器
@@ -275,17 +377,25 @@ private:
     double noise_mean_;      ///< 噪声均值，单位: mT
     double noise_stddev_;    ///< 噪声标准差，单位: mT
     double noise_amplitude_; ///< 噪声幅值，单位: mT
+
+    // 新增运动模式成员变量
+    std::string motion_mode_;           ///< 运动模式
+    std::string rotation_axis_;         ///< 旋转轴
+    double angular_velocity_;           ///< 角速度
+    double initial_roll_;               ///< 初始滚转角
+    double initial_pitch_;              ///< 初始俯仰角
+    double initial_yaw_;                ///< 初始偏航角
+    Eigen::Vector3d static_position_;   ///< 静态模式位置
+    Eigen::Vector3d static_orientation_; ///< 静态模式朝向
+    
+    // 运行时状态标志（由motion_mode_控制，不需要配置）
+    bool translation_enable_ = false;
+    bool rotation_enable_ = false;
+    bool follow_path_ = false;
 };
 
 /**
  * @brief 主函数
- * @param argc 命令行参数数量
- * @param argv 命令行参数数组
- * @return 程序退出状态
- *
- * - 设置中文本地化
- * - 初始化ROS节点
- * - 创建并运行模拟节点
  */
 int main(int argc, char **argv)
 {
