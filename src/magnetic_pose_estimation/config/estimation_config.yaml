@@ -1,22 +1,25 @@
 estimator_config:
   # 基础配置
-  estimator_type: optimization  # 可选值：optimization/kalman/nn
+  estimator_type: optimization
 
   # 磁铁参数配置
   magnet:
-    strength: 0.009 # 磁矩大小，单位：安培·米² (A·m²)
-    strength_delta: 0.02 # 允许波动范围，单位：安培·米² (A·m²)
-    direction: [0, 0, 1] # 磁矩方向向量，指向z轴正方向
-    position: [0.01, 0.01, 0.01] # 初始位置假设，单位：m
+    strength: 10
+    strength_delta: 0
+    direction: [0, 0, 1]
+    position: [0.01, 0.01, 0.01]
 
-  # 优化参数配置
+  # 基础优化参数配置（基线方案）
   optimization:
-    max_iterations: 100           # 最大迭代次数
-    function_tolerance: 1.0e-8    # 目标函数收敛阈值
-    gradient_tolerance: 1.0e-10   # 梯度收敛阈值
-    parameter_tolerance: 1.0e-8   # 参数收敛阈值
-    num_threads: 4                # 并行线程数
-    minimizer_progress_to_stdout: false # 是否输出优化过程
-
-  # 卡尔曼滤波参数配置
+    max_iterations: 50             # 基础迭代次数
+    function_tolerance: 1.0e-12    # 更严格的函数收敛条件
+    gradient_tolerance: 1.0e-14    # 更严格的梯度收敛条件
+    parameter_tolerance: 1.0e-12   # 更严格的参数收敛条件
+    num_threads: 1
+    minimizer_progress_to_stdout: true  # 开启详细输出，观察收敛过程
+    
+    linear_solver_type: "DENSE_QR"        # 基础线性求解器
+    use_huber_loss: false                 # 不使用鲁棒损失函数
+    enable_multi_stage: false             # 不使用多阶段优化
+    cost_threshold: 1000.0                # 高阈值，基本不触发重优化
 

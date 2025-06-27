@@ -10,9 +10,6 @@ namespace magnetic_pose_estimation
 
     /**
      * @brief 构造函数，初始化磁铁位姿估计器
-     * @param nh ROS节点句柄
-     *
-     * 加载传感器配置、参数，初始化发布器和订阅器
      */
     OptimizationMagnetPoseEstimator::OptimizationMagnetPoseEstimator(ros::NodeHandle &nh)
         : nh_(nh)
@@ -31,6 +28,10 @@ namespace magnetic_pose_estimation
                                             &OptimizationMagnetPoseEstimator::magneticFieldCallback, this);
         reset_localization_service_ = nh_.advertiseService("/magnet_pose/reset_localization",
                                                            &OptimizationMagnetPoseEstimator::resetServiceCallback, this);
+        
+        // 添加误差发布器
+        error_pub_ = nh_.advertise<std_msgs::Float64>("/magnet_pose/optimization_error", 10);
+        position_error_pub_ = nh_.advertise<std_msgs::Float64>("/magnet_pose/position_error", 10);
 
         ROS_INFO("磁铁位置估计器（最优化）已初始化");
     }
@@ -59,7 +60,7 @@ namespace magnetic_pose_estimation
         magnetic_direction_ = initial_direction_;
         magnet_strength_ = initial_strength_;
 
-        // 加载优化参数
+        // 基础优化参数
         nh_.param<int>("estimator_config/optimization/max_iterations", max_iterations_, 50);
         nh_.param<double>("estimator_config/optimization/function_tolerance", function_tolerance_, 1e-8);
         nh_.param<double>("estimator_config/optimization/gradient_tolerance", gradient_tolerance_, 1e-10);
@@ -67,7 +68,17 @@ namespace magnetic_pose_estimation
         nh_.param<int>("estimator_config/optimization/num_threads", num_threads_, 1);
         nh_.param<bool>("estimator_config/optimization/minimizer_progress_to_stdout", minimizer_progress_to_stdout_, false);
 
-        ROS_INFO("参数加载完成");
+        // 基线方案：简化求解器选择
+        std::string linear_solver_str;
+        nh_.param<std::string>("estimator_config/optimization/linear_solver_type", linear_solver_str, "DENSE_QR");
+        
+        if (linear_solver_str == "DENSE_QR") {
+            linear_solver_type_ = ceres::DENSE_QR;
+        } else {
+            linear_solver_type_ = ceres::DENSE_QR;  // 默认使用最基础的求解器
+        }
+
+        ROS_INFO("基线优化参数加载完成");
     }
 
     /**
@@ -108,66 +119,96 @@ namespace magnetic_pose_estimation
      */
     void OptimizationMagnetPoseEstimator::estimateMagnetPose()
     {
-        // 参数数组，Ceres会直接优化这些数组的值
         double position[3] = {current_position_.x(), current_position_.y(), current_position_.z()};
         double direction[3] = {magnetic_direction_.x(), magnetic_direction_.y(), magnetic_direction_.z()};
-        double strength = magnet_strength_; // 可选优化参数
+        double strength = magnet_strength_;
 
         ceres::Problem problem;
+    
+        // 基础方案：不使用任何损失函数，纯粹的最小二乘
         for (const auto &m : measurements_)
         {
-            Eigen::Vector3d sensor_pos(m.second.sensor_pose.position.x, m.second.sensor_pose.position.y, m.second.sensor_pose.position.z);
+            Eigen::Vector3d sensor_pos(m.second.sensor_pose.position.x, 
+                                     m.second.sensor_pose.position.y, 
+                                     m.second.sensor_pose.position.z);
             Eigen::Vector3d measured_field(m.second.mag_x, m.second.mag_y, m.second.mag_z);
 
             if (optimize_strength_) {
-                // 优化位置、方向和强度
                 problem.AddResidualBlock(
                     new ceres::AutoDiffCostFunction<MagnetFieldResidualWithStrength, 3, 3, 3, 1>(
                         new MagnetFieldResidualWithStrength(sensor_pos, measured_field)),
-                    nullptr,
+                    nullptr,  // 基线方案：不使用损失函数
                     position, direction, &strength);
             } else {
-                // 只优化位置和方向，强度固定
                 problem.AddResidualBlock(
                     new ceres::AutoDiffCostFunction<MagnetFieldResidual, 3, 3, 3>(
                         new MagnetFieldResidual(sensor_pos, measured_field, magnet_strength_)),
-                    nullptr,
+                    nullptr,  // 基线方案：不使用损失函数
                     position, direction);
             }
         }
 
-        // 对方向参数添加归一化约束，使其始终为单位向量
+        // 唯一约束：方向归一化
         problem.SetParameterization(direction, new ceres::HomogeneousVectorParameterization(3));
 
-        // 如果优化强度，可加边界约束
         if (optimize_strength_) {
             problem.SetParameterLowerBound(&strength, 0, strength_min_);
             problem.SetParameterUpperBound(&strength, 0, strength_max_);
         }
 
-        // 配置Ceres求解器参数（使用新的配置）
+        // 基础求解器配置
         ceres::Solver::Options options;
-        options.linear_solver_type = ceres::DENSE_QR;
-        options.max_num_iterations = max_iterations_;
-        options.function_tolerance = function_tolerance_;
-        options.gradient_tolerance = gradient_tolerance_;
-        options.parameter_tolerance = parameter_tolerance_;
-        options.num_threads = num_threads_;
+        options.linear_solver_type = linear_solver_type_;              // 基础线性求解器
+        options.trust_region_strategy_type = ceres::LEVENBERG_MARQUARDT; // 标准L-M算法
+        options.max_num_iterations = max_iterations_;                  // 基础迭代次数
+        options.function_tolerance = function_tolerance_;              // 标准收敛条件
+        options.gradient_tolerance = gradient_tolerance_;              
+        options.parameter_tolerance = parameter_tolerance_;            
+        options.num_threads = num_threads_;                           // 单线程
         options.minimizer_progress_to_stdout = minimizer_progress_to_stdout_;
+        
+        // 基线方案：移除所有高级优化设置
+        // 不设置信赖域半径
+        // 不使用非单调步长
+        // 不进行多阶段优化
+        
         ceres::Solver::Summary summary;
-
-        // 执行优化
         ceres::Solve(options, &problem, &summary);
 
-        // 优化完成后，更新估计的磁铁位置、方向和强度
+        // 发布优化误差
+        std_msgs::Float64 error_msg;
+        error_msg.data = summary.final_cost;
+        error_pub_.publish(error_msg);
+
+        // 基线方案：简化输出，不进行多策略优化
+        if (1) {  // 开启误差输出用于调试
+            printOptimizationError(summary, position, direction);
+        }
+
+        // 更新结果
         current_position_ = Eigen::Vector3d(position[0], position[1], position[2]);
         magnetic_direction_ = Eigen::Vector3d(direction[0], direction[1], direction[2]).normalized();
         if (optimize_strength_) {
             magnet_strength_ = strength;
         }
 
-        // 发布估计结果
         publishMagnetPose(current_position_, magnetic_direction_, magnet_strength_);
+    }
+
+    /**
+     * @brief 输出优化误差信息
+     * @param summary Ceres优化结果摘要
+     * @param position 优化后的位置
+     * @param direction 优化后的方向
+     */
+    void OptimizationMagnetPoseEstimator::printOptimizationError(const ceres::Solver::Summary& summary, 
+                                                                 const double position[3], 
+                                                                 const double direction[3])
+    {
+        ROS_INFO("优化完成: %s", summary.BriefReport().c_str());
+        ROS_INFO("初始代价: %f, 最终代价: %f", summary.initial_cost, summary.final_cost);
+        ROS_INFO("迭代次数: %d", static_cast<int>(summary.iterations.size()));
+        ROS_INFO("终止原因: %s", ceres::TerminationTypeToString(summary.termination_type));
     }
 
     /**

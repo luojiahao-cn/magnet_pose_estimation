@@ -2,7 +2,7 @@
 simulation_config:
   # 磁铁参数配置
   magnet:
-    strength: 0.009 # 磁矩大小，单位：安培·米² (A·m²)
+    strength: 10 # 磁矩大小，单位：安培·米² (A·m²)
     direction: [0, 0, 1] # 磁矩方向向量，指向z轴正方向
 
   # 运动路径参数
@@ -10,7 +10,7 @@ simulation_config:
     # 矩形路径尺寸
     width: 0.03 # 宽度，单位：m（3厘米）
     height: 0.03 # 高度，单位：m（3厘米）
-    z: 0.01 # 平面高度，单位：m（1厘米）
+    z: 0.03 # 平面高度，单位：m（1厘米）
 
     # 矩形路径中心位置
     center:

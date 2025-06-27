@@ -4,8 +4,10 @@
 #include <Eigen/Dense>
 #include <map>
 #include <std_srvs/Empty.h>
+#include <std_msgs/Float64.h>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+#include <ceres/ceres.h>
 #include <magnetic_pose_estimation/sensor_config.hpp>
 #include <magnetic_pose_estimation/magnet_pose_estimator_base.hpp>
 #include <magnetic_pose_estimation/magnetic_field_calculator.hpp>
@@ -83,6 +85,10 @@ namespace magnetic_pose_estimation
         // 构建测量矩阵和传感器位置矩阵
         void buildMeasurementMatrices(Eigen::MatrixXd &sensor_positions, Eigen::MatrixXd &measured_fields);
 
+        void printOptimizationError(const ceres::Solver::Summary &summary,
+                                    const double position[3],
+                                    const double direction[3]);
+
         // 新的Ceres优化配置参数
         int max_iterations_;
         double function_tolerance_;
@@ -91,8 +97,16 @@ namespace magnetic_pose_estimation
         int num_threads_;
         bool minimizer_progress_to_stdout_;
 
+        ceres::LinearSolverType linear_solver_type_;
+        bool use_huber_loss_;
+        double huber_loss_threshold_;
+        bool enable_multi_stage_;
+        double cost_threshold_;
+
         ros::NodeHandle nh_;
         ros::Publisher magnet_pose_pub_;
+        ros::Publisher error_pub_;                    // 添加误差发布器
+        ros::Publisher position_error_pub_;           // 添加位置误差发布器
         ros::Subscriber magnetic_field_sub_;
         ros::ServiceServer reset_localization_service_;
 
