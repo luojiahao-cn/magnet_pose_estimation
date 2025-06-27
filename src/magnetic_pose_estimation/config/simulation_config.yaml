@@ -19,7 +19,7 @@ simulation_config:
 
     # 运动控制参数
     update_rate: 100.0 # 位置更新频率，单位：Hz
-    points_per_side: 500 # 每条边的路径点数量
+    velocity: 0.005 # 位移速度，单位：m/s
 
   # 磁铁运动模式配置
   motion:
@@ -28,7 +28,7 @@ simulation_config:
     # 旋转参数（仅在rotate_only或translate_and_rotate模式下有效）
     axis: "z"              # 旋转轴: "x", "y", "z", "xyz"
     angular_velocity: 5  # 角速度，单位：rad/step
-    initial_pitch: 0.5     # 初始俯仰角，单位：rad
+    initial_pitch: 0.0     # 初始俯仰角，单位：rad
     initial_roll: 0.0      # 初始滚转角，单位：rad
     initial_yaw: 0.0       # 初始偏航角，单位：rad
       
