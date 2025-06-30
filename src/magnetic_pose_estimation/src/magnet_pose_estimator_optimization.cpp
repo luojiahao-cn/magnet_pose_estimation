@@ -181,7 +181,7 @@ namespace magnetic_pose_estimation
         error_pub_.publish(error_msg);
 
         // 基线方案：简化输出，不进行多策略优化
-        if (1) {  // 开启误差输出用于调试
+        if (0) {  // 开启误差输出用于调试
             printOptimizationError(summary, position, direction);
         }
 

@@ -27,6 +27,8 @@ namespace magnetic_pose_estimation
         void predict();
         void update(const Eigen::VectorXd &measurement);
         void publishMagnetPose();
+        void applyWorkspaceConstraints();
+        void updateAdaptiveProcessNoise();
 
         ros::NodeHandle nh_;
         ros::Publisher magnet_pose_pub_;
@@ -46,6 +48,15 @@ namespace magnetic_pose_estimation
         double initial_strength_;
 
         int state_dim_;
+        
+        // 自适应过程噪声相关变量
+        Eigen::VectorXd prev_state_;         // 上一时刻状态，用于计算速度
+        double velocity_estimate_;           // 位置速度估计
+        double angular_velocity_estimate_;   // 角速度估计
+        ros::Time last_update_time_;         // 上次更新时间
+        double base_process_noise_;          // 基础过程噪声水平
+        double velocity_scale_factor_;       // 速度缩放因子
+        bool is_first_update_;               // 是否第一次更新
     };
 
 } // namespace magnetic_pose_estimation
