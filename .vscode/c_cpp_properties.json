@@ -11,7 +11,8 @@
               "/opt/ros/noetic/include/**",
               "/opt/ros/noetic/share/**",
               "/opt/ros/noetic/lib/**",
-              "${workspaceFolder}/devel/include/**"
+              "${workspaceFolder}/devel/include/**",
+              "${workspaceFolder}/src/mag_sensor_node/include"
             ],
             "name": "ROS",
             "intelliSenseMode": "gcc-x64",

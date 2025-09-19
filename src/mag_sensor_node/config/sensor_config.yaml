@@ -1,14 +1,3 @@
-# 坐标系配置
-sensor_frames:
-  # 传感器阵列的父坐标系
-  parent_frame: "world"
-  # 传感器阵列的基准坐标系
-  array_frame: "sensor_array"
-  # 传感器阵列相对于父坐标系的位姿
-  array_pose:
-    position: [0.0, 0.0, 0.0] # [x, y, z]
-    orientation: [0.0, 0.0, 0.0] # [roll, pitch, yaw] in radians
-
 sensors:
   # - id: 1
   #   position: [0.00, 0.00, 0.00]

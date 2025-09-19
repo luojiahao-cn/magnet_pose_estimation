@@ -98,13 +98,6 @@ target_link_libraries(magnetic_field_visualizer
   ${catkin_LIBRARIES}
 )
 
-# 可执行文件：传感器读取
-add_executable(sensor_reader_node src/sensor_reader_node.cpp)
-target_link_libraries(sensor_reader_node
-  ${PROJECT_NAME}
-  ${catkin_LIBRARIES}
-)
-
 # 可执行文件：地磁场处理
 add_executable(earth_field_processor_node src/earth_field_processor_node.cpp)
 target_link_libraries(earth_field_processor_node

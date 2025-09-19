@@ -1,0 +1,23 @@
+<launch>
+    <!-- 可配置参数 -->
+    <!-- <arg name="port" default="/dev/ttyUSB0" /> -->
+    <arg name="port" default="/dev/ttyACM0" />
+    <arg name="baud_rate" default="921600" />
+    <arg name="frame_id" default="sensor_base_frame" />
+    <arg name="timeout" default="1000" />
+    <arg name="topic" default="/mag_sensor_topic/raw_data" />
+    <arg name="sleep_ms" default="1" />
+    <arg name="freq_stat_period" default="5.0" />
+
+    <rosparam command="load" file="$(find mag_sensor_node)/config/sensor_config.yaml" />
+
+    <node pkg="mag_sensor_node" type="mag_sensor_node" name="mag_sensor_node" output="screen">
+        <param name="port" value="$(arg port)" />
+        <param name="baud_rate" value="$(arg baud_rate)" />
+        <param name="frame_id" value="$(arg frame_id)" />
+        <param name="topic" value="$(arg topic)" />
+        <param name="timeout" value="$(arg timeout)" />
+        <param name="sleep_ms" value="$(arg sleep_ms)" />
+        <param name="freq_stat_period" value="$(arg freq_stat_period)" />
+    </node>
+</launch>
