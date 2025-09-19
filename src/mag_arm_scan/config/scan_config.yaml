@@ -1,0 +1,11 @@
+# 默认扫描体积与步长（米），以及姿态 yaw（弧度）
+frame_id: world
+yaw: 0.0
+autostart: true
+
+# 体积边界（min <= xyz <= max）
+volume_min: [0.0, 0.0, 0.0]
+volume_max: [0.10, 0.10, 0.05]
+
+# 步长（每轴间隔）
+step: [0.02, 0.02, 0.02]

@@ -1,0 +1,9 @@
+<library path="libmagnetic_field_panel">
+  <class name="mag_pose_visualization/MagneticFieldPanel"
+         type="mag_pose_visualization::MagneticFieldPanel"
+         base_class_type="rviz::Panel">
+    <description>
+      Magnetic field viewer and pose readout panel.
+    </description>
+  </class>
+</library>

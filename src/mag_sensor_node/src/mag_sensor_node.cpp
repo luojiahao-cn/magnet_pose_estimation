@@ -1,10 +1,11 @@
+#include <mag_sensor_node/MagSensorData.h>
 #include <ros/ros.h>
 #include <serial/serial.h>
-#include <thread>
-#include <sstream>
+
 #include <chrono>
-#include <mag_sensor_node/mag_sensor_data.h>
 #include <mag_sensor_node/sensor_config.hpp>
+#include <sstream>
+#include <thread>
 
 class MagSerialNode
 {
@@ -15,10 +16,13 @@ public:
         loadConfig();
         openSerial();
         mT_topic_ = topic_ + "_mT";
-        pub_raw_ = nh_.advertise<mag_sensor_node::mag_sensor_data>(topic_, 100);
-        pub_mT_ = nh_.advertise<mag_sensor_node::mag_sensor_data>(mT_topic_, 100);
+        pub_raw_ = nh_.advertise<mag_sensor_node::MagSensorData>(topic_, 100);
+        pub_mT_ = nh_.advertise<mag_sensor_node::MagSensorData>(mT_topic_, 100);
     }
-    void start() { worker_ = std::thread(&MagSerialNode::runLoop, this); }
+    void start()
+    {
+        worker_ = std::thread(&MagSerialNode::runLoop, this);
+    }
     ~MagSerialNode()
     {
         running_ = false;
@@ -112,7 +116,7 @@ private:
             return; // 未知 ID 直接忽略
         ros::Time stamp = ros::Time::now();
         // 原始数据发布
-        mag_sensor_node::mag_sensor_data msg_raw;
+        mag_sensor_node::MagSensorData msg_raw;
         msg_raw.header.stamp = stamp;
         msg_raw.header.frame_id = frame_id_;
         msg_raw.sensor_id = id;
@@ -123,7 +127,7 @@ private:
         pub_raw_.publish(msg_raw);
 
         // mT 数据发布：复用同一消息类型，mag_* 字段写转换值
-        mag_sensor_node::mag_sensor_data msg_mT = msg_raw;
+        mag_sensor_node::MagSensorData msg_mT = msg_raw;
         msg_mT.mag_x = rawToMilliTesla(mx);
         msg_mT.mag_y = rawToMilliTesla(my);
         msg_mT.mag_z = rawToMilliTesla(mz);
@@ -167,7 +171,10 @@ private:
                 if (elapsed > 0)
                 {
                     double hz = static_cast<double>(count) / elapsed;
-                    ROS_INFO("[mag_sensor_node] 发布频率约 %.2f Hz (计数=%llu, 窗口=%.1fs)", hz, static_cast<unsigned long long>(count), elapsed);
+                    ROS_INFO("[mag_sensor_node] 发布频率约 %.2f Hz (计数=%llu, 窗口=%.1fs)",
+                             hz,
+                             static_cast<unsigned long long>(count),
+                             elapsed);
                 }
                 count = 0;
                 period_start = now;

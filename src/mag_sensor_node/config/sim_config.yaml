@@ -1,0 +1,28 @@
+simulation_config:
+  magnet:
+    strength: 10.0
+    direction: [0.0, 0.0, 1.0]
+  path:
+    width: 0.03
+    height: 0.03
+    z: 0.03
+    center:
+      x: 0.02
+      y: 0.02
+    update_rate: 100.0
+    velocity: 0.01
+  motion:
+    mode: translate_only # static | rotate_only | translate_only | translate_and_rotate
+    axis: z # x | y | z | xyz
+    angular_velocity: 0.1
+    initial_roll: 0.0
+    initial_pitch: 0.0
+    initial_yaw: 0.0
+    static_position: [0.02, 0.02, 0.03]
+    static_orientation: [0.0, 0.5, 0.0]
+  noise:
+    enable: false
+    type: gaussian # gaussian | uniform
+    mean: 0.0
+    stddev: 1.0
+    amplitude: 1.0

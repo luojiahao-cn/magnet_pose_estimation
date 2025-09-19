@@ -1,0 +1,7 @@
+<launch>
+    <!-- Parameters -->
+    <rosparam command="load" file="$(find mag_pose_estimation)/config/estimation_config.yaml" />
+
+    <!-- Nodes -->
+    <node pkg="mag_pose_estimation" type="magnet_pose_estimator_node" name="magnet_pose_estimator" output="screen" />
+</launch>

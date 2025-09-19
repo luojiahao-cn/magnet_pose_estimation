@@ -1,5 +1,6 @@
-#include <mag_sensor_node/sensor_config.hpp>
 #include <tf2/LinearMath/Quaternion.h>
+
+#include <mag_sensor_node/sensor_config.hpp>
 
 namespace mag_sensor_node
 {
@@ -33,7 +34,8 @@ namespace mag_sensor_node
                         ROS_WARN("[SensorConfig] 跳过索引 %d: 非结构体", i);
                         continue;
                     }
-                    if (!sensors_list[i].hasMember("id") || !sensors_list[i].hasMember("position") || !sensors_list[i].hasMember("orientation"))
+                    if (!sensors_list[i].hasMember("id") || !sensors_list[i].hasMember("position") ||
+                        !sensors_list[i].hasMember("orientation"))
                     {
                         ROS_WARN("[SensorConfig] 跳过索引 %d: 缺少 id/position/orientation 字段", i);
                         continue;
@@ -66,7 +68,8 @@ namespace mag_sensor_node
                     sensor.pose.position.y = static_cast<double>(pos[1]);
                     sensor.pose.position.z = static_cast<double>(pos[2]);
                     {
-                        tf2::Quaternion q; q.setRPY(static_cast<double>(ori[0]), static_cast<double>(ori[1]), static_cast<double>(ori[2]));
+                        tf2::Quaternion q;
+                        q.setRPY(static_cast<double>(ori[0]), static_cast<double>(ori[1]), static_cast<double>(ori[2]));
                         sensor.pose.orientation.x = q.x();
                         sensor.pose.orientation.y = q.y();
                         sensor.pose.orientation.z = q.z();

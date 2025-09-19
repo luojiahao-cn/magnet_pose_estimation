@@ -1,0 +1,39 @@
+estimator_config:
+  # 基础配置
+  # estimator_type: optimization
+  estimator_type: kalman
+  # 触发估计所需的最少测量数量（建议设置为传感器数量）。<=0 表示按1个测量触发
+  min_sensors: 25
+
+  # 磁铁参数配置
+  magnet:
+    strength: 10
+    strength_delta: 0
+    direction: [0, 0, 1]
+    position: [0.005, 0.035, 0.03]
+
+  # 工作空间限制（当前实现未使用，仅预留）
+  workspace:
+    min_position: [-0.1, -0.1, -0.05]
+    max_position: [0.1, 0.1, 0.1]
+    enable_constraints: true
+
+  # EKF参数配置
+  kalman:
+    position_process_noise: 1e-10
+    angle_process_noise: 0
+    measurement_noise: 1e-9
+    initial_covariance: 0.01
+
+  # 优化参数配置
+  optimization:
+    max_iterations: 50
+    function_tolerance: 1.0e-12
+    gradient_tolerance: 1.0e-14
+    parameter_tolerance: 1.0e-12
+    num_threads: 4
+    minimizer_progress_to_stdout: false
+    linear_solver_type: "DENSE_QR"
+    use_huber_loss: false
+    enable_multi_stage: false
+    cost_threshold: 1000.0

@@ -4,6 +4,8 @@ project(mag_sensor_node)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+find_package(Eigen3 REQUIRED)
+
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   std_msgs
@@ -12,7 +14,10 @@ find_package(catkin REQUIRED COMPONENTS
   serial
 )
 
-add_message_files(FILES mag_sensor_data.msg)
+add_message_files(FILES
+  MagSensorData.msg
+  MagnetPose.msg
+)
 
 generate_messages(
   DEPENDENCIES std_msgs geometry_msgs
@@ -21,16 +26,21 @@ generate_messages(
 catkin_package(
   CATKIN_DEPENDS roscpp std_msgs geometry_msgs serial message_runtime
   INCLUDE_DIRS include
+  LIBRARIES sensor_config
 )
 
 include_directories(
   include
   ${catkin_INCLUDE_DIRS}
+  ${EIGEN3_INCLUDE_DIR}
 )
 
 add_library(sensor_config STATIC
   src/sensor_config.cpp
 )
+
+# 允许被共享库链接
+set_target_properties(sensor_config PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 add_dependencies(sensor_config ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
@@ -44,7 +54,15 @@ target_link_libraries(mag_sensor_node
   ${catkin_LIBRARIES}
 )
 
-install(TARGETS mag_sensor_node sensor_config
+# Sim node
+add_executable(mag_sensor_sim_node src/mag_sensor_sim_node.cpp)
+add_dependencies(mag_sensor_sim_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries(mag_sensor_sim_node
+  sensor_config
+  ${catkin_LIBRARIES}
+)
+
+install(TARGETS mag_sensor_node mag_sensor_sim_node sensor_config
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}

@@ -6,7 +6,6 @@ sensors:
   #   position: [0.001, 0.00, 0.00]
   #   orientation: [0.0, 0.0, 0.0]
 
-
   - id: 1
     position: [0.00, 0.04, 0.00]
     orientation: [0.0, 0.0, 0.0] # RPY格式 (单位: rad)

@@ -1,7 +1,0 @@
-<library path="lib/libmagnetic_field_panel">
-    <class name="magnetic_pose_estimation/MagneticFieldPanel" type="magnetic_pose_estimation::MagneticFieldPanel" base_class_type="rviz::Panel">
-        <description>
-            RViz panel for displaying and controlling magnetic field data
-        </description>
-    </class>
-</library>

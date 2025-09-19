@@ -4,17 +4,17 @@
 
 ## 功能概览
 * 串口读取磁传感器输出行，格式示例：`[01]: 123 -456 789`
-* 解析并发布自定义消息 `mag_sensor_node/mag_sensor_data`
+* 发布原始消息 `mag_sensor_node/MagSensorData`（/magnetic_field/raw_data 与 /magnetic_field/raw_data_mT）
 * 自动加载参数服务器上的传感器阵列配置（`sensor_config.yaml`）并附带每个传感器的位姿 `sensor_pose`
 * 发布话题（默认）：`/magnetic_field/raw_data` (原始计数/原始单位)
 * 发布第二话题：`/magnetic_field/raw_data_mT` (转换后的毫特斯拉值)
 * 周期性输出发布频率统计（参数可调）
 
-## 自定义消息 `mag_sensor_data`
+## 发布消息 `mag_sensor_node/MagSensorData`
 ```
-Header header        # frame_id = 配置/参数指定的世界或阵列坐标系
-uint32 sensor_id     # 传感器 ID (来自串口行 S<ID>: ...)
-float64 mag_x        # X 分量（原始或工程单位，取决于传感器）
+std_msgs/Header header        # frame_id = 配置/参数指定的世界或阵列坐标系
+uint32 sensor_id              # 传感器 ID (来自串口行 [ID]: ...)
+float64 mag_x                 # X 分量（原始或工程单位，取决于传感器）
 float64 mag_y
 float64 mag_z
 geometry_msgs/Pose sensor_pose  # 该传感器在阵列坐标系下的位姿
@@ -69,9 +69,9 @@ rosrun mag_sensor_node mag_sensor_node _port:=/dev/ttyUSB0 _baud_rate:=921600
 
 ## 订阅示例（C++）
 ```cpp
-ros::Subscriber sub = nh.subscribe<mag_sensor_node::mag_sensor_data>(
-        "/magnetic_field/raw_data", 50,
-        [](const mag_sensor_node::mag_sensor_data::ConstPtr& msg){
+ros::Subscriber sub = nh.subscribe<mag_sensor_node::MagSensorData>(
+    "/magnetic_field/raw_data", 50,
+    [](const mag_sensor_node::MagSensorData::ConstPtr& msg){
                 ROS_INFO_STREAM("mag xyz=" << msg->mag_x << "," << msg->mag_y << "," << msg->mag_z);
         });
 ```
