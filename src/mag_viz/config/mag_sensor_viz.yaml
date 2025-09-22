@@ -2,7 +2,7 @@
 mag_sensor_viz:
   topic: /mag_sensor/raw_data_mT
   marker_topic: /mag_viz/markers
-  frame: ""
+  frame: sensor_base_frame
   field_scale: 0.005
   marker_lifetime: 0.1
   color_max: 3.2

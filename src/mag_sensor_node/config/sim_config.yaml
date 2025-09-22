@@ -1,4 +1,7 @@
-simulation_config:
+sim_config:
+  topics:
+    magnet_pose_topic: "/magnet_pose"
+    magnetic_field_topic: "/mag_sensor/raw_data_mT"
   magnet:
     strength: 10.0
     direction: [0.0, 0.0, 1.0]

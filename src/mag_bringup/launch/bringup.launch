@@ -8,11 +8,9 @@
 
     <!-- Args -->
     <arg name="use_sim" default="true" />
+    <arg name="with_rviz" default="true" />
 
-    <!-- Topics/params wiring -->
-    <arg name="sensor_topic_raw" default="/mag_sensor/raw_data" />
-    <arg name="sensor_topic_mT" default="/mag_sensor/raw_data_mT" />
-    <arg name="viz_marker_topic" default="/mag_viz/markers" />
+    <!-- Keep topics in YAML; launch stays minimal -->
 
     <!-- Sensor bringup: gated + real or sim -->
     <group if="$(arg start_sensor)">
@@ -24,13 +22,16 @@
         </group>
     </group>
 
-    <!-- Visualization (subscribes to mT by default) -->
+    <!-- Visualization (YAML-driven) -->
     <group if="$(arg start_viz)">
-        <include file="$(find mag_viz)/launch/mag_sensor_viz.launch">
-            <arg name="topic" value="$(arg sensor_topic_mT)" />
-            <arg name="marker_topic" value="$(arg viz_marker_topic)" />
-        </include>
+        <include file="$(find mag_viz)/launch/mag_sensor_viz.launch"/>
+        <include file="$(find mag_viz)/launch/magnet_viz.launch"/>
     </group>
+
+    <group if="$(arg with_rviz)">
+        <node pkg="rviz" type="rviz" name="rviz" required="true" args="-d $(find mag_viz)/config/rviz.rviz"  />
+    </group>
+
 
     <!-- Estimator -->
     <group if="$(arg start_estimator)">

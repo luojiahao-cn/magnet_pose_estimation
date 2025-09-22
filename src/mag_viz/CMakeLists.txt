@@ -26,7 +26,10 @@ include_directories(
 add_executable(mag_sensor_viz_node src/mag_sensor_viz_node.cpp)
 target_link_libraries(mag_sensor_viz_node ${catkin_LIBRARIES})
 
-install(TARGETS mag_sensor_viz_node
+add_executable(magnet_viz_node src/magnet_viz_node.cpp)
+target_link_libraries(magnet_viz_node ${catkin_LIBRARIES})
+
+install(TARGETS mag_sensor_viz_node magnet_viz_node
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

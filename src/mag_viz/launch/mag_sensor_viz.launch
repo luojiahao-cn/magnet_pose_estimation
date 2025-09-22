@@ -1,30 +1,9 @@
 <launch>
-    <!-- Arguments with sensible defaults -->
-    <arg name="topic" default="/mag_sensor/raw_data_mT" />
-    <arg name="marker_topic" default="/mag_viz/markers" />
-    <arg name="frame" default="" />
-    <arg name="field_scale" default="0.005" />
-    <arg name="marker_lifetime" default="0.1" />
-    <arg name="color_max" default="3.2" />
-    <arg name="rviz_config" default="$(find mag_viz)/config/mag_sensor_viz.rviz" />
-    <arg name="use_config" default="true" />
-    <arg name="config_file" default="$(find mag_viz)/config/mag_sensor_viz.yaml" />
 
-    <!-- Optionally load parameters from YAML -->
-    <group if="$(arg use_config)">
-        <rosparam file="$(arg config_file)" command="load" />
-    </group>
+    <!-- Load parameters from YAML (namespaced under mag_sensor_viz) -->
+    <rosparam file="$(find mag_viz)/config/mag_sensor_viz.yaml" command="load" />
 
-    <node pkg="mag_viz" type="mag_sensor_viz_node" name="mag_sensor_viz" output="screen">
-        <param name="topic" value="$(arg topic)" />
-        <param name="marker_topic" value="$(arg marker_topic)" />
-        <param name="frame" value="$(arg frame)" />
-        <param name="field_scale" value="$(arg field_scale)" />
-        <param name="marker_lifetime" value="$(arg marker_lifetime)" />
-        <param name="color_max" value="$(arg color_max)" />
-    </node>
-
-
-    <node pkg="rviz" type="rviz" name="rviz" args="-d $(arg rviz_config)" />
+    <!-- Node: params are read from YAML; no duplication in launch -->
+    <node pkg="mag_viz" type="mag_sensor_viz_node" name="mag_sensor_viz" output="screen" />
 
 </launch>

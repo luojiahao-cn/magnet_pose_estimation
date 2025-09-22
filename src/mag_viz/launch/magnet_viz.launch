@@ -1,0 +1,9 @@
+<launch>
+
+    <!-- Load parameters from YAML (namespaced under magnet_viz) -->
+    <rosparam file="$(find mag_viz)/config/magnet_viz.yaml" command="load" />
+
+    <!-- Node: params are read from YAML; no duplication in launch -->
+    <node pkg="mag_viz" type="magnet_viz_node" name="magnet_viz" output="screen" />
+
+</launch>

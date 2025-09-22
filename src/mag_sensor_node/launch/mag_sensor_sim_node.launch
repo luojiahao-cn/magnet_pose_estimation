@@ -2,7 +2,7 @@
     <!-- 加载传感器布局 -->
     <rosparam command="load" file="$(find mag_sensor_node)/config/sensor_config.yaml" />
     <!-- 加载仿真参数 -->
-    <rosparam command="load" file="$(find mag_sensor_node)/config/simulation_config.yaml" />
+    <rosparam command="load" file="$(find mag_sensor_node)/config/sim_config.yaml" />
 
     <node pkg="mag_sensor_node" type="mag_sensor_sim_node" name="mag_sensor_sim" output="screen" />
 </launch>

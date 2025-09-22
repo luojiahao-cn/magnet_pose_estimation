@@ -7,6 +7,7 @@ Panels:
         - /Global Options1
         - /Status1
         - /MarkerArray1
+        - /MarkerArray2
       Splitter Ratio: 0.4664310812950134
     Tree Height: 1352
   - Class: rviz/Selection
@@ -60,6 +61,14 @@ Visualization Manager:
         sensor_field: true
       Queue Size: 100
       Value: true
+    - Class: rviz/MarkerArray
+      Enabled: true
+      Marker Topic: /magnet_viz/markers
+      Name: MarkerArray
+      Namespaces:
+        magnet: true
+      Queue Size: 100
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -88,7 +97,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 0.08958284556865692
+      Distance: 0.12049833685159683
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -104,9 +113,9 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.6497966647148132
+      Pitch: 0.9047971367835999
       Target Frame: <Fixed Frame>
-      Yaw: 4.723609447479248
+      Yaw: 4.818609714508057
     Saved: ~
 Window Geometry:
   Displays:
