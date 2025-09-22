@@ -1,0 +1,44 @@
+<launch>
+
+    <!-- Node bringup -->
+    <arg name="start_sensor" default="true" />
+    <arg name="start_viz" default="true" />
+    <arg name="start_estimator" default="false" />
+    <arg name="start_scan" default="false" />
+
+    <!-- Args -->
+    <arg name="use_sim" default="true" />
+
+    <!-- Topics/params wiring -->
+    <arg name="sensor_topic_raw" default="/mag_sensor/raw_data" />
+    <arg name="sensor_topic_mT" default="/mag_sensor/raw_data_mT" />
+    <arg name="viz_marker_topic" default="/mag_viz/markers" />
+
+    <!-- Sensor bringup: gated + real or sim -->
+    <group if="$(arg start_sensor)">
+        <group if="$(arg use_sim)">
+            <include file="$(find mag_sensor_node)/launch/mag_sensor_sim_node.launch" />
+        </group>
+        <group unless="$(arg use_sim)">
+            <include file="$(find mag_sensor_node)/launch/mag_sensor_node.launch" />
+        </group>
+    </group>
+
+    <!-- Visualization (subscribes to mT by default) -->
+    <group if="$(arg start_viz)">
+        <include file="$(find mag_viz)/launch/mag_sensor_viz.launch">
+            <arg name="topic" value="$(arg sensor_topic_mT)" />
+            <arg name="marker_topic" value="$(arg viz_marker_topic)" />
+        </include>
+    </group>
+
+    <!-- Estimator -->
+    <group if="$(arg start_estimator)">
+        <include file="$(find mag_pose_estimation)/launch/mag_pose_estimation.launch" />
+    </group>
+
+    <!-- Optional: scan orchestrator -->
+    <group if="$(arg start_scan)">
+        <include file="$(find mag_arm_scan)/launch/mag_arm_scan.launch" />
+    </group>
+</launch>

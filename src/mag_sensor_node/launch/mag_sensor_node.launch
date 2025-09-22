@@ -1,11 +1,11 @@
 <launch>
     <!-- 可配置参数 -->
-    <!-- <arg name="port" default="/dev/ttyUSB0" /> -->
-    <arg name="port" default="/dev/ttyACM0" />
+    <arg name="port" default="/dev/ttyUSB0" />
+    <!-- <arg name="port" default="/dev/ttyACM0" /> -->
     <arg name="baud_rate" default="921600" />
     <arg name="frame_id" default="sensor_base_frame" />
     <arg name="timeout" default="1000" />
-    <arg name="topic" default="/mag_sensor_topic/raw_data" />
+    <arg name="topic" default="/mag_sensor/raw_data" />
     <arg name="sleep_ms" default="1" />
     <arg name="freq_stat_period" default="5.0" />
 
