@@ -11,6 +11,9 @@ find_package(catkin REQUIRED COMPONENTS
   std_srvs
   tf2
   tf2_ros
+  moveit_core
+  moveit_ros_planning_interface
+  mag_sensor_node
 )
 
 catkin_package()
@@ -20,6 +23,6 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
 )
 
-add_executable(scan_orchestrator_node src/scan_orchestrator_node.cpp)
-target_link_libraries(scan_orchestrator_node ${catkin_LIBRARIES})
-add_dependencies(scan_orchestrator_node ${catkin_EXPORTED_TARGETS})
+add_executable(scan_controller_node src/scan_controller_node.cpp)
+target_link_libraries(scan_controller_node ${catkin_LIBRARIES})
+add_dependencies(scan_controller_node ${catkin_EXPORTED_TARGETS})

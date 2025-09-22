@@ -1,11 +1,22 @@
 <launch>
-    <node pkg="mag_arm_scan" type="scan_orchestrator_node" name="scan_orchestrator" output="screen">
+    <!-- 参数：是否使用Gazebo仿真 -->
+    <arg name="use_gazebo" default="true" />
+
+    <!-- 根据参数选择不同的MoveIt配置 -->
+    <group if="$(arg use_gazebo)">
+        <include file="$(find fr5v6_single_moveit_config)/launch/demo_gazebo.launch" />
+    </group>
+
+    <group unless="$(arg use_gazebo)">
+        <include file="$(find frcobot_examples)/launch/connect_single_arm.launch" />
+    </group>
+
+        <node pkg="mag_arm_scan" type="scan_controller_node" name="scan_controller" output="screen">
         <!-- 将默认配置加载到节点私有命名空间 -->
         <rosparam file="$(find mag_arm_scan)/config/scan_config.yaml" command="load" />
         <!-- 可选覆盖（按需取消注释） -->
+
         <!-- <param name="autostart" value="true" /> -->
     </node>
 
-    <!-- RViz 可选 -->
-    <!-- <node pkg="rviz" type="rviz" name="rviz" args="-d $(find mag_arm_scan)/config/scan_view.rviz" /> -->
 </launch>

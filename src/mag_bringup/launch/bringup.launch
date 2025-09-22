@@ -28,11 +28,6 @@
         <include file="$(find mag_viz)/launch/magnet_viz.launch"/>
     </group>
 
-    <group if="$(arg with_rviz)">
-        <node pkg="rviz" type="rviz" name="rviz" required="true" args="-d $(find mag_viz)/config/rviz.rviz"  />
-    </group>
-
-
     <!-- Estimator -->
     <group if="$(arg start_estimator)">
         <include file="$(find mag_pose_estimation)/launch/mag_pose_estimation.launch" />
@@ -41,5 +36,10 @@
     <!-- Optional: scan orchestrator -->
     <group if="$(arg start_scan)">
         <include file="$(find mag_arm_scan)/launch/mag_arm_scan.launch" />
+    </group>
+
+    <!-- RViz -->
+    <group if="$(arg with_rviz)">
+        <node pkg="rviz" type="rviz" name="rviz" required="true" args="-d $(find mag_viz)/config/rviz.rviz" />
     </group>
 </launch>
