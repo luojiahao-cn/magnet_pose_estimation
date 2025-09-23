@@ -13,6 +13,7 @@ find_package(catkin REQUIRED COMPONENTS
   tf2_ros
   moveit_core
   moveit_ros_planning_interface
+  geometric_shapes
   mag_sensor_node
 )
 
@@ -26,3 +27,7 @@ include_directories(
 add_executable(scan_controller_node src/scan_controller_node.cpp)
 target_link_libraries(scan_controller_node ${catkin_LIBRARIES})
 add_dependencies(scan_controller_node ${catkin_EXPORTED_TARGETS})
+
+add_executable(tool_manager_node src/tool_manager_node.cpp)
+target_link_libraries(tool_manager_node ${catkin_LIBRARIES})
+add_dependencies(tool_manager_node ${catkin_EXPORTED_TARGETS})

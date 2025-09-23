@@ -1,0 +1,10 @@
+<launch>
+  <!-- Load the magnetic sensor bracket URDF -->
+  <param name="magnetic_sensor_bracket_description"
+         command="$(find xacro)/xacro --inorder $(find mag_arm_scan)/urdf/magnetic_sensor_bracket.urdf.xacro" />
+
+  <!-- Publish TF transforms for the magnetic sensor bracket -->
+  <node name="magnetic_sensor_bracket_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher"
+        args="robot_description:=magnetic_sensor_bracket_description" />
+
+</launch>

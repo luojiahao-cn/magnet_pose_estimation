@@ -99,5 +99,6 @@
         "variant": "cpp",
         "qvboxlayout": "cpp",
         "dense": "cpp"
-    }
+    },
+    "github.copilot.chat.codeGeneration.useInstructionFiles": true
 }

@@ -8,7 +8,37 @@
     </group>
 
     <group unless="$(arg use_gazebo)">
-        <include file="$(find frcobot_examples)/launch/connect_single_arm.launch" />
+        <include file="$(find frcobot_examples)/launch/connect_single_arm.launch">
+            <arg name="use_rviz" value="false" />
+        </include>
+
+        <!-- Start RViz with our custom config -->
+        <node name="rviz" pkg="rviz" type="rviz" args="-d $(find mag_arm_scan)/config/mag_arm_scan.rviz" />
+    </group>
+
+    <!-- 是否使用 MoveIt 附加的方式显示/考虑碰撞的支架工具 -->
+    <arg name="use_attached_tool" default="true" />
+
+    <!-- 如果不使用附加对象，也可用独立 URDF 发布TF（只显示，不参与碰撞）-->
+    <group unless="$(arg use_attached_tool)">
+        <include file="$(find mag_arm_scan)/launch/magnetic_sensor_bracket.launch" />
+    </group>
+
+    <!-- 使用 MoveIt 附加对象方式，提供 attach/detach 服务 -->
+    <group if="$(arg use_attached_tool)">
+        <node pkg="mag_arm_scan" type="tool_manager_node" name="tool_manager" output="screen">
+            <param name="parent_link" value="auto" />
+            <param name="object_name" value="mag_sensor_bracket" />
+            <param name="mesh_path" value="package://mag_arm_scan/meshes/magnetic_sensor_bracket.STL" />
+            <!-- 根据实际法兰->传感器支架的装配偏移调整 -->
+            <rosparam param="xyz">[-0.04, 0.032, 0.0]</rosparam>
+            <rosparam param="rpy">[0.0, 1.5708, 1.5708]</rosparam>
+            <!-- STL 多数以毫米导出，这里按 mm→m 缩放到 0.001 -->
+            <rosparam param="scale">[0.001, 0.001, 0.001]</rosparam>
+            <param name="auto_attach" value="true" />
+            <!-- 如有手爪，将手爪链接加入 touch_links，避免自碰 -->
+            <!-- <rosparam param="touch_links">[ee_link, finger_link_1, finger_link_2]</rosparam> -->
+        </node>
     </group>
 
         <node pkg="mag_arm_scan" type="scan_controller_node" name="scan_controller" output="screen">
