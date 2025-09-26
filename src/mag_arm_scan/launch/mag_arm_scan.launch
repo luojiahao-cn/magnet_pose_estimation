@@ -31,8 +31,8 @@
             <param name="object_name" value="mag_sensor_bracket" />
             <param name="mesh_path" value="package://mag_arm_scan/meshes/magnetic_sensor_bracket.STL" />
             <!-- 根据实际法兰->传感器支架的装配偏移调整 -->
-            <rosparam param="xyz">[-0.04, 0.032, 0.0]</rosparam>
-            <rosparam param="rpy">[0.0, 1.5708, 1.5708]</rosparam>
+            <rosparam param="xyz">[0, 0, 0.0]</rosparam>
+            <rosparam param="rpy">[1.5708, 0, 0]</rosparam>
             <!-- STL 多数以毫米导出，这里按 mm→m 缩放到 0.001 -->
             <rosparam param="scale">[0.001, 0.001, 0.001]</rosparam>
             <param name="auto_attach" value="true" />
