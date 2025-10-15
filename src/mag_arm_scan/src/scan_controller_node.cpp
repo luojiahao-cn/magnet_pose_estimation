@@ -1,3 +1,36 @@
+/*
+文件: scan_controller_node.cpp
+功能概述:
+  - 使用 MoveIt 控制机械臂在设定体积内按网格顺序逐点运动，等待稳定后采集磁传感器多帧数据并求均值，
+    将(平均磁场, 位姿)保存为 CSV。支持节点启动自动扫描或通过服务触发。
+
+主要职责:
+  - 读取参数: 坐标系 frame_id、扫描体积(volume_min/max/step)、姿态(yaw/pitch)、等待时间、话题、输出文件等
+  - 生成扫描点: 在体积内按步长生成(x,y,z)网格点，姿态固定为 RPY(0, pitch, yaw)
+  - 运动执行: 规划+执行至目标点，等待系统稳定(wait_time)
+  - 数据采集: 订阅磁传感器话题，取最近若干帧求均值，写入 CSV
+  - 接口提供: /start_scan 服务触发扫描；支持 ~autostart 自动扫描
+
+ROS/MoveIt 接口:
+  - 订阅: mag_topic (mag_sensor_node::MagSensorData)，默认 /mag_sensor/raw_data_mT
+  - 服务: /start_scan (std_srvs/Trigger)
+  - 规划组: fr5v6_arm；命名位姿: ready
+
+参数(私有命名空间 ~):
+  - frame_id[string]，yaw[double]，pitch[double]，autostart[bool]
+  - mag_topic[string]，wait_time[double]，output_file[string]
+  - volume_min[double[3]]，volume_max[double[3]]，step[double[3]]
+
+数据记录:
+  - CSV 列: timestamp,mag_x,mag_y,mag_z,pos_x,pos_y,pos_z
+  - 说明: 当前实现取最近消息窗口内的样本求均值；可按需改为中值/去异常等鲁棒统计
+
+注意事项:
+  - 坐标一致性需外部标定(传感器/机械臂/世界坐标)
+  - 等待时间与控制器/传感器稳定时间相关，需根据实际系统调优
+  - 采样窗口较小(默认10帧)，可根据传感器频率/噪声调整
+*/
+
 #include <mag_arm_scan/scan_controller_node.hpp>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
@@ -108,7 +141,7 @@ void ScanControllerNode::collectDataAtPoint(const geometry_msgs::Pose& pose)
     // Collect multiple data samples
     const int num_samples = 10;
     std::vector<mag_sensor_node::MagSensorData> samples;
-
+    
     for (int i = 0; i < num_samples; ++i)
     {
         ros::spinOnce();

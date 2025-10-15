@@ -1,3 +1,39 @@
+/*
+文件: tool_manager_node.cpp
+功能概述:
+  - 通过 MoveIt PlanningScene 在机械臂末端挂载/卸载工具（网格模型），并发布工具坐标系 TF。
+  - 支持服务调用附着/分离；可选开机自动附着；支持设置工具与末端的位姿与尺度。
+
+主要职责:
+  - 参数读取: parent_link, object_name, mesh_path, xyz, rpy, scale, touch_links, auto_attach, tip_xyz, tip_rpy
+  - 附着流程: 加载网格 → 构造 CollisionObject → 应用到规划场景 → 附着到 parent_link
+  - 分离流程: 从末端分离并移除规划场景对象
+  - TF 发布: 周期发布 tool_frame 与 tool_tip_frame（工具末端）坐标系
+
+ROS/MoveIt 接口:
+  - 服务: ~attach (std_srvs/Trigger), ~detach (std_srvs/Trigger)
+  - 规划组: fr5v6_arm（使用 MoveGroupInterface 与 PlanningSceneInterface）
+  - TF: tool_frame、tool_tip_frame（20 Hz）
+
+参数(私有命名空间 ~):
+  - parent_link[string]: 工具附着父连杆；为 "auto"/空时自动取末端执行器链接
+  - object_name[string]: 规划场景对象 ID
+  - mesh_path[string]: 网格资源 URI，例如 package://pkg/path/to.stl
+  - xyz[double[3]], rpy[double[3]]: 工具相对 parent_link 的平移与姿态（弧度）
+  - scale[double[3]]: 网格缩放比例
+  - touch_links[string[]]: 允许接触的链接集合；为空则默认使用 parent_link
+  - auto_attach[bool]: 节点启动后是否自动附着一次
+  - tip_xyz[double[3]], tip_rpy[double[3]]: 工具末端(tool_tip_frame)相对 tool_frame 的位姿
+
+运行流程:
+  - 启动 → 可选自动附着 → 周期发布 TF → 根据需要调用 ~attach/~detach 切换工具状态
+
+注意事项:
+  - mesh 资源需可读且单位为米；RPY 使用弧度
+  - 修改参数后可再次调用 ~attach 以按新参数重建并附着
+  - TF 仅描述工具与父连杆的相对位姿；父子关系由 parent_link 决定
+*/
+
 #include "mag_arm_scan/tool_manager_node.hpp"
 #include <moveit_msgs/AttachedCollisionObject.h>
 #include <geometric_shapes/shape_operations.h>

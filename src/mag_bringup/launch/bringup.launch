@@ -4,7 +4,7 @@
     <arg name="start_sensor" default="true" />
     <arg name="start_viz" default="true" />
     <arg name="start_estimator" default="false" />
-    <arg name="start_scan" default="false" />
+    <arg name="start_scan" default="true" />
 
     <!-- Args -->
     <arg name="use_sim" default="true" />

@@ -1,10 +1,14 @@
 <launch>
     <!-- 参数：是否使用Gazebo仿真 -->
     <arg name="use_gazebo" default="true" />
+    <!-- 参数：MoveIt日志输出位置，默认为log，可选screen -->
+    <arg name="move_group_output" default="log"/>
 
     <!-- 根据参数选择不同的MoveIt配置 -->
     <group if="$(arg use_gazebo)">
-        <include file="$(find fr5v6_single_moveit_config)/launch/demo_gazebo.launch" />
+        <include file="$(find fr5v6_single_moveit_config)/launch/demo_gazebo.launch" >
+            <arg name="move_group_output" value="$(arg move_group_output)"/>
+        </include>
     </group>
 
     <group unless="$(arg use_gazebo)">

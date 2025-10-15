@@ -6,22 +6,22 @@
 
 - 仿真（默认）、可视化、估计器：
 ```bash
-roslaunch mag_bringup multi_bringup.launch
+roslaunch mag_bringup bringup.launch
 ```
 
 - 在无图形环境下仍想运行可视化（不启动 RViz）：
 ```bash
-roslaunch mag_bringup multi_bringup.launch with_rviz:=false
+roslaunch mag_bringup bringup.launch with_rviz:=false
 ```
 
 - 使用真机传感器：
 ```bash
-roslaunch mag_bringup multi_bringup.launch use_sim:=false
+roslaunch mag_bringup bringup.launch use_sim:=false
 ```
 
 - 启动扫描协调：
 ```bash
-roslaunch mag_bringup multi_bringup.launch start_scan:=true
+roslaunch mag_bringup bringup.launch start_scan:=true
 ```
 
 ## 参数
