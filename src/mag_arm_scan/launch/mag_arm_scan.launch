@@ -32,12 +32,8 @@
         </node>
     </group>
 
-        <node pkg="mag_arm_scan" type="scan_controller_node" name="scan_controller" output="screen">
-        <!-- 将默认配置加载到节点私有命名空间 -->
+    <!-- <node pkg="mag_arm_scan" type="scan_controller_node" name="scan_controller" output="screen">
         <rosparam file="$(find mag_arm_scan)/config/scan_config.yaml" command="load" />
-        <!-- 可选覆盖（按需取消注释） -->
-
-        <!-- <param name="autostart" value="true" /> -->
-    </node>
+    </node> -->
 
 </launch>

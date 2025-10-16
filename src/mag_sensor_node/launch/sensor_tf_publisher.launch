@@ -1,0 +1,7 @@
+<launch>
+  <rosparam command="load" file="$(find mag_sensor_node)/config/sensor_config.yaml" />
+  <arg name="parent_frame" default="tool_tip_frame" />
+  <node pkg="mag_sensor_node" type="sensor_tf_publisher_node" name="sensor_tf_publisher" output="screen">
+    <param name="parent_frame" value="$(arg parent_frame)" />
+  </node>
+</launch>

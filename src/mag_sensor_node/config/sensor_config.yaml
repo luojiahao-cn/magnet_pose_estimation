@@ -1,11 +1,10 @@
-sensors:
-  # - id: 1
-  #   position: [0.00, 0.00, 0.00]
-  #   orientation: [0.0, 0.0, 0.0] # RPY格式 (单位: rad)
-  # - id: 2
-  #   position: [0.001, 0.00, 0.00]
-  #   orientation: [0.0, 0.0, 0.0]
+# 阵列整体相对 tool_tip_frame 的偏移（平移 + RPY）
+array_offset:
+  position: [0.02, 0.0, 0.02]
+  # RPY in radians; here rotate +90deg about Z (yaw)
+  orientation: [0.0, 1.57079632679, 1.57079632679]
 
+sensors:
   - id: 1
     position: [0.00, 0.04, 0.00]
     orientation: [0.0, 0.0, 0.0] # RPY格式 (单位: rad)
@@ -81,3 +80,5 @@ sensors:
   - id: 25
     position: [0.04, 0.00, 0.00]
     orientation: [0.0, 0.0, 0.0]
+
+

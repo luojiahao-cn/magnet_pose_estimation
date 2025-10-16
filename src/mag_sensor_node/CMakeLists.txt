@@ -12,6 +12,8 @@ find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   message_generation
   serial
+  tf2
+  tf2_ros
 )
 
 add_message_files(FILES
@@ -24,7 +26,7 @@ generate_messages(
 )
 
 catkin_package(
-  CATKIN_DEPENDS roscpp std_msgs geometry_msgs serial message_runtime
+  CATKIN_DEPENDS roscpp std_msgs geometry_msgs serial message_runtime tf2 tf2_ros
   INCLUDE_DIRS include
   LIBRARIES sensor_config
 )
@@ -62,7 +64,15 @@ target_link_libraries(mag_sensor_sim_node
   ${catkin_LIBRARIES}
 )
 
-install(TARGETS mag_sensor_node mag_sensor_sim_node sensor_config
+# Sensor TF publisher
+add_executable(sensor_tf_publisher_node src/sensor_tf_publisher_node.cpp)
+add_dependencies(sensor_tf_publisher_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries(sensor_tf_publisher_node
+  sensor_config
+  ${catkin_LIBRARIES}
+)
+
+install(TARGETS mag_sensor_node mag_sensor_sim_node sensor_tf_publisher_node sensor_config
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}

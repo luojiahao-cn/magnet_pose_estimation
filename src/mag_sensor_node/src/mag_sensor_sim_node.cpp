@@ -4,6 +4,8 @@
 #include <mag_sensor_node/mag_sensor_sim_node.hpp>
 #include <ros/ros.h>
 #include <tf2/LinearMath/Quaternion.h>
+#include <tf2/LinearMath/Transform.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
 #include <Eigen/Dense>
 #include <cmath>
@@ -243,7 +245,9 @@ geometry_msgs::Point MagSensorSimNode::calculatePositionFromVelocity(double elap
 
 void MagSensorSimNode::publishSensorMagneticFields(const mag_sensor_node::MagnetPose &magnet_pose)
 {
-    const auto &sensors = mag_sensor_node::SensorConfig::getInstance().getAllSensors();
+    const auto &cfg = mag_sensor_node::SensorConfig::getInstance();
+    const auto &sensors = cfg.getAllSensors();
+    const geometry_msgs::Pose &array_off = cfg.getArrayOffset();
     if (sensors.empty())
     {
         ROS_WARN_THROTTLE(5.0, "未找到传感器配置，跳过磁场计算");
@@ -273,7 +277,19 @@ void MagSensorSimNode::publishSensorMagneticFields(const mag_sensor_node::Magnet
         msg.header.stamp = magnet_pose.header.stamp;
         msg.header.frame_id = magnet_pose.header.frame_id;  // Set frame_id to match magnet pose
         msg.sensor_id = sensors[i].id;
-        msg.sensor_pose = sensors[i].pose;
+        // 组合 array_offset 与局部传感器位姿：array_off * sensor.pose
+        {
+            tf2::Transform T_off, T_s;
+            tf2::fromMsg(array_off, T_off);
+            tf2::fromMsg(sensors[i].pose, T_s);
+            tf2::Transform T = T_off * T_s;
+            geometry_msgs::Pose pose;
+            pose.position.x = T.getOrigin().x();
+            pose.position.y = T.getOrigin().y();
+            pose.position.z = T.getOrigin().z();
+            pose.orientation = tf2::toMsg(T.getRotation());
+            msg.sensor_pose = pose;
+        }
         Eigen::Vector3d noise = Eigen::Vector3d::Zero();
         if (noise_enable_)
         {

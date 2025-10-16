@@ -5,6 +5,9 @@ estimator_config:
   # 触发估计所需的最少测量数量（建议设置为传感器数量）。<=0 表示按1个测量触发
   min_sensors: 25
 
+  # 估计与发布使用的全局坐标系
+  global_frame: world
+
   # 磁铁参数配置
   magnet:
     strength: 10

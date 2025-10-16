@@ -4,6 +4,8 @@
 #include <serial/serial.h>
 
 #include <chrono>
+#include <tf2/LinearMath/Transform.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <mag_sensor_node/sensor_config.hpp>
 #include <sstream>
 #include <thread>
@@ -127,7 +129,20 @@ void MagSerialNode::publishMeasurement(int id, double mx, double my, double mz)
     msg_raw.mag_x = mx;
     msg_raw.mag_y = my;
     msg_raw.mag_z = mz;
-    msg_raw.sensor_pose = info.pose;
+    // 组合 array_offset 与局部传感器位姿
+    {
+        const auto &array_off = mag_sensor_node::SensorConfig::getInstance().getArrayOffset();
+        tf2::Transform T_off, T_s;
+        tf2::fromMsg(array_off, T_off);
+        tf2::fromMsg(info.pose, T_s);
+        tf2::Transform T = T_off * T_s;
+        geometry_msgs::Pose pose;
+        pose.position.x = T.getOrigin().x();
+        pose.position.y = T.getOrigin().y();
+        pose.position.z = T.getOrigin().z();
+        pose.orientation = tf2::toMsg(T.getRotation());
+        msg_raw.sensor_pose = pose;
+    }
     pub_raw_.publish(msg_raw);
 
     // mT 数据发布：复用同一消息类型，mag_* 字段写转换值

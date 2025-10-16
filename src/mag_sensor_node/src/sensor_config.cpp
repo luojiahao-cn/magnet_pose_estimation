@@ -1,4 +1,5 @@
 #include <tf2/LinearMath/Quaternion.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
 #include <mag_sensor_node/sensor_config.hpp>
 
@@ -9,6 +10,31 @@ namespace mag_sensor_node
     {
         try
         {
+            // 读取阵列整体相对 tool_tip_frame 的偏移
+            array_offset_ = geometry_msgs::Pose();
+            if (nh.hasParam("array_offset"))
+            {
+                XmlRpc::XmlRpcValue off;
+                nh.getParam("array_offset", off);
+                if (off.getType() == XmlRpc::XmlRpcValue::TypeStruct && off.hasMember("position") && off.hasMember("orientation"))
+                {
+                    XmlRpc::XmlRpcValue pos = off["position"];
+                    XmlRpc::XmlRpcValue ori = off["orientation"]; // RPY
+                    if (pos.getType() == XmlRpc::XmlRpcValue::TypeArray && pos.size() == 3 &&
+                        ori.getType() == XmlRpc::XmlRpcValue::TypeArray && ori.size() == 3)
+                    {
+                        array_offset_.position.x = static_cast<double>(pos[0]);
+                        array_offset_.position.y = static_cast<double>(pos[1]);
+                        array_offset_.position.z = static_cast<double>(pos[2]);
+                        tf2::Quaternion q;
+                        q.setRPY(static_cast<double>(ori[0]), static_cast<double>(ori[1]), static_cast<double>(ori[2]));
+                        array_offset_.orientation.x = q.x();
+                        array_offset_.orientation.y = q.y();
+                        array_offset_.orientation.z = q.z();
+                        array_offset_.orientation.w = q.w();
+                    }
+                }
+            }
             // 传感器列表
             XmlRpc::XmlRpcValue sensors_list;
             if (!nh.getParam("sensors", sensors_list))
