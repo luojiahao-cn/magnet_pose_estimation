@@ -1,11 +1,11 @@
 # mag_viz
 
-磁传感器数据可视化（Mag Sensor Visualization）。
+磁传感器数据可视化（Mag Sensor Visualization）。支持在源帧或目标帧（通过 TF2 转换）下绘制磁场箭头。
 
 - 可执行：`mag_sensor_viz_node`
-- 输入话题（可改）：`/mag_sensor/raw_data_mT`
+- 输入话题（可改）：`/mag_sensor/data_mT`
 - 输出 MarkerArray：`/mag_viz/markers`
-- 默认不使用 TF（`frame: ""`），如需在某坐标系（如 `world`）下显示，启动时传 `frame:=world`。
+- 目标帧 `~frame`：默认空（在消息 `header.frame_id` 下绘制）。若留空且集中参数 `/frames/global_frame` 存在，则回退使用该全局帧。
 
 启动：
 

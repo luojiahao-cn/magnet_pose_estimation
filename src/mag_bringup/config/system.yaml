@@ -1,0 +1,23 @@
+# Centralized system configuration for frames, topics, and module defaults
+# Loaded by mag_bringup/launch/bringup.launch at startup
+
+frames:
+  # Global/world frame used by estimator and RViz
+  global_frame: world
+  # TCP (tool center point) parent frame of the sensor array
+  parent_frame: tool_tcp
+  # Name for the virtual sensor array frame under the TCP
+  array_frame: sensor_array
+  # Optionally publish a static world->base transform (identity by default)
+  world_frame: world
+  base_frame: base_link
+
+# Estimator bridge configuration (read as absolute keys)
+estimator_config:
+  global_frame: world
+  mag_topic: /mag_sensor/data_mT
+  output_topic: /magnet_pose/estimated
+
+# Visualization defaults
+viz_config:
+  topic: /mag_sensor/data_mT

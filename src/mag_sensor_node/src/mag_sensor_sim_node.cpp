@@ -45,6 +45,8 @@ Eigen::MatrixXd MagSensorSimNode::computeMagneticField(const Eigen::Matrix<doubl
 
 void MagSensorSimNode::loadParams()
 {
+    // frame_id for published messages
+    nh_.param<std::string>("sim_config/frame_id", frame_id_, frame_id_);
     nh_.param<double>("sim_config/magnet/strength", magnet_strength_, 10.0);
     std::vector<double> direction;
     nh_.param("sim_config/magnet/direction", direction, std::vector<double>{0, 0, 1});
@@ -81,8 +83,8 @@ void MagSensorSimNode::loadParams()
 
 void MagSensorSimNode::setupPublishers()
 {
-    std::string magnet_pose_topic = "/magnet_pose/simulation";
-    std::string magnetic_field_topic = "/magnetic_field/raw_data";
+    std::string magnet_pose_topic = "/magnet_pose/ground_truth";
+    std::string magnetic_field_topic = "/mag_sensor/data_mT";
     nh_.param<std::string>("sim_config/topics/magnet_pose_topic", magnet_pose_topic, magnet_pose_topic);
     nh_.param<std::string>("sim_config/topics/magnetic_field_topic", magnetic_field_topic, magnetic_field_topic);
 
@@ -105,7 +107,7 @@ void MagSensorSimNode::onTimer(const ros::TimerEvent &)
 {
     mag_sensor_node::MagnetPose magnet_pose;
     magnet_pose.header.stamp = ros::Time::now();
-    magnet_pose.header.frame_id = "sensor_base_frame";
+    magnet_pose.header.frame_id = frame_id_;
     updateMagnetPose(magnet_pose);
     magnet_pose.magnetic_strength = magnet_strength_;
     magnet_pose_pub_.publish(magnet_pose);
@@ -275,7 +277,7 @@ void MagSensorSimNode::publishSensorMagneticFields(const mag_sensor_node::Magnet
     {
         mag_sensor_node::MagSensorData msg;
         msg.header.stamp = magnet_pose.header.stamp;
-        msg.header.frame_id = magnet_pose.header.frame_id;  // Set frame_id to match magnet pose
+    msg.header.frame_id = magnet_pose.header.frame_id;  // match configured frame
         msg.sensor_id = sensors[i].id;
         // 组合 array_offset 与局部传感器位姿：array_off * sensor.pose
         {

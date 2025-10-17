@@ -1,8 +1,8 @@
 # Default parameters for mag_sensor_viz node
 mag_sensor_viz:
-  topic: /mag_sensor/raw_data_mT
+  topic: /mag_sensor/data_mT
   marker_topic: /mag_viz/markers
-  frame: sensor_base_frame
+  frame: ""
   field_scale: 0.005
   marker_lifetime: 0.1
   color_max: 3.2

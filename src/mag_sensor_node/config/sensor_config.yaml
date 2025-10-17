@@ -1,4 +1,5 @@
-# 阵列整体相对 tool_tip_frame 的偏移（平移 + RPY）
+# 阵列整体相对 parent_frame 的偏移（平移 + RPY），
+# parent_frame 默认为 tool_tcp；完整链路通常为 frrobot_tool_link -> tool_frame -> tool_tcp -> sensor_array -> sensor_<id>
 array_offset:
   position: [0.02, 0.0, 0.02]
   # RPY in radians; here rotate +90deg about Z (yaw)

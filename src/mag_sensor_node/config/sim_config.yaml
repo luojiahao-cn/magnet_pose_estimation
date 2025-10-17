@@ -1,7 +1,9 @@
 sim_config:
+  # 默认消息的 frame_id（与传感器阵列父坐标一致，默认 tool_tcp）
+  frame_id: tool_tcp
   topics:
-    magnet_pose_topic: "/magnet_pose"
-    magnetic_field_topic: "/mag_sensor/raw_data_mT"
+    magnet_pose_topic: "/magnet_pose/ground_truth"
+    magnetic_field_topic: "/mag_sensor/data_mT"
   magnet:
     strength: 10.0
     direction: [0.0, 0.0, 1.0]

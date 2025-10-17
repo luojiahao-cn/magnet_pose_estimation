@@ -4,6 +4,9 @@
 #include <std_msgs/Float64.h>
 #include <std_srvs/Empty.h>
 
+#include <tf2_ros/transform_listener.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+
 #include <map>
 #include <string>
 
@@ -18,6 +21,7 @@ class MagnetPoseEstimatorNode
 public:
     explicit MagnetPoseEstimatorNode(ros::NodeHandle &nh) : nh_(nh)
     {
+        ros::NodeHandle pnh("~");
         // Select algorithm
         std::string estimator_type;
         nh_.param<std::string>("/estimator_config/estimator_type", estimator_type, std::string("optimization"));
@@ -38,19 +42,74 @@ public:
             estimator_.reset(new mag_pose_estimation::OptimizationMagnetPoseEstimator(nh_));
         }
 
-        // 通过参数控制触发所需的最少测量数量，避免直接依赖 mag_sensor_node
-        nh_.param<int>("/estimator_config/min_sensors", min_sensors_, 0);
+        // 全局坐标系和话题配置（优先 ~ 私有参数，其次集中 /estimator_config/*，最后默认）
+        pnh.param<std::string>("global_frame", global_frame_, std::string("world"));
+        nh_.param<std::string>("/estimator_config/global_frame", global_frame_, global_frame_);
+        pnh.param<std::string>("mag_topic", mag_topic_, std::string("/mag_sensor/data_mT"));
+        nh_.param<std::string>("/estimator_config/mag_topic", mag_topic_, mag_topic_);
+        pnh.param<std::string>("output_topic", output_topic_, std::string("/magnet_pose/estimated"));
+        nh_.param<std::string>("/estimator_config/output_topic", output_topic_, output_topic_);
+
+        // 通过参数控制触发所需的最少测量数量
+        pnh.param<int>("min_sensors", min_sensors_, 0);
+        nh_.param<int>("/estimator_config/min_sensors", min_sensors_, min_sensors_);
         if (min_sensors_ < 0)
             min_sensors_ = 0;
 
+        ROS_INFO_STREAM("[magnet_pose_estimator] config: global_frame='" << global_frame_
+                        << "', mag_topic='" << mag_topic_ << "', output_topic='" << output_topic_
+                        << "', min_sensors=" << min_sensors_);
+
+        // TF listener
+        tf_listener_ = std::make_unique<tf2_ros::TransformListener>(tf_buffer_);
+
         // ROS I/O
-        pose_pub_ = nh_.advertise<MagnetPose>("/magnet_pose/predicted", 10);
-        error_pub_ = nh_.advertise<std_msgs::Float64>("/magnet_pose/error", 10);
-        sub_ = nh_.subscribe("/magnetic_field/raw_data", 50, &MagnetPoseEstimatorNode::magCallback, this);
+        pose_pub_ = nh_.advertise<MagnetPose>(output_topic_, 10);
+    error_pub_ = nh_.advertise<std_msgs::Float64>("/magnet_pose/error", 10);
+        sub_ = nh_.subscribe(mag_topic_, 50, &MagnetPoseEstimatorNode::magCallback, this);
         reset_srv_ = nh_.advertiseService("/magnet_pose/reset_localization", &MagnetPoseEstimatorNode::onReset, this);
     }
 
 private:
+    // 将单条传感器测量转换到 global_frame_
+    bool transformMeasurementToGlobal(const MagneticField &in, MagneticField &out)
+    {
+        if (in.header.frame_id == global_frame_)
+        {
+            out = in;
+            return true;
+        }
+        try
+        {
+            geometry_msgs::TransformStamped T = tf_buffer_.lookupTransform(
+                global_frame_, in.header.frame_id, in.header.stamp, ros::Duration(0.05));
+
+            geometry_msgs::Pose pose_tf;
+            tf2::doTransform(in.sensor_pose, pose_tf, T);
+
+            geometry_msgs::Vector3Stamped vin, vout;
+            vin.header = in.header;
+            vin.vector.x = in.mag_x;
+            vin.vector.y = in.mag_y;
+            vin.vector.z = in.mag_z;
+            tf2::doTransform(vin, vout, T);
+
+            out = in;
+            out.header.frame_id = global_frame_;
+            out.sensor_pose = pose_tf;
+            out.mag_x = vout.vector.x;
+            out.mag_y = vout.vector.y;
+            out.mag_z = vout.vector.z;
+            return true;
+        }
+        catch (const std::exception &e)
+        {
+            ROS_WARN_THROTTLE(1.0, "TF 转换失败: %s -> %s（传感器ID=%u）: %s", in.header.frame_id.c_str(),
+                              global_frame_.c_str(), in.sensor_id, e.what());
+            return false;
+        }
+    }
+
     void magCallback(const MagneticField::ConstPtr &msg)
     {
         // Cache by sensor_id; latest wins
@@ -59,10 +118,19 @@ private:
         const size_t need = min_sensors_ > 0 ? static_cast<size_t>(min_sensors_) : 1u;
         if (measurements_.size() >= need)
         {
+            std::map<int, MagneticField> meas_tf;
+            for (const auto &kv : measurements_)
+            {
+                MagneticField tfed;
+                if (transformMeasurementToGlobal(kv.second, tfed))
+                    meas_tf[kv.first] = tfed;
+            }
+
             MagnetPose pose;
             double error = 0.0;
-            if (estimator_->estimate(measurements_, pose, &error))
+            if (!meas_tf.empty() && estimator_->estimate(meas_tf, pose, &error))
             {
+                pose.header.frame_id = global_frame_;
                 pose_pub_.publish(pose);
                 std_msgs::Float64 e;
                 e.data = error;
@@ -92,6 +160,13 @@ private:
     ros::ServiceServer reset_srv_;
     std::map<int, MagneticField> measurements_;
     int min_sensors_{0};
+
+    // TF and params
+    tf2_ros::Buffer tf_buffer_;
+    std::unique_ptr<tf2_ros::TransformListener> tf_listener_;
+    std::string global_frame_ {"world"};
+    std::string mag_topic_ {"/mag_sensor/data_mT"};
+    std::string output_topic_ {"/magnet_pose/estimated"};
 };
 
 int main(int argc, char **argv)

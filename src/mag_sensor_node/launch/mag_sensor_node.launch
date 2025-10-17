@@ -1,11 +1,11 @@
 <launch>
     <!-- 可配置参数 -->
     <arg name="port" default="/dev/ttyUSB0" />
-    <!-- <arg name="port" default="/dev/ttyACM0" /> -->
     <arg name="baud_rate" default="921600" />
-        <arg name="frame_id" default="tool_tip_frame" />
+    <arg name="frame_id" default="tool_tcp" />
     <arg name="timeout" default="1000" />
-    <arg name="topic" default="/mag_sensor/raw_data" />
+    <!-- 默认发布原始话题 + 自动派生 _mT 话题；为方便消费者，默认原始话题名设为 /mag_sensor/data（_mT 会同步发布） -->
+    <arg name="topic" default="/mag_sensor/data" />
     <arg name="sleep_ms" default="1" />
     <arg name="freq_stat_period" default="5.0" />
 

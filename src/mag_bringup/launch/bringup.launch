@@ -5,10 +5,7 @@
     <arg name="start_viz" default="true" />
     <arg name="start_estimator" default="false" />
     <arg name="start_scan" default="true" />
-
-    <!-- New: sensor TF publisher & optional world->base static TF -->
     <arg name="start_sensor_tf" default="true" />
-    <arg name="parent_frame" default="tool_tip_frame" />
     <arg name="start_world_tf" default="false" />
     <arg name="world_frame" default="world" />
     <arg name="base_frame" default="base_link" />
@@ -17,7 +14,8 @@
     <arg name="use_sim" default="true" />
     <arg name="with_rviz" default="true" />
 
-    <!-- Keep topics in YAML; launch stays minimal -->
+    <!-- Load centralized system config (frames/topics); launch stays minimal -->
+    <rosparam file="$(find mag_bringup)/config/system.yaml" command="load" />
 
     <!-- Sensor bringup: gated + real or sim -->
     <group if="$(arg start_sensor)">
@@ -29,12 +27,12 @@
         </group>
     </group>
 
-    <!-- Publish per-sensor static TF under tool_tip_frame (or custom parent) -->
+    <!-- Publish per-sensor static TF under TCP (or custom parent from centralized config) -->
     <group if="$(arg start_sensor_tf)">
-        <include file="$(find mag_sensor_node)/launch/sensor_tf_publisher.launch">
-            <arg name="parent_frame" value="$(arg parent_frame)" />
-        </include>
+        <include file="$(find mag_sensor_node)/launch/sensor_tf_publisher.launch" />
     </group>
+
+    
 
     <!-- Optional: publish world -> base_frame static TF (identity) -->
     <group if="$(arg start_world_tf)">

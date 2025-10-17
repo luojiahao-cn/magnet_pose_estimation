@@ -4,6 +4,7 @@
 #include <moveit/planning_scene_interface/planning_scene_interface.h>
 #include <std_srvs/Trigger.h>
 #include <tf2_ros/transform_broadcaster.h>
+#include <tf2_ros/static_transform_broadcaster.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <vector>
 #include <string>
@@ -35,9 +36,10 @@ private:
   // 支架末端参数
   std::vector<double> tip_xyz_;
   std::vector<double> tip_rpy_;
+  std::string tcp_frame_name_ {"tool_tcp"};
 
   ros::Timer tf_timer_;
-  tf2_ros::TransformBroadcaster tf_broadcaster_;
+  tf2_ros::StaticTransformBroadcaster static_broadcaster_;
 
   ros::ServiceServer srv_attach_;
   ros::ServiceServer srv_detach_;

@@ -8,12 +8,12 @@
   - 参数读取: parent_link, object_name, mesh_path, xyz, rpy, scale, touch_links, auto_attach, tip_xyz, tip_rpy
   - 附着流程: 加载网格 → 构造 CollisionObject → 应用到规划场景 → 附着到 parent_link
   - 分离流程: 从末端分离并移除规划场景对象
-  - TF 发布: 周期发布 tool_frame 与 tool_tip_frame（工具末端）坐标系
+  - TF 发布: 周期发布 tool_frame 与 tool_tcp（工具末端TCP）坐标系
 
 ROS/MoveIt 接口:
   - 服务: ~attach (std_srvs/Trigger), ~detach (std_srvs/Trigger)
   - 规划组: fr5v6_arm（使用 MoveGroupInterface 与 PlanningSceneInterface）
-  - TF: tool_frame、tool_tip_frame（20 Hz）
+  - TF: tool_frame、tool_tcp（20 Hz）
 
 参数(私有命名空间 ~):
   - parent_link[string]: 工具附着父连杆；为 "auto"/空时自动取末端执行器链接
@@ -23,7 +23,7 @@ ROS/MoveIt 接口:
   - scale[double[3]]: 网格缩放比例
   - touch_links[string[]]: 允许接触的链接集合；为空则默认使用 parent_link
   - auto_attach[bool]: 节点启动后是否自动附着一次
-  - tip_xyz[double[3]], tip_rpy[double[3]]: 工具末端(tool_tip_frame)相对 tool_frame 的位姿
+  - tip_xyz[double[3]], tip_rpy[double[3]]: 工具末端(tool_tcp)相对 tool_frame 的位姿
 
 运行流程:
   - 启动 → 可选自动附着 → 周期发布 TF → 根据需要调用 ~attach/~detach 切换工具状态
@@ -43,6 +43,7 @@ ROS/MoveIt 接口:
 #include <geometry_msgs/Pose.h>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+#include <algorithm>
 
 ToolManagerNode::ToolManagerNode(ros::NodeHandle &nh, ros::NodeHandle &pnh)
   : nh_(nh), pnh_(pnh), move_group_("fr5v6_arm"), planning_scene_interface_() {
@@ -56,9 +57,10 @@ ToolManagerNode::ToolManagerNode(ros::NodeHandle &nh, ros::NodeHandle &pnh)
      pnh_.param("touch_links", touch_links_, std::vector<std::string>());
      pnh_.param("auto_attach", auto_attach_, false);
 
-     // 支架末端参数
-     pnh_.param("tip_xyz", tip_xyz_, std::vector<double>());
-     pnh_.param("tip_rpy", tip_rpy_, std::vector<double>());
+  // 支架末端参数
+  pnh_.param("tip_xyz", tip_xyz_, std::vector<double>());
+  pnh_.param("tip_rpy", tip_rpy_, std::vector<double>());
+  pnh_.param<std::string>("tcp_frame_name", tcp_frame_name_, std::string("tool_tcp"));
 
     // Resolve parent_link automatically from MoveGroup if requested
     if (parent_link_ == "auto" || parent_link_.empty()) {
@@ -77,6 +79,8 @@ ToolManagerNode::ToolManagerNode(ros::NodeHandle &nh, ros::NodeHandle &pnh)
        scale_.size()>0?scale_[0]:1.0, scale_.size()>1?scale_[1]:1.0, scale_.size()>2?scale_[2]:1.0);
 
     if (auto_attach_) {
+      // 先行发布一次 TF（基于 xyz/rpy/tip_* 参数），即使后续 mesh/attach 失败也能保证 TF 链路
+      publishToolTF(ros::TimerEvent());
       auto_attach_timer_ = nh_.createTimer(ros::Duration(1.0), [this](const ros::TimerEvent&){
         std_srvs::Trigger::Request req; std_srvs::Trigger::Response res;
         this->attachCb(req, res);
@@ -84,8 +88,8 @@ ToolManagerNode::ToolManagerNode(ros::NodeHandle &nh, ros::NodeHandle &pnh)
       }, true); // oneshot
     }
 
-    // TF broadcaster timer: publish tool_frame at 20Hz
-    tf_timer_ = nh_.createTimer(ros::Duration(0.05), &ToolManagerNode::publishToolTF, this);
+  // 按需发布 TF：默认不周期发布，避免 TF_REPEATED_DATA；
+  // 在自动附着完成或手动调用 attach 后发布一次静态 TF
   }
 
 bool ToolManagerNode::attachCb(std_srvs::Trigger::Request &req, std_srvs::Trigger::Response &res) {
@@ -96,9 +100,18 @@ bool ToolManagerNode::attachCb(std_srvs::Trigger::Request &req, std_srvs::Trigge
 bool ToolManagerNode::attachWithParams(std_srvs::Trigger::Response &res) {
     // Attempt to remove any previous instance
     try {
-      move_group_.detachObject(object_name_);
-      ros::Duration(0.1).sleep();
-      planning_scene_interface_.removeCollisionObjects({object_name_});
+      // Detach only if currently attached
+      std::map<std::string, moveit_msgs::AttachedCollisionObject> attached =
+          planning_scene_interface_.getAttachedObjects(std::vector<std::string>{object_name_});
+      if (!attached.empty()) {
+        move_group_.detachObject(object_name_);
+        ros::Duration(0.1).sleep();
+      }
+      // Remove only if the world object exists
+      std::vector<std::string> known = planning_scene_interface_.getKnownObjectNames();
+      if (std::find(known.begin(), known.end(), object_name_) != known.end()) {
+        planning_scene_interface_.removeCollisionObjects({object_name_});
+      }
     } catch (...) {}
 
     // Prepare pose relative to parent_link
@@ -127,6 +140,8 @@ bool ToolManagerNode::attachWithParams(std_srvs::Trigger::Response &res) {
       if (!mesh) {
         res.success = false;
         res.message = "Failed to load mesh from resource";
+        // 即便网格加载失败，也发布 TF，保证链路连贯
+        publishToolTF(ros::TimerEvent());
         return true;
       }
       shapes::ShapeMsg shape_msg;
@@ -140,6 +155,8 @@ bool ToolManagerNode::attachWithParams(std_srvs::Trigger::Response &res) {
     } catch (const std::exception &e) {
       res.success = false;
       res.message = std::string("Failed to build mesh collision object: ") + e.what();
+      // 构建碰撞体失败时也发布 TF，保证链路连贯
+      publishToolTF(ros::TimerEvent());
       return true;
     }
 
@@ -158,9 +175,13 @@ bool ToolManagerNode::attachWithParams(std_srvs::Trigger::Response &res) {
     } catch (const std::exception &e) {
       res.success = false;
       res.message = std::string("Failed to attach object: ") + e.what();
+      // 附着失败也发布一次 TF，尽量保持坐标链路可用
+      publishToolTF(ros::TimerEvent());
       return true;
     }
 
+    // 发布一次 TF（静态关系），避免高频重复
+    publishToolTF(ros::TimerEvent());
     res.success = true;
     res.message = "attached";
     return true;
@@ -168,48 +189,62 @@ bool ToolManagerNode::attachWithParams(std_srvs::Trigger::Response &res) {
 
 bool ToolManagerNode::detachCb(std_srvs::Trigger::Request &req, std_srvs::Trigger::Response &res) {
     try {
-      move_group_.detachObject(object_name_);
-      ros::Duration(0.2).sleep();
-      planning_scene_interface_.removeCollisionObjects({object_name_});
+      bool did_any = false;
+      // Detach if attached
+      std::map<std::string, moveit_msgs::AttachedCollisionObject> attached =
+          planning_scene_interface_.getAttachedObjects(std::vector<std::string>{object_name_});
+      if (!attached.empty()) {
+        move_group_.detachObject(object_name_);
+        ros::Duration(0.2).sleep();
+        did_any = true;
+      }
+      // Remove if exists in world
+      std::vector<std::string> known = planning_scene_interface_.getKnownObjectNames();
+      if (std::find(known.begin(), known.end(), object_name_) != known.end()) {
+        planning_scene_interface_.removeCollisionObjects({object_name_});
+        did_any = true;
+      }
+      res.success = true;
+      res.message = did_any ? "detached" : "object not present";
+      return true;
     } catch (const std::exception &e) {
       res.success = false;
       res.message = std::string("Failed to detach/remove: ") + e.what();
       return true;
     }
-    res.success = true;
-    res.message = "detached";
-    return true;
   }
 
 
 void ToolManagerNode::publishToolTF(const ros::TimerEvent&) {
     if (parent_link_.empty() || xyz_.size() != 3 || rpy_.size() != 3) return;
-    ros::Time now = ros::Time::now();
-    // tool_frame: 支架基座
-    geometry_msgs::TransformStamped tf;
-    tf.header.stamp = now;
-    tf.header.frame_id = parent_link_;
-    tf.child_frame_id = "tool_frame";
-    tf.transform.translation.x = xyz_[0];
-    tf.transform.translation.y = xyz_[1];
-    tf.transform.translation.z = xyz_[2];
-    tf2::Quaternion q; q.setRPY(rpy_[0], rpy_[1], rpy_[2]);
-    tf.transform.rotation = tf2::toMsg(q);
-    tf_broadcaster_.sendTransform(tf);
+  ros::Time now = ros::Time::now();
+  // tool_frame: 支架基座（静态 TF）
+  geometry_msgs::TransformStamped tf;
+  tf.header.stamp = now;
+  tf.header.frame_id = parent_link_;
+  tf.child_frame_id = "tool_frame";
+  tf.transform.translation.x = xyz_[0];
+  tf.transform.translation.y = xyz_[1];
+  tf.transform.translation.z = xyz_[2];
+  tf2::Quaternion q; q.setRPY(rpy_[0], rpy_[1], rpy_[2]);
+  tf.transform.rotation = tf2::toMsg(q);
 
-    // tool_tip_frame: 支架末端
+    // tool TCP frame: 支架末端
+    std::vector<geometry_msgs::TransformStamped> tfs;
+    tfs.push_back(tf);
     if (tip_xyz_.size() == 3 && tip_rpy_.size() == 3) {
       geometry_msgs::TransformStamped tf_tip;
       tf_tip.header.stamp = now;
       tf_tip.header.frame_id = "tool_frame";
-      tf_tip.child_frame_id = "tool_tip_frame";
+      tf_tip.child_frame_id = tcp_frame_name_;
       tf_tip.transform.translation.x = tip_xyz_[0];
       tf_tip.transform.translation.y = tip_xyz_[1];
       tf_tip.transform.translation.z = tip_xyz_[2];
       tf2::Quaternion q_tip; q_tip.setRPY(tip_rpy_[0], tip_rpy_[1], tip_rpy_[2]);
       tf_tip.transform.rotation = tf2::toMsg(q_tip);
-      tf_broadcaster_.sendTransform(tf_tip);
+      tfs.push_back(tf_tip);
     }
+    static_broadcaster_.sendTransform(tfs);
   }
 
 int main(int argc, char **argv) {

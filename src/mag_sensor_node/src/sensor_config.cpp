@@ -10,7 +10,7 @@ namespace mag_sensor_node
     {
         try
         {
-            // 读取阵列整体相对 tool_tip_frame 的偏移
+            // 读取阵列整体相对 tool_tcp 的偏移
             array_offset_ = geometry_msgs::Pose();
             if (nh.hasParam("array_offset"))
             {

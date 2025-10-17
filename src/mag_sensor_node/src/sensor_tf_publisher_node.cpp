@@ -21,9 +21,15 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    // Parent frame (tool_tip_frame by default)
-    std::string parent_frame = "tool_tip_frame";
+    // Parent & array frames: prefer private params; fallback to centralized /frames/*; default to tool_tcp/sensor_array
+    std::string parent_frame = "tool_tcp";
+    std::string array_frame = "sensor_array";
+    // 1) private params (~parent_frame/~array_frame)
     pnh.param<std::string>("parent_frame", parent_frame, parent_frame);
+    pnh.param<std::string>("array_frame", array_frame, array_frame);
+    // 2) centralized params (/frames/*) as fallback if not overridden
+    nh.param<std::string>("/frames/parent_frame", parent_frame, parent_frame);
+    nh.param<std::string>("/frames/array_frame", array_frame, array_frame);
 
     const auto &cfg = mag_sensor_node::SensorConfig::getInstance();
     const auto &sensors = cfg.getAllSensors();
@@ -43,15 +49,13 @@ int main(int argc, char **argv)
         geometry_msgs::TransformStamped tf_arr;
         tf_arr.header.stamp = ros::Time::now();
         tf_arr.header.frame_id = parent_frame;
-        tf_arr.child_frame_id = parent_frame + std::string("/array_frame");
+        tf_arr.child_frame_id = array_frame;
         tf_arr.transform.translation.x = array_off.position.x;
         tf_arr.transform.translation.y = array_off.position.y;
         tf_arr.transform.translation.z = array_off.position.z;
         tf_arr.transform.rotation = array_off.orientation;
         tfs.push_back(tf_arr);
     }
-
-    std::string array_frame = parent_frame + std::string("/array_frame");
 
     for (const auto &s : sensors)
     {

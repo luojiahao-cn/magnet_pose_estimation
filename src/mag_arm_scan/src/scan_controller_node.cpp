@@ -12,7 +12,7 @@
   - 接口提供: /start_scan 服务触发扫描；支持 ~autostart 自动扫描
 
 ROS/MoveIt 接口:
-  - 订阅: mag_topic (mag_sensor_node::MagSensorData)，默认 /mag_sensor/raw_data_mT
+    - 订阅: mag_topic (mag_sensor_node::MagSensorData)，默认 /mag_sensor/data_mT
   - 服务: /start_scan (std_srvs/Trigger)
   - 规划组: fr5v6_arm；命名位姿: ready
 
@@ -55,7 +55,7 @@ void ScanControllerNode::loadParams()
     pnh_.param<double>("yaw", yaw_, 0.0);
     pnh_.param<double>("pitch", pitch_, -M_PI);
     pnh_.param<bool>("autostart", autostart_, true);
-    pnh_.param<std::string>("mag_topic", mag_topic_, "/mag_sensor/raw_data_mT");
+    pnh_.param<std::string>("mag_topic", mag_topic_, "/mag_sensor/data_mT");
     pnh_.param<double>("wait_time", wait_time_, 2.0);
     pnh_.param<std::string>("output_file", output_file_, "/tmp/scan_data.csv");
 

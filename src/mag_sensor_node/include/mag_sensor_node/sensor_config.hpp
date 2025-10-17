@@ -44,7 +44,7 @@ namespace mag_sensor_node
         // array_frame_ 与 array_pose_ 已删除
         std::vector<SensorInfo> sensors_;
         std::map<int, size_t> id_index_map_;
-        geometry_msgs::Pose array_offset_{}; // tool_tip_frame -> array_frame
+    geometry_msgs::Pose array_offset_{}; // tool_tcp -> array_frame
     };
 
 } // namespace mag_sensor_node

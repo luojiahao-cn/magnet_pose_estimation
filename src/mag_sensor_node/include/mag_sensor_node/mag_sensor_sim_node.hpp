@@ -76,4 +76,6 @@ private:
     double noise_mean_{};
     double noise_stddev_{};
     double noise_amplitude_{};
+    // effective frame for published messages
+    std::string frame_id_ {"tool_tcp"};
 };
