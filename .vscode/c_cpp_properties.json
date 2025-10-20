@@ -12,6 +12,7 @@
         "/opt/ros/noetic/share/**",
         "/opt/ros/noetic/lib/**",
         "${workspaceFolder}/devel/include/**",
+        "${workspaceFolder}/devel/.private/**/include/**",
         "${workspaceFolder}/src/mag_sensor_node/include",
         "${workspaceFolder}/src/mag_pose_visualization/include",
         "${workspaceFolder}/src/mag_viz/include"
