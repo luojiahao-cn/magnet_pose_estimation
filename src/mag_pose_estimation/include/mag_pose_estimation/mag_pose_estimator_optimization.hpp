@@ -74,7 +74,8 @@ namespace mag_pose_estimation
     class OptimizationMagnetPoseEstimator : public BaseMagnetPoseEstimator
     {
     public:
-        explicit OptimizationMagnetPoseEstimator(ros::NodeHandle &nh);
+        // Expect a node's private NodeHandle; parameters are read from "~estimator_config/*"
+        explicit OptimizationMagnetPoseEstimator(ros::NodeHandle &pnh);
 
         void reset() override;
         bool estimate(const std::map<int, MagneticField> &measurements, MagnetPose &out_pose, double *out_error) override;
@@ -83,7 +84,8 @@ namespace mag_pose_estimation
         void loadParameters();
         void resetToInitialParameters();
 
-        ros::NodeHandle nh_;
+    // Private node handle for this node ("~")
+    ros::NodeHandle pnh_;
 
         Eigen::Vector3d initial_position_;
         Eigen::Vector3d initial_direction_;

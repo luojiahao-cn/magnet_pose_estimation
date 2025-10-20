@@ -50,8 +50,7 @@ void MagSerialNode::loadParams()
 
 void MagSerialNode::loadConfig()
 {
-    ros::NodeHandle global_nh;
-    if (!mag_sensor_node::SensorConfig::getInstance().loadConfig(global_nh))
+    if (!mag_sensor_node::SensorConfig::getInstance().loadConfig(pnh_))
     {
         throw std::runtime_error("load sensor config failed");
     }
@@ -77,7 +76,6 @@ void MagSerialNode::openSerial()
 
 bool MagSerialNode::parseLine(const std::string &line, int &id, double &mx, double &my, double &mz)
 {
-    // 仅支持格式: [NN]: v1 v2 v3  （例如: [01]: 001761 -03264 -02251）
     std::string trimmed = line;
     while (!trimmed.empty() && (trimmed.back() == '\n' || trimmed.back() == '\r' || isspace(trimmed.back())))
         trimmed.pop_back();
@@ -87,7 +85,7 @@ bool MagSerialNode::parseLine(const std::string &line, int &id, double &mx, doub
     if (start > 0)
         trimmed = trimmed.substr(start);
     if (trimmed.size() < 6)
-        return false; // 最小形态 [0]: 0 0 0
+        return false;
     size_t colon = trimmed.find(':');
     if (colon == std::string::npos)
         return false;
@@ -111,8 +109,7 @@ bool MagSerialNode::parseLine(const std::string &line, int &id, double &mx, doub
 
 double MagSerialNode::rawToMilliTesla(double raw_value) const
 {
-    // 假设 raw_value 对应 int16 范围缩放，这里输入已被读为数值（可能仍是整数字符串转 double）
-    return (raw_value / 32767.0) * 3.2; // 输出 mT
+    return (raw_value / 32767.0) * 3.2;
 }
 
 void MagSerialNode::publishMeasurement(int id, double mx, double my, double mz)
@@ -121,7 +118,6 @@ void MagSerialNode::publishMeasurement(int id, double mx, double my, double mz)
     if (!mag_sensor_node::SensorConfig::getInstance().getSensorById(id, info))
         return; // 未知 ID 直接忽略
     ros::Time stamp = ros::Time::now();
-    // 原始数据发布
     mag_sensor_node::MagSensorData msg_raw;
     msg_raw.header.stamp = stamp;
     msg_raw.header.frame_id = frame_id_;
@@ -129,7 +125,6 @@ void MagSerialNode::publishMeasurement(int id, double mx, double my, double mz)
     msg_raw.mag_x = mx;
     msg_raw.mag_y = my;
     msg_raw.mag_z = mz;
-    // 组合 array_offset 与局部传感器位姿
     {
         const auto &array_off = mag_sensor_node::SensorConfig::getInstance().getArrayOffset();
         tf2::Transform T_off, T_s;

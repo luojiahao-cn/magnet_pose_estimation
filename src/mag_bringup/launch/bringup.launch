@@ -14,8 +14,7 @@
     <arg name="use_sim" default="true" />
     <arg name="with_rviz" default="true" />
 
-    <!-- Load centralized system config (frames/topics); launch stays minimal -->
-    <rosparam file="$(find mag_bringup)/config/system.yaml" command="load" />
+    <!-- 不再全局加载参数；各子节点在其私有命名空间加载各自 YAML -->
 
     <!-- Sensor bringup: gated + real or sim -->
     <group if="$(arg start_sensor)">

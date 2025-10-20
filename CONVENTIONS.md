@@ -21,7 +21,7 @@ Parameters
 - estimator_config/mag_topic: Defaults to /mag_sensor/data_mT.
 - estimator_config/output_topic: Defaults to /magnet_pose/estimated.
 - mag_sensor_node/~frame_id: Defaults to tool_tcp.
-- sensor_config.yaml/array_offset: position + orientation (RPY rad).
+- sensor_config.yaml: use `array.offset` (position + orientation, RPY rad) for array-level transform.
 
 Launch order
 1) Publish static TFs for sensor array (sensor_tf_publisher.launch).

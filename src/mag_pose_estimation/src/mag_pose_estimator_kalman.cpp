@@ -7,7 +7,7 @@
 
 namespace mag_pose_estimation
 {
-    KalmanMagnetPoseEstimator::KalmanMagnetPoseEstimator(ros::NodeHandle &nh) : nh_(nh)
+    KalmanMagnetPoseEstimator::KalmanMagnetPoseEstimator(ros::NodeHandle &pnh) : pnh_(pnh)
     {
         loadParameters();
         ROS_INFO("磁铁位置估计器（卡尔曼滤波）已初始化");
@@ -16,9 +16,12 @@ namespace mag_pose_estimation
     void KalmanMagnetPoseEstimator::loadParameters()
     {
         std::vector<double> position_vec, direction_vec;
-        nh_.param("/estimator_config/magnet/position", position_vec, std::vector<double>{0.01, 0.01, 0.05});
-        nh_.param("/estimator_config/magnet/direction", direction_vec, std::vector<double>{0, 0, 1});
-        nh_.param<double>("/estimator_config/magnet/strength", initial_strength_, 2.0);
+        if (!pnh_.getParam("estimator_config/magnet/position", position_vec) || position_vec.size() != 3)
+            throw std::runtime_error("缺少或非法参数: ~estimator_config/magnet/position[3]");
+        if (!pnh_.getParam("estimator_config/magnet/direction", direction_vec) || direction_vec.size() != 3)
+            throw std::runtime_error("缺少或非法参数: ~estimator_config/magnet/direction[3]");
+        if (!pnh_.getParam("estimator_config/magnet/strength", initial_strength_))
+            throw std::runtime_error("缺少参数: ~estimator_config/magnet/strength");
 
         initial_position_ = Eigen::Vector3d(position_vec[0], position_vec[1], position_vec[2]);
         initial_direction_ = Eigen::Vector3d(direction_vec[0], direction_vec[1], direction_vec[2]);
@@ -34,10 +37,14 @@ namespace mag_pose_estimation
         state_(4) = phi;
 
         double position_process_noise, angle_process_noise, measurement_noise, initial_covariance;
-        nh_.param<double>("/estimator_config/kalman/position_process_noise", position_process_noise, 1e-7);
-        nh_.param<double>("/estimator_config/kalman/angle_process_noise", angle_process_noise, 1e-8);
-        nh_.param<double>("/estimator_config/kalman/measurement_noise", measurement_noise, 1e-2);
-        nh_.param<double>("/estimator_config/kalman/initial_covariance", initial_covariance, 0.01);
+        if (!pnh_.getParam("estimator_config/kalman/position_process_noise", position_process_noise))
+            throw std::runtime_error("缺少参数: ~estimator_config/kalman/position_process_noise");
+        if (!pnh_.getParam("estimator_config/kalman/angle_process_noise", angle_process_noise))
+            throw std::runtime_error("缺少参数: ~estimator_config/kalman/angle_process_noise");
+        if (!pnh_.getParam("estimator_config/kalman/measurement_noise", measurement_noise))
+            throw std::runtime_error("缺少参数: ~estimator_config/kalman/measurement_noise");
+        if (!pnh_.getParam("estimator_config/kalman/initial_covariance", initial_covariance))
+            throw std::runtime_error("缺少参数: ~estimator_config/kalman/initial_covariance");
         measurement_noise_ = measurement_noise;
 
         P_ = Eigen::MatrixXd::Identity(state_dim_, state_dim_) * initial_covariance;

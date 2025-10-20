@@ -1,8 +1,6 @@
 sim_config:
-  # 默认消息的 frame_id（与传感器阵列父坐标一致，默认 tool_tcp）
-  frame_id: tool_tcp
   topics:
-    magnet_pose_topic: "/magnet_pose/ground_truth"
+    magnet_pose_topic: "/magnet_pose/sim_true"
     magnetic_field_topic: "/mag_sensor/data_mT"
   magnet:
     strength: 10.0
@@ -17,8 +15,8 @@ sim_config:
     update_rate: 100.0
     velocity: 0.01
   motion:
-    mode: translate_only # static | rotate_only | translate_only | translate_and_rotate
-    axis: z # x | y | z | xyz
+    mode: translate_only
+    axis: z
     angular_velocity: 0.1
     initial_roll: 0.0
     initial_pitch: 0.0
@@ -27,7 +25,10 @@ sim_config:
     static_orientation: [0.0, 0.5, 0.0]
   noise:
     enable: false
-    type: gaussian # gaussian | uniform
+    type: gaussian
     mean: 0.0
     stddev: 1.0
     amplitude: 1.0
+  
+  # 传感器阵列定义改为从 launch 加载的共享文件 sensor_array.yaml
+

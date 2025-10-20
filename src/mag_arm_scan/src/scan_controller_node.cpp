@@ -36,6 +36,7 @@ ROS/MoveIt 接口:
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <fstream>
 #include <iostream>
+#include <stdexcept>
 
 ScanControllerNode::ScanControllerNode(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     : nh_(nh), pnh_(pnh), move_group_("fr5v6_arm")
@@ -43,29 +44,36 @@ ScanControllerNode::ScanControllerNode(ros::NodeHandle& nh, ros::NodeHandle& pnh
     loadParams();
     generateScanPoints();
 
-    start_scan_srv_ = nh_.advertiseService("start_scan", &ScanControllerNode::startScan, this);
+    // 服务置于节点命名空间下
+    start_scan_srv_ = pnh_.advertiseService("start_scan", &ScanControllerNode::startScan, this);
     mag_data_sub_ = nh_.subscribe(mag_topic_, 100, &ScanControllerNode::magDataCallback, this);
 
-    ROS_INFO("ScanControllerNode initialized with %zu scan points", scan_points_.size());
+    ROS_INFO("[scan_controller] initialized with %zu scan points", scan_points_.size());
 }
 
 void ScanControllerNode::loadParams()
 {
-    pnh_.param<std::string>("frame_id", frame_id_, "world");
-    pnh_.param<double>("yaw", yaw_, 0.0);
-    pnh_.param<double>("pitch", pitch_, -M_PI);
-    pnh_.param<bool>("autostart", autostart_, true);
-    pnh_.param<std::string>("mag_topic", mag_topic_, "/mag_sensor/data_mT");
-    pnh_.param<double>("wait_time", wait_time_, 2.0);
-    pnh_.param<std::string>("output_file", output_file_, "/tmp/scan_data.csv");
+    if (!pnh_.getParam("frame_id", frame_id_))
+        throw std::runtime_error("缺少参数: ~frame_id");
+    if (!pnh_.getParam("yaw", yaw_))
+        throw std::runtime_error("缺少参数: ~yaw");
+    if (!pnh_.getParam("pitch", pitch_))
+        throw std::runtime_error("缺少参数: ~pitch");
+    if (!pnh_.getParam("autostart", autostart_))
+        throw std::runtime_error("缺少参数: ~autostart");
+    if (!pnh_.getParam("mag_topic", mag_topic_))
+        throw std::runtime_error("缺少参数: ~mag_topic");
+    if (!pnh_.getParam("wait_time", wait_time_))
+        throw std::runtime_error("缺少参数: ~wait_time");
+    if (!pnh_.getParam("output_file", output_file_))
+        throw std::runtime_error("缺少参数: ~output_file");
 
-    std::vector<double> default_min = {0.0, 0.0, 0.0};
-    std::vector<double> default_max = {0.1, 0.1, 0.05};
-    std::vector<double> default_step = {0.02, 0.02, 0.02};
-
-    pnh_.param("volume_min", volume_min_, default_min);
-    pnh_.param("volume_max", volume_max_, default_max);
-    pnh_.param("step", step_, default_step);
+    if (!pnh_.getParam("volume_min", volume_min_) || volume_min_.size() != 3)
+        throw std::runtime_error("缺少或非法参数: ~volume_min[3]");
+    if (!pnh_.getParam("volume_max", volume_max_) || volume_max_.size() != 3)
+        throw std::runtime_error("缺少或非法参数: ~volume_max[3]");
+    if (!pnh_.getParam("step", step_) || step_.size() != 3)
+        throw std::runtime_error("缺少或非法参数: ~step[3]");
 }
 
 void ScanControllerNode::generateScanPoints()
@@ -110,7 +118,7 @@ bool ScanControllerNode::moveToPose(const geometry_msgs::Pose& pose)
 
 bool ScanControllerNode::moveToReadyPose()
 {
-    ROS_INFO("Moving to ready position using named target");
+    ROS_INFO("[scan_controller] moving to ready position using named target");
 
     move_group_.setNamedTarget("ready");
 
@@ -127,11 +135,11 @@ bool ScanControllerNode::moveToReadyPose()
 
 void ScanControllerNode::collectDataAtPoint(const geometry_msgs::Pose& pose)
 {
-    ROS_INFO("Moving to position: x=%.3f, y=%.3f, z=%.3f", pose.position.x, pose.position.y, pose.position.z);
+    ROS_INFO("[scan_controller] moving to position: x=%.3f, y=%.3f, z=%.3f", pose.position.x, pose.position.y, pose.position.z);
 
     if (!moveToPose(pose))
     {
-        ROS_ERROR("Failed to move to pose");
+    ROS_ERROR("[scan_controller] failed to move to pose");
         return;
     }
 
@@ -187,12 +195,12 @@ void ScanControllerNode::collectDataAtPoint(const geometry_msgs::Pose& pose)
 
 bool ScanControllerNode::startScan(std_srvs::Trigger::Request& req, std_srvs::Trigger::Response& res)
 {
-    ROS_INFO("Starting scan with %zu points", scan_points_.size());
+    ROS_INFO("[scan_controller] starting scan with %zu points", scan_points_.size());
 
     // First move to ready position
     if (!moveToReadyPose())
     {
-        ROS_ERROR("Failed to move to ready position");
+    ROS_ERROR("[scan_controller] failed to move to ready position");
         res.success = false;
         res.message = "Failed to move to ready position";
         return true;
@@ -228,19 +236,19 @@ void ScanControllerNode::run()
     if (autostart_)
     {
         // 等待控制器启动
-        ROS_INFO("Waiting for controller manager services to be available...");
+        ROS_INFO("[scan_controller] waiting for controller manager services to be available...");
         while (move_group_.getPlanningFrame().empty())
         {
-            ROS_INFO("Waiting for MoveGroup to be ready...");
+            ROS_INFO("[scan_controller] waiting for MoveGroup to be ready...");
             ros::Duration(1.0).sleep();
             ros::spinOnce();
         }
-        ROS_INFO("MoveGroup is ready. Waiting additional time for system stabilization...");
+    ROS_INFO("[scan_controller] MoveGroup is ready. Waiting additional time for system stabilization...");
 
         // 等待系统完全启动
         ros::Duration(3.0).sleep();
         
-        ROS_INFO("Starting automatic scan...");
+    ROS_INFO("[scan_controller] starting automatic scan...");
         std_srvs::Trigger::Request req;
         std_srvs::Trigger::Response res;
         startScan(req, res);

@@ -1,7 +1,0 @@
-# Default parameters for magnet_viz node
-magnet_viz:
-  topic: /magnet_pose
-  marker_topic: /magnet_viz/markers
-  frame: sensor_base_frame
-  marker_lifetime: 0.0  # 0.0 means permanent
-  magnet_scale: 0.005

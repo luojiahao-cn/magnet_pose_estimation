@@ -32,8 +32,8 @@
         </node>
     </group>
 
-    <!-- <node pkg="mag_arm_scan" type="scan_controller_node" name="scan_controller" output="screen">
-        <rosparam file="$(find mag_arm_scan)/config/scan_config.yaml" command="load" />
-    </node> -->
+    <node pkg="mag_arm_scan" type="scan_controller_node" name="scan_controller" output="screen">
+        <rosparam file="$(find mag_arm_scan)/config/scan_controller_node.yaml" command="load" />
+    </node>
 
 </launch>

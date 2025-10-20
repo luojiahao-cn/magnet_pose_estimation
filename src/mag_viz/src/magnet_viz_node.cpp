@@ -13,11 +13,16 @@
 MagnetPoseViz::MagnetPoseViz(ros::NodeHandle &nh)
     : nh_(nh), tf_buffer_(), tf_listener_(tf_buffer_)
 {
-    nh_.param<std::string>("topic", topic_, std::string("/magnet_pose"));
-    nh_.param<std::string>("frame", target_frame_, std::string("world"));
-    nh_.param<std::string>("marker_topic", marker_topic_, std::string("/magnet_viz/markers"));
-    nh_.param("marker_lifetime", marker_lifetime_, 0.0); // 0.0表示永久
-    nh_.param("magnet_scale", magnet_scale_, 0.005); // 更小的默认值，让圆柱体更细
+    if (!nh_.getParam("topic", topic_))
+        throw std::runtime_error("缺少参数: ~topic");
+    if (!nh_.getParam("frame", target_frame_))
+        throw std::runtime_error("缺少参数: ~frame");
+    if (!nh_.getParam("marker_topic", marker_topic_))
+        throw std::runtime_error("缺少参数: ~marker_topic");
+    if (!nh_.getParam("marker_lifetime", marker_lifetime_))
+        throw std::runtime_error("缺少参数: ~marker_lifetime");
+    if (!nh_.getParam("magnet_scale", magnet_scale_))
+        throw std::runtime_error("缺少参数: ~magnet_scale");
 
     pub_ = nh_.advertise<visualization_msgs::MarkerArray>(marker_topic_, 10);
     sub_ = nh_.subscribe(topic_, 10, &MagnetPoseViz::onMsg, this);

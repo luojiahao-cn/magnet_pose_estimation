@@ -1,7 +1,8 @@
 <launch>
-  <rosparam command="load" file="$(find mag_sensor_node)/config/sensor_config.yaml" />
-  <arg name="parent_frame" default="tool_tcp" />
   <node pkg="mag_sensor_node" type="sensor_tf_publisher_node" name="sensor_tf_publisher" output="screen">
-    <param name="parent_frame" value="$(arg parent_frame)" />
+    <!-- 共享的传感器阵列定义（sensor_config/*） -->
+    <rosparam command="load" file="$(find mag_sensor_node)/config/sensor_array.yaml" />
+    <!-- 如需特化该节点，可追加一个仅包含差异键的 YAML（可选） -->
+    <!-- <rosparam command="load" file="$(find mag_sensor_node)/config/sensor_tf_publisher_node.yaml" /> -->
   </node>
 </launch>

@@ -15,7 +15,8 @@ namespace mag_pose_estimation
     class KalmanMagnetPoseEstimator : public BaseMagnetPoseEstimator
     {
     public:
-        explicit KalmanMagnetPoseEstimator(ros::NodeHandle &nh);
+        // Expect a node's private NodeHandle; parameters are read from "~estimator_config/*"
+        explicit KalmanMagnetPoseEstimator(ros::NodeHandle &pnh);
         void reset() override;
         bool estimate(const std::map<int, MagneticField> &measurements, MagnetPose &out_pose, double *out_error) override;
 
@@ -23,7 +24,8 @@ namespace mag_pose_estimation
         void loadParameters();
         void predict();
         void update(const Eigen::VectorXd &measurement, const Eigen::MatrixXd &sensor_positions);
-        ros::NodeHandle nh_;
+    // Private node handle for this node ("~")
+    ros::NodeHandle pnh_;
 
         Eigen::VectorXd state_;
         Eigen::MatrixXd P_;

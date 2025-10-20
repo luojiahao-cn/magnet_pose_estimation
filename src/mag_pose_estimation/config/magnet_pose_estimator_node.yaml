@@ -1,0 +1,37 @@
+estimator_config:
+  # 选择算法：optimization 或 kalman（必填）
+  estimator_type: kalman
+
+  # 触发估计所需的最少测量数量（建议设置为传感器数量，必填）
+  min_sensors: 25
+
+  # 全局坐标系（必填）
+  global_frame: world
+
+  # 订阅和发布话题（必填）
+  mag_topic: /mag_sensor/data_mT
+  output_topic: /magnet_pose/estimated
+
+  # 磁铁参数（必填）
+  magnet:
+    strength: 10
+    strength_delta: 0
+    direction: [0, 0, 1]
+    position: [0.005, 0.035, 0.03]
+
+  # 卡尔曼滤波参数（当 estimator_type=kalman 时必填）
+  kalman:
+    position_process_noise: 1.0e-10
+    angle_process_noise: 0.0
+    measurement_noise: 1.0e-9
+    initial_covariance: 0.01
+
+  # 优化器参数（当 estimator_type=optimization 时必填）
+  optimization:
+    max_iterations: 50
+    function_tolerance: 1.0e-12
+    gradient_tolerance: 1.0e-14
+    parameter_tolerance: 1.0e-12
+    num_threads: 4
+    minimizer_progress_to_stdout: false
+    linear_solver_type: DENSE_QR

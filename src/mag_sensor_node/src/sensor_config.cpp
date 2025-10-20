@@ -10,12 +10,18 @@ namespace mag_sensor_node
     {
         try
         {
-            // 读取阵列整体相对 tool_tcp 的偏移
+            if (!nh.hasParam("sensor_config"))
+            {
+                ROS_ERROR("[SensorConfig] 缺少顶层命名空间 'sensor_config' 参数");
+                return false;
+            }
+            ros::NodeHandle cfg_nh(nh, "sensor_config");
+
             array_offset_ = geometry_msgs::Pose();
-            if (nh.hasParam("array_offset"))
+            if (cfg_nh.hasParam("array/offset"))
             {
                 XmlRpc::XmlRpcValue off;
-                nh.getParam("array_offset", off);
+                cfg_nh.getParam("array/offset", off);
                 if (off.getType() == XmlRpc::XmlRpcValue::TypeStruct && off.hasMember("position") && off.hasMember("orientation"))
                 {
                     XmlRpc::XmlRpcValue pos = off["position"];
@@ -37,7 +43,7 @@ namespace mag_sensor_node
             }
             // 传感器列表
             XmlRpc::XmlRpcValue sensors_list;
-            if (!nh.getParam("sensors", sensors_list))
+            if (!cfg_nh.getParam("sensors", sensors_list))
             {
                 ROS_ERROR("[SensorConfig] 缺少 sensors 数组");
                 return false;

@@ -1,8 +1,9 @@
 <launch>
-    <!-- 加载传感器布局 -->
-    <rosparam command="load" file="$(find mag_sensor_node)/config/sensor_config.yaml" />
-    <!-- 加载仿真参数 -->
-    <rosparam command="load" file="$(find mag_sensor_node)/config/sim_config.yaml" />
-
-    <node pkg="mag_sensor_node" type="mag_sensor_sim_node" name="mag_sensor_sim" output="screen" />
+    <node pkg="mag_sensor_node" type="mag_sensor_sim_node" name="mag_sensor_sim" output="screen">
+        <!-- 共享的传感器阵列定义（sensor_config/*） -->
+        <rosparam command="load" file="$(find mag_sensor_node)/config/sensor_array.yaml" />
+        <!-- 仿真节点专属配置（sim_config/*），如需覆盖可在此文件中添加 ~sensor_config 局部键 -->
+        <rosparam command="load" file="$(find mag_sensor_node)/config/mag_sensor_sim_node.yaml" />
+    </node>
+    
 </launch>

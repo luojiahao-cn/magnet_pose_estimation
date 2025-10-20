@@ -1,9 +1,5 @@
 <launch>
-
-    <!-- Load parameters from YAML (namespaced under mag_sensor_viz) -->
-    <rosparam file="$(find mag_viz)/config/mag_sensor_viz.yaml" command="load" />
-
-    <!-- Node: params are read from YAML; no duplication in launch -->
-    <node pkg="mag_viz" type="mag_sensor_viz_node" name="mag_sensor_viz" output="screen" />
-
+    <node pkg="mag_viz" type="mag_sensor_viz_node" name="mag_sensor_viz" output="screen">
+        <rosparam file="$(find mag_viz)/config/mag_sensor_viz_node.yaml" command="load" />
+    </node>
 </launch>

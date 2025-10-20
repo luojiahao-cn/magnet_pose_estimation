@@ -47,20 +47,28 @@ ROS/MoveIt 接口:
 
 ToolManagerNode::ToolManagerNode(ros::NodeHandle &nh, ros::NodeHandle &pnh)
   : nh_(nh), pnh_(pnh), move_group_("fr5v6_arm"), planning_scene_interface_() {
-    // Params
-  pnh_.param<std::string>("parent_link", parent_link_, std::string());
-  pnh_.param<std::string>("object_name", object_name_, std::string());
-  pnh_.param<std::string>("mesh_path", mesh_path_, std::string());
-     pnh_.param("xyz", xyz_, std::vector<double>());
-     pnh_.param("rpy", rpy_, std::vector<double>());
-     pnh_.param("scale", scale_, std::vector<double>());
-     pnh_.param("touch_links", touch_links_, std::vector<std::string>());
-     pnh_.param("auto_attach", auto_attach_, false);
+    // Params (strict private namespace)
+    if (!pnh_.getParam("parent_link", parent_link_))
+      throw std::runtime_error("缺少参数: ~parent_link");
+    if (!pnh_.getParam("object_name", object_name_))
+      throw std::runtime_error("缺少参数: ~object_name");
+    if (!pnh_.getParam("mesh_path", mesh_path_))
+      throw std::runtime_error("缺少参数: ~mesh_path");
+    if (!pnh_.getParam("xyz", xyz_) || xyz_.size() != 3)
+      throw std::runtime_error("缺少或非法参数: ~xyz[3]");
+    if (!pnh_.getParam("rpy", rpy_) || rpy_.size() != 3)
+      throw std::runtime_error("缺少或非法参数: ~rpy[3]");
+    if (!pnh_.getParam("scale", scale_) || scale_.size() != 3)
+      throw std::runtime_error("缺少或非法参数: ~scale[3]");
+    pnh_.getParam("touch_links", touch_links_); // 可空
+    if (!pnh_.getParam("auto_attach", auto_attach_))
+      throw std::runtime_error("缺少参数: ~auto_attach");
 
-  // 支架末端参数
-  pnh_.param("tip_xyz", tip_xyz_, std::vector<double>());
-  pnh_.param("tip_rpy", tip_rpy_, std::vector<double>());
-  pnh_.param<std::string>("tcp_frame_name", tcp_frame_name_, std::string("tool_tcp"));
+    // 支架末端参数（可选）
+    pnh_.getParam("tip_xyz", tip_xyz_);
+    pnh_.getParam("tip_rpy", tip_rpy_);
+    if (!pnh_.getParam("tcp_frame_name", tcp_frame_name_))
+      throw std::runtime_error("缺少参数: ~tcp_frame_name");
 
     // Resolve parent_link automatically from MoveGroup if requested
     if (parent_link_ == "auto" || parent_link_.empty()) {
@@ -72,11 +80,9 @@ ToolManagerNode::ToolManagerNode(ros::NodeHandle &nh, ros::NodeHandle &pnh)
   srv_detach_ = pnh_.advertiseService("detach", &ToolManagerNode::detachCb, this);
 
 
-  ROS_INFO("ToolManagerNode ready. object=%s parent_link=%s mesh=%s", object_name_.c_str(), parent_link_.c_str(), mesh_path_.c_str());
-  ROS_INFO("Tool params: xyz=[%.4f, %.4f, %.4f], rpy=[%.4f, %.4f, %.4f], scale=[%.4f, %.4f, %.4f]",
-       xyz_.size()>0?xyz_[0]:0.0, xyz_.size()>1?xyz_[1]:0.0, xyz_.size()>2?xyz_[2]:0.0,
-       rpy_.size()>0?rpy_[0]:0.0, rpy_.size()>1?rpy_[1]:0.0, rpy_.size()>2?rpy_[2]:0.0,
-       scale_.size()>0?scale_[0]:1.0, scale_.size()>1?scale_[1]:1.0, scale_.size()>2?scale_[2]:1.0);
+  ROS_INFO("[tool_manager] ready. object=%s parent_link=%s mesh=%s", object_name_.c_str(), parent_link_.c_str(), mesh_path_.c_str());
+  ROS_INFO("[tool_manager] params: xyz=[%.4f, %.4f, %.4f], rpy=[%.4f, %.4f, %.4f], scale=[%.4f, %.4f, %.4f]",
+    xyz_[0], xyz_[1], xyz_[2], rpy_[0], rpy_[1], rpy_[2], scale_[0], scale_[1], scale_[2]);
 
     if (auto_attach_) {
       // 先行发布一次 TF（基于 xyz/rpy/tip_* 参数），即使后续 mesh/attach 失败也能保证 TF 链路
@@ -84,7 +90,7 @@ ToolManagerNode::ToolManagerNode(ros::NodeHandle &nh, ros::NodeHandle &pnh)
       auto_attach_timer_ = nh_.createTimer(ros::Duration(1.0), [this](const ros::TimerEvent&){
         std_srvs::Trigger::Request req; std_srvs::Trigger::Response res;
         this->attachCb(req, res);
-        ROS_INFO_STREAM("Auto-attach: " << (res.success ? "success" : (std::string("failed: ") + res.message)));
+  ROS_INFO_STREAM("[tool_manager] auto-attach: " << (res.success ? "success" : (std::string("failed: ") + res.message)));
       }, true); // oneshot
     }
 

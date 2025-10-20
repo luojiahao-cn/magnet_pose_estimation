@@ -9,7 +9,7 @@
 namespace mag_pose_estimation
 {
 
-    OptimizationMagnetPoseEstimator::OptimizationMagnetPoseEstimator(ros::NodeHandle &nh) : nh_(nh)
+    OptimizationMagnetPoseEstimator::OptimizationMagnetPoseEstimator(ros::NodeHandle &pnh) : pnh_(pnh)
     {
         loadParameters();
         ROS_INFO("磁铁位置估计器（优化）已初始化");
@@ -18,10 +18,22 @@ namespace mag_pose_estimation
     void OptimizationMagnetPoseEstimator::loadParameters()
     {
         std::vector<double> position_vec, direction_vec;
-        nh_.param("/estimator_config/magnet/position", position_vec, std::vector<double>{0.01, 0.01, 0.05});
-        nh_.param("/estimator_config/magnet/direction", direction_vec, std::vector<double>{0, 0, 1});
-        nh_.param<double>("/estimator_config/magnet/strength", initial_strength_, 2.0);
-        nh_.param<double>("/estimator_config/magnet/strength_delta", strength_delta_, 0.0);
+        if (!pnh_.getParam("estimator_config/magnet/position", position_vec) || position_vec.size() != 3)
+        {
+            throw std::runtime_error("缺少或非法参数: ~estimator_config/magnet/position[3]");
+        }
+        if (!pnh_.getParam("estimator_config/magnet/direction", direction_vec) || direction_vec.size() != 3)
+        {
+            throw std::runtime_error("缺少或非法参数: ~estimator_config/magnet/direction[3]");
+        }
+        if (!pnh_.getParam("estimator_config/magnet/strength", initial_strength_))
+        {
+            throw std::runtime_error("缺少参数: ~estimator_config/magnet/strength");
+        }
+        if (!pnh_.getParam("estimator_config/magnet/strength_delta", strength_delta_))
+        {
+            throw std::runtime_error("缺少参数: ~estimator_config/magnet/strength_delta");
+        }
 
         optimize_strength_ = (strength_delta_ != 0.0);
         strength_min_ = std::max(0.0, initial_strength_ - (optimize_strength_ ? strength_delta_ : 0.0));
@@ -33,15 +45,22 @@ namespace mag_pose_estimation
         magnetic_direction_ = initial_direction_;
         magnet_strength_ = initial_strength_;
 
-        nh_.param<int>("/estimator_config/optimization/max_iterations", max_iterations_, 50);
-        nh_.param<double>("/estimator_config/optimization/function_tolerance", function_tolerance_, 1e-8);
-        nh_.param<double>("/estimator_config/optimization/gradient_tolerance", gradient_tolerance_, 1e-10);
-        nh_.param<double>("/estimator_config/optimization/parameter_tolerance", parameter_tolerance_, 1e-8);
-        nh_.param<int>("/estimator_config/optimization/num_threads", num_threads_, 1);
-        nh_.param<bool>("/estimator_config/optimization/minimizer_progress_to_stdout", minimizer_progress_to_stdout_, false);
+        if (!pnh_.getParam("estimator_config/optimization/max_iterations", max_iterations_))
+            throw std::runtime_error("缺少参数: ~estimator_config/optimization/max_iterations");
+        if (!pnh_.getParam("estimator_config/optimization/function_tolerance", function_tolerance_))
+            throw std::runtime_error("缺少参数: ~estimator_config/optimization/function_tolerance");
+        if (!pnh_.getParam("estimator_config/optimization/gradient_tolerance", gradient_tolerance_))
+            throw std::runtime_error("缺少参数: ~estimator_config/optimization/gradient_tolerance");
+        if (!pnh_.getParam("estimator_config/optimization/parameter_tolerance", parameter_tolerance_))
+            throw std::runtime_error("缺少参数: ~estimator_config/optimization/parameter_tolerance");
+        if (!pnh_.getParam("estimator_config/optimization/num_threads", num_threads_))
+            throw std::runtime_error("缺少参数: ~estimator_config/optimization/num_threads");
+        if (!pnh_.getParam("estimator_config/optimization/minimizer_progress_to_stdout", minimizer_progress_to_stdout_))
+            throw std::runtime_error("缺少参数: ~estimator_config/optimization/minimizer_progress_to_stdout");
 
         std::string linear_solver_str;
-        nh_.param<std::string>("/estimator_config/optimization/linear_solver_type", linear_solver_str, "DENSE_QR");
+        if (!pnh_.getParam("estimator_config/optimization/linear_solver_type", linear_solver_str))
+            throw std::runtime_error("缺少参数: ~estimator_config/optimization/linear_solver_type");
         if (linear_solver_str == "DENSE_QR")
             linear_solver_type_ = ceres::DENSE_QR;
         else

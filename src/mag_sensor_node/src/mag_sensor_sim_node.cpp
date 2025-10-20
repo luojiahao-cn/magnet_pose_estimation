@@ -14,11 +14,9 @@
 
 MagSensorSimNode::MagSensorSimNode(ros::NodeHandle &nh) : nh_(nh)
 {
-    if (!mag_sensor_node::SensorConfig::getInstance().loadConfig(nh_))
-    {
-        ROS_ERROR("传感器配置加载失败");
+    ros::NodeHandle pnh("~");
+    if (!mag_sensor_node::SensorConfig::getInstance().loadConfig(pnh))
         throw std::runtime_error("sensor config not loaded");
-    }
     loadParams();
     setupPublishers();
     initializeMotionSystem();
@@ -40,58 +38,92 @@ Eigen::MatrixXd MagSensorSimNode::computeMagneticField(const Eigen::Matrix<doubl
     Eigen::MatrixXd B =
         (mu_0 / (4 * M_PI)) * (3.0 * (r_vec.array().colwise() * (m_dot_r.array() / r_norm.array().pow(5))) -
                                m.transpose().replicate(r_vec.rows(), 1).array().colwise() / r_norm.array().pow(3));
-    return B * 1e3; // 转为 mT
+    return B * 1e3;
 }
 
 void MagSensorSimNode::loadParams()
 {
-    // frame_id for published messages
-    nh_.param<std::string>("sim_config/frame_id", frame_id_, frame_id_);
-    nh_.param<double>("sim_config/magnet/strength", magnet_strength_, 10.0);
+    ros::NodeHandle pnh("~");
+    auto require = [&](const std::string &key, auto &var)
+    {
+        if (!pnh.getParam(key, var))
+            throw std::runtime_error("缺少必需参数: " + key);
+    };
+    if (!pnh.getParam("sensor_config/array/frame_id", frame_id_))
+        throw std::runtime_error("缺少必需参数: ~sensor_config/array/frame_id");
+
+    require("sim_config/magnet/strength", magnet_strength_);
     std::vector<double> direction;
-    nh_.param("sim_config/magnet/direction", direction, std::vector<double>{0, 0, 1});
+    if (!pnh.getParam("sim_config/magnet/direction", direction) || direction.size() != 3)
+        throw std::runtime_error("缺少或非法参数: sim_config/magnet/direction");
     magnetic_direction_ = Eigen::Vector3d(direction[0], direction[1], direction[2]);
 
-    nh_.param<double>("sim_config/path/width", rect_width_, 0.03);
-    nh_.param<double>("sim_config/path/height", rect_height_, 0.03);
-    nh_.param<double>("sim_config/path/z", rect_z_, 0.03);
-    nh_.param<double>("sim_config/path/center/x", x_center_, 0.02);
-    nh_.param<double>("sim_config/path/center/y", y_center_, 0.02);
-    nh_.param<double>("sim_config/path/update_rate", update_rate_, 100.0);
-    nh_.param<double>("sim_config/path/velocity", translation_velocity_, 0.01);
+    require("sim_config/path/width", rect_width_);
+    require("sim_config/path/height", rect_height_);
+    require("sim_config/path/z", rect_z_);
+    require("sim_config/path/center/x", x_center_);
+    require("sim_config/path/center/y", y_center_);
+    require("sim_config/path/update_rate", update_rate_);
+    require("sim_config/path/velocity", translation_velocity_);
 
-    nh_.param<std::string>("sim_config/motion/mode", motion_mode_, std::string("translate_only"));
-    nh_.param<std::string>("sim_config/motion/axis", rotation_axis_, std::string("z"));
-    nh_.param<double>("sim_config/motion/angular_velocity", angular_velocity_, 0.1);
-    nh_.param<double>("sim_config/motion/initial_roll", initial_roll_, 0.0);
-    nh_.param<double>("sim_config/motion/initial_pitch", initial_pitch_, 0.0);
-    nh_.param<double>("sim_config/motion/initial_yaw", initial_yaw_, 0.0);
+    require("sim_config/motion/mode", motion_mode_);
+    require("sim_config/motion/axis", rotation_axis_);
+    require("sim_config/motion/angular_velocity", angular_velocity_);
+    require("sim_config/motion/initial_roll", initial_roll_);
+    require("sim_config/motion/initial_pitch", initial_pitch_);
+    require("sim_config/motion/initial_yaw", initial_yaw_);
 
-    std::vector<double> static_pos{0.02, 0.02, 0.03};
-    std::vector<double> static_orient{0.0, 0.5, 0.0};
-    nh_.param("sim_config/motion/static_position", static_pos, static_pos);
-    nh_.param("sim_config/motion/static_orientation", static_orient, static_orient);
+    std::vector<double> static_pos;
+    std::vector<double> static_orient;
+    if (!pnh.getParam("sim_config/motion/static_position", static_pos) || static_pos.size() != 3)
+        throw std::runtime_error("缺少或非法参数: sim_config/motion/static_position");
+    if (!pnh.getParam("sim_config/motion/static_orientation", static_orient) || static_orient.size() != 3)
+        throw std::runtime_error("缺少或非法参数: sim_config/motion/static_orientation");
     static_position_ = Eigen::Vector3d(static_pos[0], static_pos[1], static_pos[2]);
     static_orientation_ = Eigen::Vector3d(static_orient[0], static_orient[1], static_orient[2]);
 
-    nh_.param<bool>("sim_config/noise/enable", noise_enable_, false);
-    nh_.param<std::string>("sim_config/noise/type", noise_type_, std::string("gaussian"));
-    nh_.param<double>("sim_config/noise/mean", noise_mean_, 0.0);
-    nh_.param<double>("sim_config/noise/stddev", noise_stddev_, 1.0);
-    nh_.param<double>("sim_config/noise/amplitude", noise_amplitude_, 1.0);
+    require("sim_config/noise/enable", noise_enable_);
+    require("sim_config/noise/type", noise_type_);
+    require("sim_config/noise/mean", noise_mean_);
+    require("sim_config/noise/stddev", noise_stddev_);
+    require("sim_config/noise/amplitude", noise_amplitude_);
+
+    // Map motion_mode_ to flags
+    translation_enable_ = false;
+    rotation_enable_ = false;
+    follow_path_ = true;
+    if (motion_mode_ == "static") {
+        translation_enable_ = false;
+        rotation_enable_ = false;
+    } else if (motion_mode_ == "translate_only") {
+        translation_enable_ = true;
+        rotation_enable_ = false;
+        follow_path_ = true;
+    } else if (motion_mode_ == "rotate_only") {
+        translation_enable_ = false;
+        rotation_enable_ = true;
+    } else if (motion_mode_ == "translate_and_rotate") {
+        translation_enable_ = true;
+        rotation_enable_ = true;
+        follow_path_ = true;
+    } else {
+        throw std::runtime_error("非法 motion mode: " + motion_mode_);
+    }
 }
 
 void MagSensorSimNode::setupPublishers()
 {
-    std::string magnet_pose_topic = "/magnet_pose/ground_truth";
-    std::string magnetic_field_topic = "/mag_sensor/data_mT";
-    nh_.param<std::string>("sim_config/topics/magnet_pose_topic", magnet_pose_topic, magnet_pose_topic);
-    nh_.param<std::string>("sim_config/topics/magnetic_field_topic", magnetic_field_topic, magnetic_field_topic);
+    std::string magnet_pose_topic;
+    std::string magnetic_field_topic;
+    ros::NodeHandle pnh("~");
+    if (!pnh.getParam("sim_config/topics/magnet_pose_topic", magnet_pose_topic))
+        throw std::runtime_error("缺少必需参数: sim_config/topics/magnet_pose_topic");
+    if (!pnh.getParam("sim_config/topics/magnetic_field_topic", magnetic_field_topic))
+        throw std::runtime_error("缺少必需参数: sim_config/topics/magnetic_field_topic");
 
     magnet_pose_pub_ = nh_.advertise<mag_sensor_node::MagnetPose>(magnet_pose_topic, 25);
     magnetic_field_pub_ = nh_.advertise<mag_sensor_node::MagSensorData>(magnetic_field_topic, 25);
-    ROS_INFO_STREAM("[mag_sensor_sim] topics: magnet_pose='" << magnet_pose_topic
-                    << "', magnetic_field='" << magnetic_field_topic << "'");
+    ROS_INFO_STREAM("[mag_sensor_sim] topics: magnet_pose='" << magnet_pose_topic << "', magnetic_field='" << magnetic_field_topic << "'");
 }
 
 void MagSensorSimNode::initializeMotionSystem()
@@ -277,7 +309,7 @@ void MagSensorSimNode::publishSensorMagneticFields(const mag_sensor_node::Magnet
     {
         mag_sensor_node::MagSensorData msg;
         msg.header.stamp = magnet_pose.header.stamp;
-    msg.header.frame_id = magnet_pose.header.frame_id;  // match configured frame
+        msg.header.frame_id = magnet_pose.header.frame_id;
         msg.sensor_id = sensors[i].id;
         // 组合 array_offset 与局部传感器位姿：array_off * sensor.pose
         {

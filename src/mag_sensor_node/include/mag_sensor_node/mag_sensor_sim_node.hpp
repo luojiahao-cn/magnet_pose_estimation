@@ -16,7 +16,6 @@ public:
     explicit MagSensorSimNode(ros::NodeHandle &nh);
 
 private:
-    // 计算磁偶极子模型的磁场（返回单位 mT）
     static Eigen::MatrixXd computeMagneticField(const Eigen::Matrix<double, -1, 3> &sensor_positions,
                                                 const Eigen::Vector3d &magnetic_position,
                                                 const Eigen::Vector3d &magnetic_direction,
@@ -43,7 +42,6 @@ private:
 
     MotionType getMotionType() const;
 
-    // members
     ros::NodeHandle nh_;
     ros::Publisher magnet_pose_pub_;
     ros::Publisher magnetic_field_pub_;
@@ -76,6 +74,5 @@ private:
     double noise_mean_{};
     double noise_stddev_{};
     double noise_amplitude_{};
-    // effective frame for published messages
-    std::string frame_id_ {"tool_tcp"};
+    std::string frame_id_;
 };

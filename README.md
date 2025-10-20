@@ -4,7 +4,7 @@
 
 适配 ROS1（Noetic），默认使用 catkin 构建。工程包含以下功能包：
 
-- mag_bringup：系统编排与集中配置（system.yaml）
+- mag_bringup：系统编排（不再加载集中配置，全按“每节点私有 YAML”）
 - mag_sensor_node：传感器串口节点、仿真节点、阵列静态 TF 发布器
 - mag_pose_estimation：磁体位姿估计器（优化/Kalman）
 - mag_arm_scan：支架挂载/TF 发布（tool_manager）与扫描控制器
@@ -35,13 +35,20 @@ magnet_pose_estimation/
 
 ```bash
 cd ~/catkin_ws/src
-git clone <this-repo> magnet_pose_estimation
+git clone https://github.com/luojiahao-cn/magnet_pose_estimation.git
 cd ~/catkin_ws
 catkin_make
 source devel/setup.bash
 ```
 
 2) 验证依赖（可选）：确保 MoveIt/机器人驱动可用（若需 tool_manager 或与机械臂联动）。
+
+3) 多工作区环境示例（当同时使用多个 workspace 时）
+- 临时在当前终端合并 ROS_PACKAGE_PATH：
+```bash
+export ROS_PACKAGE_PATH=~/zlab_robots/catkin_ws/src:~/magnet_pose_estimation/src:$ROS_PACKAGE_PATH
+```
+- 若希望每次新终端自动生效，请将上面一行加入 `~/.bashrc`（或写一个 source 脚本并在 `.bashrc` 中 source）。
 
 ## 一键启动（仿真通路）
 
@@ -59,18 +66,14 @@ roslaunch mag_bringup bringup.launch use_sim:=true with_rviz:=false
 
 更多开关请查看 `src/mag_bringup/launch/bringup.launch`。
 
-## 集中配置（system.yaml）
+## 配置策略（统一约定）
 
-路径：`src/mag_bringup/config/system.yaml`
-
-- frames
-	- global_frame：全局坐标（估计器/可视化默认参考），默认 world
-	- parent_frame：传感器阵列父坐标，默认 tool_tcp
-	- array_frame：阵列逻辑帧名，默认 sensor_array
-- estimator_config：估计器的全局帧、输入/输出话题
-- viz_config：可视化默认订阅的话题
-
-bringup 会在启动时自动 load 该文件，尽量减少跨包配置分散。
+- 仅使用“每个节点的私有 YAML”加载参数。每个 `<node>` 内部用 `<rosparam ...>` 加载对应 YAML；代码只读 `~` 命名空间，缺参直接报错，无代码默认值。
+- 传感器阵列的 `sensor_config/*` 为公共片段，集中在：`src/mag_sensor_node/config/sensor_array.yaml`。需要该数据的节点（仿真、TF 发布、串口读）在各自 `<node>` 内先加载这个公共文件，再加载自己的差异配置。
+- 示例：
+  - 估计节点：`mag_pose_estimation/config/magnet_pose_estimator_node.yaml`（键在 `~estimator_config/*`）
+  - 仿真节点：`mag_sensor_node/config/mag_sensor_sim_node.yaml`（仅 `~sim_config/*`，阵列从 `sensor_array.yaml` 提供）
+  - TF 发布器：优先加载 `sensor_array.yaml`，如需覆盖个别键可追加 `sensor_tf_publisher_node.yaml` 中的差异（可选）
 
 ## TF 约定（关键）
 
@@ -87,7 +90,7 @@ frrobot_tool_link  →  tool_frame  →  tool_tcp  →  sensor_array  →  senso
 	- tool_tcp → sensor_array
 	- sensor_array → sensor_<id>
 
-默认不强行提供 world→base_link，避免引入不真实世界系；若需要在 world 下查看统一树，可在 bringup 里开启 `start_world_tf` 并配置该静态变换。
+默认不强行提供 world→base_link，避免引入不真实世界系；若需要在 world 下查看统一树，可在 bringup 里开启 `start_world_tf` 并配置该静态变换，或直接将 `sensor_array.yaml` 的 `parent_frame` 改为 `world`。
 
 更详细的命名与话题规范见根目录 `CONVENTIONS.md`。
 
@@ -125,6 +128,8 @@ frrobot_tool_link  →  tool_frame  →  tool_tcp  →  sensor_array  →  senso
 - 文档与 README（尤其真机接入/标定经验）
 - 新的估计算法（例如更鲁棒的优化目标/约束）
 - 仿真器与可视化改进（自定义 colormap、批量 marker 优化等）
+
+
 
 ## License
 

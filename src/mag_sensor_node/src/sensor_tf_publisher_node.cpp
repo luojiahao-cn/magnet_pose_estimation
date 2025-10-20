@@ -14,22 +14,24 @@ int main(int argc, char **argv)
     ros::NodeHandle nh;
     ros::NodeHandle pnh("~");
 
-    // Load sensor layout
-    if (!mag_sensor_node::SensorConfig::getInstance().loadConfig(nh))
+    if (!mag_sensor_node::SensorConfig::getInstance().loadConfig(pnh))
     {
         ROS_FATAL("[sensor_tf_publisher] 传感器配置加载失败");
         return 1;
     }
 
-    // Parent & array frames: prefer private params; fallback to centralized /frames/*; default to tool_tcp/sensor_array
-    std::string parent_frame = "tool_tcp";
-    std::string array_frame = "sensor_array";
-    // 1) private params (~parent_frame/~array_frame)
-    pnh.param<std::string>("parent_frame", parent_frame, parent_frame);
-    pnh.param<std::string>("array_frame", array_frame, array_frame);
-    // 2) centralized params (/frames/*) as fallback if not overridden
-    nh.param<std::string>("/frames/parent_frame", parent_frame, parent_frame);
-    nh.param<std::string>("/frames/array_frame", array_frame, array_frame);
+    std::string parent_frame;
+    std::string array_frame;
+    if (!pnh.getParam("sensor_config/array/parent_frame", parent_frame))
+    {
+        ROS_FATAL("[sensor_tf_publisher] 缺少参数 ~sensor_config/array/parent_frame");
+        return 1;
+    }
+    if (!pnh.getParam("sensor_config/array/frame_id", array_frame))
+    {
+        ROS_FATAL("[sensor_tf_publisher] 缺少参数 ~sensor_config/array/frame_id");
+        return 1;
+    }
 
     const auto &cfg = mag_sensor_node::SensorConfig::getInstance();
     const auto &sensors = cfg.getAllSensors();
@@ -44,7 +46,7 @@ int main(int argc, char **argv)
     std::vector<geometry_msgs::TransformStamped> tfs;
     tfs.reserve(sensors.size());
 
-    // 先发布 parent -> array_offset 的静态TF（若非单位）
+    // 先发布 parent -> array/offset 的静态TF（若非单位）
     {
         geometry_msgs::TransformStamped tf_arr;
         tf_arr.header.stamp = ros::Time::now();

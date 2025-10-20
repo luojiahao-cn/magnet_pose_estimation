@@ -22,37 +22,39 @@ public:
     explicit MagnetPoseEstimatorNode(ros::NodeHandle &nh) : nh_(nh)
     {
         ros::NodeHandle pnh("~");
-        // Select algorithm
+        // 仅从私有命名空间读取配置
         std::string estimator_type;
-        nh_.param<std::string>("/estimator_config/estimator_type", estimator_type, std::string("optimization"));
+        if (!pnh.getParam("estimator_config/estimator_type", estimator_type))
+        {
+            throw std::runtime_error("缺少参数: ~estimator_config/estimator_type");
+        }
 
         if (estimator_type == "optimization")
         {
-            ROS_INFO("使用优化算法进行磁场姿态估计");
-            estimator_.reset(new mag_pose_estimation::OptimizationMagnetPoseEstimator(nh_));
+            ROS_INFO("[magnet_pose_estimator] 使用优化算法进行磁场姿态估计");
+            estimator_.reset(new mag_pose_estimation::OptimizationMagnetPoseEstimator(pnh));
         }
         else if (estimator_type == "kalman")
         {
-            ROS_INFO("使用卡尔曼滤波器进行磁场姿态估计");
-            estimator_.reset(new mag_pose_estimation::KalmanMagnetPoseEstimator(nh_));
+            ROS_INFO("[magnet_pose_estimator] 使用卡尔曼滤波器进行磁场姿态估计");
+            estimator_.reset(new mag_pose_estimation::KalmanMagnetPoseEstimator(pnh));
         }
         else
         {
-            ROS_ERROR("未知的estimator_type: %s，使用默认 optimization", estimator_type.c_str());
-            estimator_.reset(new mag_pose_estimation::OptimizationMagnetPoseEstimator(nh_));
+            throw std::runtime_error((std::string("未知的estimator_type: ") + estimator_type).c_str());
         }
 
-        // 全局坐标系和话题配置（优先 ~ 私有参数，其次集中 /estimator_config/*，最后默认）
-        pnh.param<std::string>("global_frame", global_frame_, std::string("world"));
-        nh_.param<std::string>("/estimator_config/global_frame", global_frame_, global_frame_);
-        pnh.param<std::string>("mag_topic", mag_topic_, std::string("/mag_sensor/data_mT"));
-        nh_.param<std::string>("/estimator_config/mag_topic", mag_topic_, mag_topic_);
-        pnh.param<std::string>("output_topic", output_topic_, std::string("/magnet_pose/estimated"));
-        nh_.param<std::string>("/estimator_config/output_topic", output_topic_, output_topic_);
+        // 必需参数：全局坐标系和话题
+        if (!pnh.getParam("estimator_config/global_frame", global_frame_))
+            throw std::runtime_error("缺少参数: ~estimator_config/global_frame");
+        if (!pnh.getParam("estimator_config/mag_topic", mag_topic_))
+            throw std::runtime_error("缺少参数: ~estimator_config/mag_topic");
+        if (!pnh.getParam("estimator_config/output_topic", output_topic_))
+            throw std::runtime_error("缺少参数: ~estimator_config/output_topic");
 
-        // 通过参数控制触发所需的最少测量数量
-        pnh.param<int>("min_sensors", min_sensors_, 0);
-        nh_.param<int>("/estimator_config/min_sensors", min_sensors_, min_sensors_);
+        // 触发所需最少测量数量
+        if (!pnh.getParam("estimator_config/min_sensors", min_sensors_))
+            throw std::runtime_error("缺少参数: ~estimator_config/min_sensors");
         if (min_sensors_ < 0)
             min_sensors_ = 0;
 
@@ -65,9 +67,9 @@ public:
 
         // ROS I/O
         pose_pub_ = nh_.advertise<MagnetPose>(output_topic_, 10);
-    error_pub_ = nh_.advertise<std_msgs::Float64>("/magnet_pose/error", 10);
+        error_pub_ = nh_.advertise<std_msgs::Float64>(pnh.getNamespace() + std::string("/error"), 10);
         sub_ = nh_.subscribe(mag_topic_, 50, &MagnetPoseEstimatorNode::magCallback, this);
-        reset_srv_ = nh_.advertiseService("/magnet_pose/reset_localization", &MagnetPoseEstimatorNode::onReset, this);
+        reset_srv_ = nh_.advertiseService(pnh.getNamespace() + std::string("/reset_localization"), &MagnetPoseEstimatorNode::onReset, this);
     }
 
 private:
@@ -104,7 +106,7 @@ private:
         }
         catch (const std::exception &e)
         {
-            ROS_WARN_THROTTLE(1.0, "TF 转换失败: %s -> %s（传感器ID=%u）: %s", in.header.frame_id.c_str(),
+            ROS_WARN_THROTTLE(1.0, "[magnet_pose_estimator] TF 转换失败: %s -> %s（传感器ID=%u）: %s", in.header.frame_id.c_str(),
                               global_frame_.c_str(), in.sensor_id, e.what());
             return false;
         }
@@ -138,7 +140,7 @@ private:
             }
             else
             {
-                ROS_WARN_THROTTLE(1.0, "估计失败，等待更多数据");
+                ROS_WARN_THROTTLE(1.0, "[magnet_pose_estimator] 估计失败，等待更多数据");
             }
             measurements_.clear();
         }
@@ -148,7 +150,7 @@ private:
     {
         estimator_->reset();
         measurements_.clear();
-        ROS_INFO("已重置定位估计器与测量缓存");
+    ROS_INFO("[magnet_pose_estimator] 已重置定位估计器与测量缓存");
         return true;
     }
 
@@ -164,9 +166,9 @@ private:
     // TF and params
     tf2_ros::Buffer tf_buffer_;
     std::unique_ptr<tf2_ros::TransformListener> tf_listener_;
-    std::string global_frame_ {"world"};
-    std::string mag_topic_ {"/mag_sensor/data_mT"};
-    std::string output_topic_ {"/magnet_pose/estimated"};
+    std::string global_frame_;
+    std::string mag_topic_;
+    std::string output_topic_;
 };
 
 int main(int argc, char **argv)

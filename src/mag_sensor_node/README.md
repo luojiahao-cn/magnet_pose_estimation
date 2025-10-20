@@ -102,12 +102,15 @@ ros::Subscriber sub = nh.subscribe<mag_sensor_node::MagSensorData>(
 ## TF 阵列发布器（sensor_tf_publisher_node）
 
 从 `config/sensor_config.yaml` 读取：
-- `array_offset`：阵列相对父坐标系（默认 `tool_tcp`）的位姿
-- `sensors[]`：每个传感器在阵列坐标系下的位姿
+并发布静态 TF：
+从 `config/sensor_config.yaml` 读取：
+ `array.offset`：阵列相对父坐标系（默认 `tool_tcp`）的位姿
+ `array.frame_id`：阵列的 frame 名（例如 `sensor_array`）
+ `sensors[]`：每个传感器在阵列坐标系下的位姿
 
 并发布静态 TF：
-- `parent_frame` → `array_frame`（默认 `tool_tcp` → `sensor_array`）
-- `array_frame` → `sensor_<id>`
+ `parent_frame` → `array_frame`（默认 `tool_tcp` → `sensor_array`）
+ `array_frame` → `sensor_<id>`
 
 启动示例：
 ```bash

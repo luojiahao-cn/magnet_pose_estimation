@@ -15,19 +15,19 @@
 MagSensorViz::MagSensorViz(ros::NodeHandle &nh)
     : nh_(nh), tf_buffer_(), tf_listener_(tf_buffer_)
 {
-    // 优先读私有参数，其次集中配置 /viz_config/* 与 /frames/global_frame
-    nh_.param<std::string>("topic", topic_, std::string("/mag_sensor/data_mT"));
-    nh_.param<std::string>("frame", target_frame_, std::string(""));
-    nh_.param<std::string>("marker_topic", marker_topic_, std::string("/mag_viz/markers"));
-    ros::NodeHandle gnh;
-    gnh.param<std::string>("/viz_config/topic", topic_, topic_);
-    std::string global_frame_param;
-    gnh.param<std::string>("/frames/global_frame", global_frame_param, std::string(""));
-    if (target_frame_.empty() && !global_frame_param.empty())
-        target_frame_ = global_frame_param;
-    nh_.param("field_scale", field_scale_, 0.005);
-    nh_.param("marker_lifetime", marker_lifetime_, 0.1);
-    nh_.param("color_max", color_max_, 3.2);
+    // 仅从私有命名空间读取；缺少即报错
+    if (!nh_.getParam("topic", topic_))
+        throw std::runtime_error("缺少参数: ~topic");
+    if (!nh_.getParam("frame", target_frame_))
+        throw std::runtime_error("缺少参数: ~frame");
+    if (!nh_.getParam("marker_topic", marker_topic_))
+        throw std::runtime_error("缺少参数: ~marker_topic");
+    if (!nh_.getParam("field_scale", field_scale_))
+        throw std::runtime_error("缺少参数: ~field_scale");
+    if (!nh_.getParam("marker_lifetime", marker_lifetime_))
+        throw std::runtime_error("缺少参数: ~marker_lifetime");
+    if (!nh_.getParam("color_max", color_max_))
+        throw std::runtime_error("缺少参数: ~color_max");
 
     zero_color_ = {0.0, 0.0, 1.0, 1.0};
 
