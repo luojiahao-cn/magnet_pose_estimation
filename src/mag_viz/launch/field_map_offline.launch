@@ -1,0 +1,6 @@
+<launch>
+  <!-- 离线 CSV 可视化：读取扫描完成后的 CSV 并一次性发布 MarkerArray -->
+  <node pkg="mag_viz" type="field_map_csv_viz_node" name="field_map_csv_viz" output="screen">
+    <rosparam file="$(find mag_viz)/config/field_map_csv_viz.yaml" command="load"/>
+  </node>
+</launch>

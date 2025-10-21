@@ -15,7 +15,8 @@ sim_config:
     update_rate: 100.0
     velocity: 0.01
   motion:
-    mode: translate_only
+    # mode: translate_only
+    mode: static
     axis: z
     angular_velocity: 0.1
     initial_roll: 0.0

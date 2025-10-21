@@ -1,4 +1,5 @@
 <launch>
+    <param name="/use_sim_time" value="true"/>
     <node pkg="mag_sensor_node" type="mag_sensor_sim_node" name="mag_sensor_sim" output="screen">
         <!-- 共享的传感器阵列定义（sensor_config/*） -->
         <rosparam command="load" file="$(find mag_sensor_node)/config/sensor_array.yaml" />

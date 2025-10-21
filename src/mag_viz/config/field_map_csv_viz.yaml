@@ -1,0 +1,9 @@
+# 离线 CSV 可视化
+# 默认扫描输出 CSV，可在 bringup 里覆盖到 data/scan_data.csv
+csv_path: /home/lawkaho/workshop/magnet_pose_estimation/data/scan_data.csv
+frame: world
+marker_topic: /field_map_csv/markers
+field_scale: 0.03
+marker_lifetime: 10.0
+color_max: 50.0
+stride: 1   # 可设置>1进行抽稀

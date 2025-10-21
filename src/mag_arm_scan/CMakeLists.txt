@@ -11,6 +11,7 @@ find_package(catkin REQUIRED COMPONENTS
   std_srvs
   tf2
   tf2_ros
+  tf2_geometry_msgs
   moveit_core
   moveit_ros_planning_interface
   geometric_shapes
@@ -31,3 +32,11 @@ add_dependencies(scan_controller_node ${catkin_EXPORTED_TARGETS})
 add_executable(tool_manager_node src/tool_manager_node.cpp)
 target_link_libraries(tool_manager_node ${catkin_LIBRARIES})
 add_dependencies(tool_manager_node ${catkin_EXPORTED_TARGETS})
+
+add_executable(raw_data_recorder_node src/raw_data_recorder_node.cpp)
+target_link_libraries(raw_data_recorder_node ${catkin_LIBRARIES})
+add_dependencies(raw_data_recorder_node ${catkin_EXPORTED_TARGETS})
+
+install(TARGETS scan_controller_node tool_manager_node raw_data_recorder_node
+  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)

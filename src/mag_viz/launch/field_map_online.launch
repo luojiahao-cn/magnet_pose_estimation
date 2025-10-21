@@ -1,0 +1,6 @@
+<launch>
+  <!-- 在线聚合可视化 -->
+  <node pkg="mag_viz" type="field_map_aggregator_node" name="field_map_aggregator" output="screen">
+    <rosparam file="$(find mag_viz)/config/field_map_aggregator.yaml" command="load"/>
+  </node>
+</launch>

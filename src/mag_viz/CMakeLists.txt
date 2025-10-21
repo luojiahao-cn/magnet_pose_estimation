@@ -8,6 +8,8 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   visualization_msgs
   geometry_msgs
+  std_msgs
+  std_srvs
   tf2
   tf2_ros
   tf2_geometry_msgs
@@ -15,7 +17,7 @@ find_package(catkin REQUIRED COMPONENTS
 )
 
 catkin_package(
-  CATKIN_DEPENDS roscpp visualization_msgs geometry_msgs tf2 tf2_ros tf2_geometry_msgs mag_sensor_node
+  CATKIN_DEPENDS roscpp visualization_msgs geometry_msgs std_msgs std_srvs tf2 tf2_ros tf2_geometry_msgs mag_sensor_node
 )
 
 include_directories(
@@ -29,7 +31,13 @@ target_link_libraries(mag_sensor_viz_node ${catkin_LIBRARIES})
 add_executable(magnet_viz_node src/magnet_viz_node.cpp)
 target_link_libraries(magnet_viz_node ${catkin_LIBRARIES})
 
-install(TARGETS mag_sensor_viz_node magnet_viz_node
+add_executable(field_map_aggregator_node src/field_map_aggregator_node.cpp)
+target_link_libraries(field_map_aggregator_node ${catkin_LIBRARIES})
+
+add_executable(field_map_csv_viz_node src/field_map_csv_viz_node.cpp)
+target_link_libraries(field_map_csv_viz_node ${catkin_LIBRARIES})
+
+install(TARGETS mag_sensor_viz_node magnet_viz_node field_map_aggregator_node field_map_csv_viz_node
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
