@@ -311,19 +311,9 @@ void MagSensorSimNode::publishSensorMagneticFields(const mag_sensor_node::Magnet
         msg.header.stamp = magnet_pose.header.stamp;
         msg.header.frame_id = magnet_pose.header.frame_id;
         msg.sensor_id = sensors[i].id;
-        // 组合 array_offset 与局部传感器位姿：array_off * sensor.pose
-        {
-            tf2::Transform T_off, T_s;
-            tf2::fromMsg(array_off, T_off);
-            tf2::fromMsg(sensors[i].pose, T_s);
-            tf2::Transform T = T_off * T_s;
-            geometry_msgs::Pose pose;
-            pose.position.x = T.getOrigin().x();
-            pose.position.y = T.getOrigin().y();
-            pose.position.z = T.getOrigin().z();
-            pose.orientation = tf2::toMsg(T.getRotation());
-            msg.sensor_pose = pose;
-        }
+        // 在消息帧（sensor_array）下发布局部传感器位姿：直接使用 array->sensor_i 的位姿
+        // 注：array_offset 定义的是 parent->array 的变换，不应混入 sensor_pose（其帧为 sensor_array）
+        msg.sensor_pose = sensors[i].pose;
         Eigen::Vector3d noise = Eigen::Vector3d::Zero();
         if (noise_enable_)
         {

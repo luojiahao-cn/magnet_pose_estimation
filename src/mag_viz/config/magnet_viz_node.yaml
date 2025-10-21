@@ -1,5 +1,5 @@
-topic: /magnet_pose/estimated
+topic: /magnet_pose/sim_true
 marker_topic: /magnet_viz/markers
-frame: world
+frame: sensor_array
 marker_lifetime: 0.0
 magnet_scale: 0.005

@@ -1,6 +1,6 @@
 topic: /mag_sensor/data_mT
 marker_topic: /mag_viz/markers
-frame: world
+frame: sensor_array
 field_scale: 0.005
 marker_lifetime: 0.1
 color_max: 3.2

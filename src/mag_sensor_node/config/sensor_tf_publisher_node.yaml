@@ -1,4 +1,0 @@
-## 可选：如需要覆盖共享 sensor_array.yaml 的个别键，可在此文件中仅填写差异项
-# sensor_config:
-#   array:
-#     parent_frame: world  # 例如覆盖父坐标系
