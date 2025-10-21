@@ -125,19 +125,9 @@ void MagSerialNode::publishMeasurement(int id, double mx, double my, double mz)
     msg_raw.mag_x = mx;
     msg_raw.mag_y = my;
     msg_raw.mag_z = mz;
-    {
-        const auto &array_off = mag_sensor_node::SensorConfig::getInstance().getArrayOffset();
-        tf2::Transform T_off, T_s;
-        tf2::fromMsg(array_off, T_off);
-        tf2::fromMsg(info.pose, T_s);
-        tf2::Transform T = T_off * T_s;
-        geometry_msgs::Pose pose;
-        pose.position.x = T.getOrigin().x();
-        pose.position.y = T.getOrigin().y();
-        pose.position.z = T.getOrigin().z();
-        pose.orientation = tf2::toMsg(T.getRotation());
-        msg_raw.sensor_pose = pose;
-    }
+    // 在消息帧（通常为 sensor_array）下发布局部传感器位姿：直接使用 array->sensor_i 的位姿
+    // 注：array_offset（parent->array）仅应用于 TF 发布，不应混入本消息的 sensor_pose
+    msg_raw.sensor_pose = info.pose;
     pub_raw_.publish(msg_raw);
 
     // mT 数据发布：复用同一消息类型，mag_* 字段写转换值
