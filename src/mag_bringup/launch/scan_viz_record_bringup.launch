@@ -23,24 +23,10 @@
     </node>
   </group>
 
-  <!-- 3) 扫描控制（设置 autostart=true 与输出路径到 data/scan_data.csv）-->
-  <node pkg="mag_arm_scan" type="scan_controller_node" name="scan_controller" output="screen">
+  <!-- 3) 扫描控制与记录（设置 autostart=true）-->
+  <node pkg="mag_arm_scan" type="scan_controller_with_recorder_node" name="scan_controller_with_recorder" output="screen">
     <rosparam file="$(find mag_arm_scan)/config/scan_controller_node.yaml" command="load" />
     <param name="autostart" value="true" />
-    <param name="output_file" value="$(find mag_bringup)/../../data/scan_data.csv" />
-  </node>
-
-  <!-- 4) 在线可视化（网格与颜色可在其 YAML 中调整）-->
-  <node pkg="mag_viz" type="field_map_aggregator_node" name="field_map_aggregator" output="screen">
-    <rosparam file="$(find mag_viz)/config/field_map_aggregator.yaml" command="load"/>
-    <!-- 如需同步在线样本导出到 data/online_samples.csv，可覆盖此参数：-->
-    <param name="export_csv" value="$(find mag_bringup)/../../data/online_samples.csv" />
-  </node>
-
-  <!-- 5) 原始数据记录（完整保存每条观测）-->
-  <node pkg="mag_arm_scan" type="raw_data_recorder_node" name="raw_data_recorder" output="screen">
-    <rosparam file="$(find mag_arm_scan)/config/raw_data_recorder.yaml" command="load"/>
-    <param name="output_csv" value="$(find mag_bringup)/../../data/raw_samples.csv" />
   </node>
 
   <!-- 6) Mag Sensor Node (可选) -->

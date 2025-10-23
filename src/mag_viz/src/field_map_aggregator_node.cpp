@@ -1,9 +1,12 @@
 #include <ros/ros.h>
+#include <ros/package.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <geometry_msgs/Pose.h>
 #include <geometry_msgs/Vector3Stamped.h>
 #include <tf2_ros/transform_listener.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+#include <std_msgs/Bool.h>
+#include <std_srvs/Trigger.h>
 #include <mag_sensor_node/MagSensorData.h>
 
 #include <vector>
@@ -12,6 +15,7 @@
 #include <fstream>
 #include <cmath>
 #include <cstdint>
+#include <sys/stat.h>
 
 struct Vec3 {
   double x{0}, y{0}, z{0};
@@ -65,12 +69,21 @@ public:
     if (!nh_.getParam("marker_lifetime", marker_lifetime_)) throw std::runtime_error("缺少参数: ~marker_lifetime");
     if (!nh_.getParam("color_max", color_max_)) throw std::runtime_error("缺少参数: ~color_max");
     nh_.param<std::string>("export_csv", export_csv_, std::string(""));
+    nh_.param<std::string>("output_base_dir", output_base_dir_, std::string(""));
+    
+    // 如果设置了export_csv，创建时间戳目录
+    if (!export_csv_.empty()) {
+        createTimestampDirectory();
+    }
+
     nh_.param<int>("publish_stride", publish_stride_, 1);
 
     initGrid();
 
     sub_ = nh_.subscribe(topic_, 200, &FieldMapAggregator::onMag, this);
     pub_ = nh_.advertise<visualization_msgs::MarkerArray>(marker_topic_, 5);
+    clear_srv_ = nh_.advertiseService("clear_map", &FieldMapAggregator::clearMap, this);
+    at_position_sub_ = nh_.subscribe("/scan_at_position", 1, &FieldMapAggregator::atPositionCallback, this);
 
     pub_timer_ = nh_.createTimer(ros::Duration(0.5), &FieldMapAggregator::publishMarkersTimer, this);
 
@@ -102,7 +115,21 @@ private:
     return t<=0.5 ? lerp({0,0,1,1},{0,1,0,1}, t*2.0) : lerp({0,1,0,1},{1,0,0,1}, (t-0.5)*2.0);
   }
 
+  bool clearMap(std_srvs::Trigger::Request& req, std_srvs::Trigger::Response& res) {
+    cell_map_.clear();
+    ROS_INFO("[field_map_aggregator] cleared accumulated data");
+    res.success = true;
+    res.message = "Map cleared";
+    return true;
+  }
+
+  void atPositionCallback(const std_msgs::Bool::ConstPtr& msg) {
+    at_position_ = msg->data;
+  }
+
   void onMag(const mag_sensor_node::MagSensorData::ConstPtr& msg){
+    if (!at_position_) return;  // Only accumulate when at scan position
+
     // 将传感器姿态与向量转换到 target frame
     geometry_msgs::Pose pose_in = msg->sensor_pose;
     geometry_msgs::Pose pose_w = pose_in; // in frame_
@@ -154,7 +181,7 @@ private:
       double dx=b.x,dy=b.y,dz=b.z; if(norm>1e-9){dx/=norm;dy/=norm;dz/=norm;}
 
       visualization_msgs::Marker m; m.header.frame_id=frame_; m.header.stamp=ros::Time::now();
-      m.ns="field_map"; m.id=id++; m.type=visualization_msgs::Marker::ARROW; m.action=visualization_msgs::Marker::ADD;
+      m.ns="sensor_field"; m.id=id++; m.type=visualization_msgs::Marker::ARROW; m.action=visualization_msgs::Marker::ADD;
       m.scale.x = 0.0005; m.scale.y = 0.002; m.scale.z = 0.002; m.lifetime = ros::Duration(marker_lifetime_);
       geometry_msgs::Pose p; p.position.x = pos.x; p.position.y = pos.y; p.position.z = pos.z; p.orientation.w = 1.0; m.pose = p;
       m.points.resize(2); m.points[0].x=0; m.points[0].y=0; m.points[0].z=0; m.points[1].x=dx*field_scale_; m.points[1].y=dy*field_scale_; m.points[1].z=dz*field_scale_;
@@ -162,15 +189,45 @@ private:
       arr.markers.push_back(m);
     }
     pub_.publish(arr);
+    if (!arr.markers.empty()) {
+      ROS_INFO("[field_map_aggregator] published %zu markers", arr.markers.size());
+    }
   }
 
 private:
   ros::NodeHandle nh_;
   ros::Subscriber sub_;
   ros::Publisher pub_;
+  ros::ServiceServer clear_srv_;
+  ros::Subscriber at_position_sub_;
   ros::Timer pub_timer_;
   tf2_ros::Buffer tf_buffer_;
   tf2_ros::TransformListener tf_listener_;
+
+  void createTimestampDirectory()
+  {
+    // 获取当前时间
+    std::time_t now = std::time(nullptr);
+    std::tm* tm = std::localtime(&now);
+    
+    // 格式化为 YYYYMMDD_HHMM
+    char timestamp[20];
+    std::strftime(timestamp, sizeof(timestamp), "%Y%m%d_%H%M", tm);
+    
+    // 使用配置的基目录创建时间戳文件夹
+    std::string timestamp_dir = output_base_dir_ + "/scan_" + timestamp;
+    
+    // 创建目录
+    if (mkdir(timestamp_dir.c_str(), 0755) == 0) {
+      ROS_INFO("[field_map_aggregator] created timestamp directory: %s", timestamp_dir.c_str());
+    } else {
+      ROS_WARN("[field_map_aggregator] failed to create directory: %s", timestamp_dir.c_str());
+    }
+    
+    // 设置输出文件路径为文件夹中的online_samples.csv
+    export_csv_ = timestamp_dir + "/online_samples.csv";
+    ROS_INFO("[field_map_aggregator] export file: %s", export_csv_.c_str());
+  }
 
   std::string topic_;
   std::string frame_;
@@ -178,11 +235,13 @@ private:
   std::vector<double> volume_min_, volume_max_, step_;
   double field_scale_{}; double marker_lifetime_{}; double color_max_{};
   std::string export_csv_;
+  std::string output_base_dir_;
   int publish_stride_{1};
 
   int nx_{0}, ny_{0}, nz_{0};
   std::unordered_map<CellKey, CellAgg, CellKeyHash> cell_map_;
 
+  bool at_position_{false};
   double bx_{0}, by_{0}, bz_{0};
 };
 

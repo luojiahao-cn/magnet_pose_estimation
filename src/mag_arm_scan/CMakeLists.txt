@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(catkin REQUIRED COMPONENTS
   roscpp
+  roslib
   std_msgs
   geometry_msgs
   std_srvs
@@ -25,18 +26,14 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
 )
 
-add_executable(scan_controller_node src/scan_controller_node.cpp)
-target_link_libraries(scan_controller_node ${catkin_LIBRARIES})
-add_dependencies(scan_controller_node ${catkin_EXPORTED_TARGETS})
+add_executable(scan_controller_with_recorder_node src/scan_controller_with_recorder_node.cpp)
+target_link_libraries(scan_controller_with_recorder_node ${catkin_LIBRARIES})
+add_dependencies(scan_controller_with_recorder_node ${catkin_EXPORTED_TARGETS})
 
 add_executable(tool_manager_node src/tool_manager_node.cpp)
 target_link_libraries(tool_manager_node ${catkin_LIBRARIES})
 add_dependencies(tool_manager_node ${catkin_EXPORTED_TARGETS})
 
-add_executable(raw_data_recorder_node src/raw_data_recorder_node.cpp)
-target_link_libraries(raw_data_recorder_node ${catkin_LIBRARIES})
-add_dependencies(raw_data_recorder_node ${catkin_EXPORTED_TARGETS})
-
-install(TARGETS scan_controller_node tool_manager_node raw_data_recorder_node
+install(TARGETS scan_controller_with_recorder_node tool_manager_node
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
