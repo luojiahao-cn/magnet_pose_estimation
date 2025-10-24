@@ -1,5 +1,0 @@
-<launch>
-  <node pkg="mag_arm_scan" type="raw_data_recorder_node" name="raw_data_recorder" output="screen">
-    <rosparam file="$(find mag_arm_scan)/config/raw_data_recorder.yaml" command="load"/>
-  </node>
-</launch>

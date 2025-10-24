@@ -4,4 +4,4 @@ timeout: 1000
 topic: /mag_sensor/data
 frame_id: sensor_array
 sleep_ms: 1
-freq_stat_period: 5.0
+freq_stat_period: 20.0

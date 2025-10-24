@@ -2,7 +2,7 @@
   <!-- 完整磁场扫描系统：传感器 + 机械臂扫描 + 实时可视化 -->
 
   <!-- 参数配置 -->
-  <arg name="use_gazebo" default="false" />
+  <arg name="use_gazebo" default="true" />
   <arg name="move_group_output" default="log"/>
   <arg name="use_attached_tool" default="true" />
   <arg name="start_rviz" default="true" />
@@ -50,18 +50,17 @@
 
   <!-- 5) 扫描控制与记录 -->
   <node pkg="mag_arm_scan" type="scan_controller_with_recorder_node" name="scan_controller_with_recorder" output="screen">
+    <rosparam file="$(find mag_sensor_node)/config/sensor_array.yaml" command="load" />
     <rosparam file="$(find mag_arm_scan)/config/scan_controller_node.yaml" command="load" />
   </node>
 
   <!-- 6) 实时磁场可视化 -->
-  <node pkg="mag_viz" type="field_map_aggregator_node" name="field_map_aggregator" output="screen">
-    <rosparam file="$(find mag_viz)/config/field_map_aggregator.yaml" command="load"/>
-  </node>
+  <!-- 移除 field_map_aggregator，由 scan_controller_with_recorder 完成 -->
 
   <!-- 7) RViz 可视化界面 -->
   <group if="$(arg start_rviz)">
     <node name="rviz" pkg="rviz" type="rviz" args="-d $(find mag_viz)/rviz/mag_sensor.rviz" />
-    <node name="rviz_arm" pkg="rviz" type="rviz" args="-d $(find mag_bringup)/rviz/mag_arm_scan.rviz" />
+    <node name="rviz_arm" pkg="rviz" type="rviz" args="-d $(find mag_arm_scan)/rviz/mag_arm_scan.rviz" />
   </group>
 
 </launch>

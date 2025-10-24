@@ -1,4 +1,5 @@
 sensor_config:
+  num_sensors: 25
   array:
     frame_id: sensor_array  
     parent_frame: tool_tcp  

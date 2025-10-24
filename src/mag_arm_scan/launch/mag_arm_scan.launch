@@ -17,7 +17,7 @@
         </include>
 
         <!-- Start RViz with our custom config -->
-        <node name="rviz" pkg="rviz" type="rviz" args="-d $(find mag_arm_scan)/config/mag_arm_scan.rviz" />
+        <node name="rviz" pkg="rviz" type="rviz" args="-d $(find mag_arm_scan)/rviz/mag_arm_scan.rviz" />
     </group>
 
     <!-- 是否使用 MoveIt 附加的方式显示/考虑碰撞的支架工具 -->

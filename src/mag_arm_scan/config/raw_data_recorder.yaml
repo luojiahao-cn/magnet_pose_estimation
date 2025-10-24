@@ -1,4 +1,0 @@
-# 原始数据记录（在控制包中进行更合理）
-topic: /mag_sensor/data_mT
-frame: world
-output_csv: data/raw_samples.csv
