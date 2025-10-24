@@ -9,6 +9,8 @@ autostart: true
 mag_topic: /mag_sensor/data_mT
 # 移动到目标后的等待时间（秒）
 wait_time: 2.0
+# 最大稳定等待时间（秒）
+max_stable_wait_time: 10.0
 # 输出 CSV 文件路径（会被时间戳目录覆盖）
 output_file: placeholder.csv
 # 输出基目录（时间戳文件夹将创建在此目录下）

@@ -2,10 +2,11 @@
   <!-- 完整磁场扫描系统：传感器 + 机械臂扫描 + 实时可视化 -->
 
   <!-- 参数配置 -->
-  <arg name="use_gazebo" default="true" />
+  <arg name="use_gazebo" default="false" />
   <arg name="move_group_output" default="log"/>
   <arg name="use_attached_tool" default="true" />
   <arg name="start_rviz" default="true" />
+  <arg name="use_sim_sensor" default="false" />
 
   <!-- 1) MoveIt 与机械臂环境 -->
   <group if="$(arg use_gazebo)">
@@ -15,7 +16,8 @@
   </group>
   <group unless="$(arg use_gazebo)">
     <include file="$(find frcobot_examples)/launch/connect_single_arm.launch">
-      <!-- <arg name="use_rviz" value="false" /> -->
+      <arg name="move_group_output" value="$(arg move_group_output)"/>
+      <arg name="use_rviz" value="false" /> 
     </include>
   </group>
 
@@ -26,12 +28,20 @@
     </node>
   </group>
 
-  <!-- 3) 磁传感器仿真节点 -->
-  <param name="/use_sim_time" value="true" />
-  <node pkg="mag_sensor_node" type="mag_sensor_sim_node" name="mag_sensor_sim" output="screen">
-    <rosparam file="$(find mag_sensor_node)/config/sensor_array.yaml" command="load" />
-    <rosparam file="$(find mag_sensor_node)/config/mag_sensor_sim_node.yaml" command="load" />
-  </node>
+  <!-- 3) 磁传感器节点 -->
+  <group if="$(arg use_sim_sensor)">
+    <param name="/use_sim_time" value="true" />
+    <node pkg="mag_sensor_node" type="mag_sensor_sim_node" name="mag_sensor" output="screen">
+      <rosparam file="$(find mag_sensor_node)/config/sensor_array.yaml" command="load" />
+      <rosparam file="$(find mag_sensor_node)/config/mag_sensor_sim_node.yaml" command="load" />
+    </node>
+  </group>
+  <group unless="$(arg use_sim_sensor)">
+    <node pkg="mag_sensor_node" type="mag_sensor_node" name="mag_sensor" output="screen">
+      <rosparam file="$(find mag_sensor_node)/config/sensor_array.yaml" command="load" />
+      <rosparam file="$(find mag_sensor_node)/config/mag_sensor_node.yaml" command="load" />
+    </node>
+  </group>
 
   <!-- 4) 传感器 TF 发布器 -->
   <node pkg="mag_sensor_node" type="sensor_tf_publisher_node" name="sensor_tf_publisher" output="screen">
@@ -51,6 +61,7 @@
   <!-- 7) RViz 可视化界面 -->
   <group if="$(arg start_rviz)">
     <node name="rviz" pkg="rviz" type="rviz" args="-d $(find mag_viz)/rviz/mag_sensor.rviz" />
+    <node name="rviz_arm" pkg="rviz" type="rviz" args="-d $(find mag_bringup)/rviz/mag_arm_scan.rviz" />
   </group>
 
 </launch>

@@ -1,6 +1,6 @@
 <launch>
     <!-- 参数：是否使用Gazebo仿真 -->
-    <arg name="use_gazebo" default="true" />
+    <arg name="use_gazebo" default="false" />
     <!-- 参数：MoveIt日志输出位置，默认为log，可选screen -->
     <arg name="move_group_output" default="log"/>
 

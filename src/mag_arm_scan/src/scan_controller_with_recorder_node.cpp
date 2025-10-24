@@ -40,6 +40,7 @@ ROS/MoveIt 接口:
 #include <std_srvs/Trigger.h>
 #include <mag_sensor_node/MagSensorData.h>
 #include <geometry_msgs/Pose.h>
+#include <sensor_msgs/JointState.h>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf2_ros/transform_listener.h>
@@ -64,6 +65,7 @@ public:
         // 服务置于节点命名空间下
         start_scan_srv_ = pnh_.advertiseService("start_scan", &ScanControllerWithRecorderNode::startScan, this);
         mag_data_sub_ = nh_.subscribe(mag_topic_, 100, &ScanControllerWithRecorderNode::magDataCallback, this);
+        joint_states_sub_ = nh_.subscribe("/joint_states", 10, &ScanControllerWithRecorderNode::jointStateCallback, this);
         clear_client_ = nh_.serviceClient<std_srvs::Trigger>("/field_map_aggregator/clear_map");
         at_position_pub_ = nh_.advertise<std_msgs::Bool>("/scan_at_position", 1);
         scan_complete_pub_ = nh_.advertise<std_msgs::String>("/scan_complete", 1);
@@ -85,6 +87,8 @@ public:
             throw std::runtime_error("缺少参数: ~mag_topic");
         if (!pnh_.getParam("wait_time", wait_time_))
             throw std::runtime_error("缺少参数: ~wait_time");
+        if (!pnh_.getParam("max_stable_wait_time", max_stable_wait_time_))
+            throw std::runtime_error("缺少参数: ~max_stable_wait_time");
         if (!pnh_.getParam("output_file", output_file_))
             throw std::runtime_error("缺少参数: ~output_file");
         if (!pnh_.getParam("output_base_dir", output_base_dir_))
@@ -227,6 +231,24 @@ public:
         // Wait for settling
         ros::Duration(wait_time_).sleep();
 
+        // Wait for arm to be stable (joint velocities below threshold)
+        ros::Time start_wait = ros::Time::now();
+        ros::Duration max_stable_wait(max_stable_wait_time_);  // Max additional wait for stability
+        while (!isArmStable() && (ros::Time::now() - start_wait) < max_stable_wait)
+        {
+            ros::spinOnce();
+            ros::Duration(0.1).sleep();
+        }
+
+        if (isArmStable())
+        {
+            ROS_INFO("[scan_controller_with_recorder] arm is stable at position");
+        }
+        else
+        {
+            ROS_WARN("[scan_controller_with_recorder] arm did not stabilize within timeout, proceeding anyway");
+        }
+
         // Publish at position
         at_pos_msg.data = true;
         at_position_pub_.publish(at_pos_msg);
@@ -251,7 +273,7 @@ public:
             bool did_tf = false;
             try {
                 if (!frame_id_.empty() && frame_id_ != data.header.frame_id) {
-                    geometry_msgs::TransformStamped T = tf_buffer_.lookupTransform(frame_id_, data.header.frame_id, data.header.stamp, ros::Duration(0.05));
+                    geometry_msgs::TransformStamped T = tf_buffer_.lookupTransform(frame_id_, data.header.frame_id, ros::Time(0), ros::Duration(0.05));
                     tf2::doTransform(pose_in, pose_w, T);
                     did_tf = true;
                 }
@@ -266,7 +288,7 @@ public:
                     geometry_msgs::Vector3Stamped vin, vout;
                     vin.header = data.header;
                     vin.vector.x = bx; vin.vector.y = by; vin.vector.z = bz;
-                    geometry_msgs::TransformStamped T = tf_buffer_.lookupTransform(frame_id_, data.header.frame_id, data.header.stamp, ros::Duration(0.05));
+                    geometry_msgs::TransformStamped T = tf_buffer_.lookupTransform(frame_id_, data.header.frame_id, ros::Time(0), ros::Duration(0.05));
                     tf2::doTransform(vin, vout, T);
                     bx = vout.vector.x; by = vout.vector.y; bz = vout.vector.z;
                 } catch (...) { /* ignore */ }
@@ -334,6 +356,15 @@ public:
         return true;
     }
 
+    bool isArmStable(double velocity_threshold = 0.01)
+    {
+        if (latest_joint_state_.velocity.empty()) return false;
+        for (double vel : latest_joint_state_.velocity) {
+            if (std::abs(vel) > velocity_threshold) return false;
+        }
+        return true;
+    }
+
     void magDataCallback(const mag_sensor_node::MagSensorData::ConstPtr& msg)
     {
         collected_data_.push_back(*msg);
@@ -342,6 +373,11 @@ public:
         {
             collected_data_.erase(collected_data_.begin());
         }
+    }
+
+    void jointStateCallback(const sensor_msgs::JointState::ConstPtr& msg)
+    {
+        latest_joint_state_ = *msg;
     }
 
     void run()
@@ -379,8 +415,11 @@ private:
     ros::ServiceClient clear_client_;
     ros::Publisher at_position_pub_;
     ros::Publisher scan_complete_pub_;
+    ros::Subscriber joint_states_sub_;
     tf2_ros::Buffer tf_buffer_;
     tf2_ros::TransformListener tf_listener_;
+
+    sensor_msgs::JointState latest_joint_state_;
 
     std::string frame_id_;
     double yaw_;
@@ -388,6 +427,7 @@ private:
     bool autostart_;
     std::string mag_topic_;
     double wait_time_;
+    double max_stable_wait_time_;
     std::string output_file_;
     std::string output_base_dir_;
     std::vector<double> volume_min_;

@@ -3,8 +3,8 @@ sensor_config:
     frame_id: sensor_array  
     parent_frame: tool_tcp  
     offset:
-      position: [0.02, 0.0, 0.02]
-      orientation: [0.0, 1.57079632679, 1.57079632679]
+      position: [0.03, 0.0, -0.02]
+      orientation: [-1.57079632679, 3.14159265359, 0.0]
   sensors:
     - id: 1
       position: [0.00, 0.04, 0.00]

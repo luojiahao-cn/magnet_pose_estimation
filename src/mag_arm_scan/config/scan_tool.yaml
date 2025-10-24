@@ -1,6 +1,6 @@
 # 传感器支架参数
 xyz: [0, 0, 0.0]
-rpy: [1.5708, 0, 0]
+rpy: [1.5708, 0, -1.5708]
 scale: [0.001, 0.001, 0.001]
 parent_link: auto
 object_name: mag_sensor_bracket
