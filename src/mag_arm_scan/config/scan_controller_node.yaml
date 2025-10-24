@@ -12,7 +12,7 @@ wait_time: 2.0
 # 输出 CSV 文件路径（会被时间戳目录覆盖）
 output_file: placeholder.csv
 # 输出基目录（时间戳文件夹将创建在此目录下）
-output_base_dir: $(find mag_bringup)/../../data
+output_base_dir: data
 # 体积边界与步长（米）
 volume_min: [0.3, -0.2, 1.0]
 volume_max: [0.5, 0.2, 1.3]

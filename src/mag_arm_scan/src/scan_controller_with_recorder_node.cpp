@@ -36,6 +36,7 @@ ROS/MoveIt 接口:
 #include <moveit/move_group_interface/move_group_interface.h>
 #include <moveit/planning_scene_interface/planning_scene_interface.h>
 #include <std_msgs/Bool.h>
+#include <std_msgs/String.h>
 #include <std_srvs/Trigger.h>
 #include <mag_sensor_node/MagSensorData.h>
 #include <geometry_msgs/Pose.h>
@@ -52,16 +53,20 @@ ROS/MoveIt 接口:
 class ScanControllerWithRecorderNode {
 public:
     ScanControllerWithRecorderNode(ros::NodeHandle& nh, ros::NodeHandle& pnh)
-        : nh_(nh), pnh_(pnh), move_group_("fr5v6_arm"), tf_buffer_(), tf_listener_(tf_buffer_)
+        : nh_(nh), pnh_(pnh), tf_buffer_(), tf_listener_(tf_buffer_)
     {
         loadParams();
         generateScanPoints();
+
+        // 延迟初始化MoveGroupInterface，直到ROS完全启动
+        move_group_ = std::make_shared<moveit::planning_interface::MoveGroupInterface>("fr5v6_arm");
 
         // 服务置于节点命名空间下
         start_scan_srv_ = pnh_.advertiseService("start_scan", &ScanControllerWithRecorderNode::startScan, this);
         mag_data_sub_ = nh_.subscribe(mag_topic_, 100, &ScanControllerWithRecorderNode::magDataCallback, this);
         clear_client_ = nh_.serviceClient<std_srvs::Trigger>("/field_map_aggregator/clear_map");
         at_position_pub_ = nh_.advertise<std_msgs::Bool>("/scan_at_position", 1);
+        scan_complete_pub_ = nh_.advertise<std_msgs::String>("/scan_complete", 1);
 
         ROS_INFO("[scan_controller_with_recorder] initialized with %zu scan points", scan_points_.size());
     }
@@ -84,6 +89,9 @@ public:
             throw std::runtime_error("缺少参数: ~output_file");
         if (!pnh_.getParam("output_base_dir", output_base_dir_))
             throw std::runtime_error("缺少参数: ~output_base_dir");
+
+        // 解析output_base_dir中的$(find ...)语法
+        output_base_dir_ = resolveRelativePath(output_base_dir_);
 
         // 创建时间戳文件夹
         createTimestampDirectory();
@@ -171,14 +179,14 @@ public:
 
     bool moveToPose(const geometry_msgs::Pose& pose)
     {
-        move_group_.setPoseTarget(pose);
+        move_group_->setPoseTarget(pose);
 
         moveit::planning_interface::MoveGroupInterface::Plan plan;
-        bool success = (move_group_.plan(plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
+        bool success = (move_group_->plan(plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
 
         if (success)
         {
-            success = (move_group_.execute(plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
+            success = (move_group_->execute(plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
         }
 
         return success;
@@ -188,14 +196,14 @@ public:
     {
         ROS_INFO("[scan_controller_with_recorder] moving to ready position using named target");
 
-        move_group_.setNamedTarget("ready");
+        move_group_->setNamedTarget("ready");
 
         moveit::planning_interface::MoveGroupInterface::Plan plan;
-        bool success = (move_group_.plan(plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
+        bool success = (move_group_->plan(plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
 
         if (success)
         {
-            success = (move_group_.execute(plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
+            success = (move_group_->execute(plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
         }
 
         return success;
@@ -318,6 +326,9 @@ public:
         at_pos_msg.data = false;
         at_position_pub_.publish(at_pos_msg);
 
+        // 扫描完成后的处理
+        finalizeScan();
+
         res.success = true;
         res.message = "Scan completed";
         return true;
@@ -339,7 +350,7 @@ public:
         {
             // 等待控制器启动
             ROS_INFO("[scan_controller_with_recorder] waiting for controller manager services to be available...");
-            while (move_group_.getPlanningFrame().empty())
+            while (move_group_->getPlanningFrame().empty())
             {
                 ROS_INFO("[scan_controller_with_recorder] waiting for MoveGroup to be ready...");
                 ros::Duration(1.0).sleep();
@@ -362,11 +373,12 @@ public:
 private:
     ros::NodeHandle nh_;
     ros::NodeHandle pnh_;
-    moveit::planning_interface::MoveGroupInterface move_group_;
+    std::shared_ptr<moveit::planning_interface::MoveGroupInterface> move_group_;
     ros::ServiceServer start_scan_srv_;
     ros::Subscriber mag_data_sub_;
     ros::ServiceClient clear_client_;
     ros::Publisher at_position_pub_;
+    ros::Publisher scan_complete_pub_;
     tf2_ros::Buffer tf_buffer_;
     tf2_ros::TransformListener tf_listener_;
 
@@ -382,11 +394,47 @@ private:
     std::vector<double> volume_max_;
     std::vector<double> step_;
 
-    void createTimestampDirectory()
+    std::string resolveRelativePath(const std::string& path)
+    {
+        std::string result = path;
+
+        // 处理相对路径（相对于工作空间根目录）
+        if (!result.empty() && result[0] != '/') {
+            // 获取工作空间根目录（通过当前包的路径向上查找src目录的父目录）
+            std::string current_package_path;
+            try {
+                current_package_path = ros::package::getPath("mag_arm_scan");
+                // 从包路径向上查找，直到找到src目录的父目录
+                size_t src_pos = current_package_path.find("/src/");
+                if (src_pos != std::string::npos) {
+                    std::string workspace_root = current_package_path.substr(0, src_pos);
+                    result = workspace_root + "/" + result;
+                } else {
+                    ROS_WARN("[scan_controller_with_recorder] could not determine workspace root, using absolute path");
+                }
+            } catch (const std::exception& e) {
+                ROS_ERROR("[scan_controller_with_recorder] failed to get current package path: %s", e.what());
+            }
+        }
+
+        return result;
+    }    void createTimestampDirectory()
     {
         // 获取当前时间
         std::time_t now = std::time(nullptr);
         std::tm* tm = std::localtime(&now);
+        
+        // 检查localtime返回值是否有效
+        if (!tm) {
+            ROS_ERROR("[scan_controller_with_recorder] failed to get local time");
+            // 使用默认时间戳
+            std::string timestamp_dir = output_base_dir_ + "/scan_default";
+            if (mkdir(timestamp_dir.c_str(), 0755) == 0) {
+                ROS_INFO("[scan_controller_with_recorder] created default timestamp directory: %s", timestamp_dir.c_str());
+            }
+            output_file_ = timestamp_dir + "/scan_data.csv";
+            return;
+        }
         
         // 格式化为 YYYYMMDD_HHMM
         char timestamp[20];
@@ -399,12 +447,41 @@ private:
         if (mkdir(timestamp_dir.c_str(), 0755) == 0) {
             ROS_INFO("[scan_controller_with_recorder] created timestamp directory: %s", timestamp_dir.c_str());
         } else {
-            ROS_WARN("[scan_controller_with_recorder] failed to create directory: %s", timestamp_dir.c_str());
+            // 检查是否是因为目录已存在
+            if (errno == EEXIST) {
+                ROS_INFO("[scan_controller_with_recorder] timestamp directory already exists: %s", timestamp_dir.c_str());
+            } else {
+                ROS_WARN("[scan_controller_with_recorder] failed to create directory: %s (errno: %d)", timestamp_dir.c_str(), errno);
+            }
         }
         
         // 设置输出文件路径为文件夹中的scan_data.csv
         output_file_ = timestamp_dir + "/scan_data.csv";
         ROS_INFO("[scan_controller_with_recorder] output file: %s", output_file_.c_str());
+    }
+
+    void finalizeScan()
+    {
+        // 确保输出文件正确关闭
+        std::ofstream file_check(output_file_, std::ios::app);
+        if (file_check.is_open()) {
+            file_check.close();
+            ROS_INFO("[scan_controller_with_recorder] output file closed successfully: %s", output_file_.c_str());
+        }
+
+        // 计算扫描统计信息
+        size_t total_points = scan_points_.size();
+        ROS_INFO("[scan_controller_with_recorder] scan completed: %zu points scanned", total_points);
+
+        // 发布扫描完成通知
+        std_msgs::String complete_msg;
+        complete_msg.data = "Scan completed successfully. Data saved to: " + output_file_;
+        scan_complete_pub_.publish(complete_msg);
+        ROS_INFO("[scan_controller_with_recorder] published scan completion notification");
+
+        // 清理收集的数据缓冲区
+        collected_data_.clear();
+        ROS_INFO("[scan_controller_with_recorder] cleaned up collected data buffer");
     }
 
     std::vector<geometry_msgs::Pose> scan_points_;

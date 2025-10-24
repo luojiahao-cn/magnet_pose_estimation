@@ -22,4 +22,4 @@ publish_stride: 1           # 抽稀绘制步长（>1可加速）
 # 导出整图采样 CSV（会被时间戳目录覆盖）
 export_csv: placeholder.csv
 # 输出基目录（时间戳文件夹将创建在此目录下）
-output_base_dir: $(find mag_bringup)/../../data
+output_base_dir: data

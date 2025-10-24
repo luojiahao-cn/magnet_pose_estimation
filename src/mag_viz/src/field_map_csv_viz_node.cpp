@@ -1,4 +1,5 @@
 #include <ros/ros.h>
+#include <ros/package.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <geometry_msgs/Pose.h>
 #include <fstream>
@@ -6,16 +7,48 @@
 #include <vector>
 #include <string>
 #include <cmath>
+#include <dirent.h>
+#include <algorithm>
 
 struct Sample{ double t; double bx,by,bz; double x,y,z; };
 
 struct Color{ double r,g,b,a; };
 static Color lerp(const Color&a,const Color&b,double t){return {a.r+(b.r-a.r)*t,a.g+(b.g-a.g)*t,a.b+(b.b-a.b)*t,a.a+(b.a-a.a)*t};}
 
+std::string findLatestScanFolder(const std::string& data_dir) {
+    DIR* dir = opendir(data_dir.c_str());
+    if (!dir) {
+        ROS_WARN("[field_map_csv_viz] cannot open data directory: %s", data_dir.c_str());
+        return "";
+    }
+
+    std::vector<std::string> scan_folders;
+    struct dirent* entry;
+    while ((entry = readdir(dir)) != nullptr) {
+        std::string name = entry->d_name;
+        if (entry->d_type == DT_DIR && name.find("scan_") == 0) {
+            scan_folders.push_back(name);
+        }
+    }
+    closedir(dir);
+
+    if (scan_folders.empty()) {
+        ROS_WARN("[field_map_csv_viz] no scan folders found in: %s", data_dir.c_str());
+        return "";
+    }
+
+    // 按时间戳排序，找到最新的
+    std::sort(scan_folders.begin(), scan_folders.end(), std::greater<std::string>());
+    return scan_folders[0];
+}
+
 class FieldMapCsvViz{
 public:
   FieldMapCsvViz(ros::NodeHandle& nh): nh_(nh){
-    if(!nh_.getParam("csv_path", csv_)) throw std::runtime_error("缺少参数: ~csv_path");
+    if(!nh_.getParam("csv_path", csv_)) {
+      ROS_ERROR("[field_map_csv_viz] missing parameter: ~csv_path");
+      throw std::runtime_error("缺少参数: ~csv_path");
+    }
     if(!nh_.getParam("frame", frame_)) throw std::runtime_error("缺少参数: ~frame");
     if(!nh_.getParam("marker_topic", marker_topic_)) throw std::runtime_error("缺少参数: ~marker_topic");
     if(!nh_.getParam("field_scale", field_scale_)) throw std::runtime_error("缺少参数: ~field_scale");
@@ -23,14 +56,59 @@ public:
     if(!nh_.getParam("color_max", color_max_)) throw std::runtime_error("缺少参数: ~color_max");
     nh_.param<int>("stride", stride_, 1);
 
+    std::string subfolder;
+    nh_.param<std::string>("subfolder", subfolder, "");
+
+    // 解析相对路径（相对于工作空间根目录）
+    if(!csv_.empty() && csv_[0] != '/'){
+      try{
+        std::string pkg = ros::package::getPath("mag_viz");
+        size_t src_pos = pkg.find("/src/");
+        if(src_pos != std::string::npos){
+          std::string workspace_root = pkg.substr(0, src_pos);
+          csv_ = workspace_root + "/" + csv_;
+        } else {
+          ROS_WARN("[field_map_csv_viz] could not determine workspace root from package path, using given path");
+        }
+      } catch(const std::exception& e){
+        ROS_WARN("[field_map_csv_viz] failed to resolve relative csv path: %s", e.what());
+      }
+    }
+
+    // 处理子文件夹逻辑
+    std::string data_dir = csv_.substr(0, csv_.find_last_of('/')); // 获取data目录路径
+    std::string filename = csv_.substr(csv_.find_last_of('/') + 1); // 获取文件名
+
+    if (!subfolder.empty()) {
+        // 使用指定的子文件夹
+        csv_ = data_dir + "/" + subfolder + "/" + filename;
+        ROS_INFO("[field_map_csv_viz] using specified subfolder: %s", subfolder.c_str());
+    } else {
+        // 自动找到最新的扫描文件夹
+        std::string latest_folder = findLatestScanFolder(data_dir);
+        if (!latest_folder.empty()) {
+            csv_ = data_dir + "/" + latest_folder + "/" + filename;
+            ROS_INFO("[field_map_csv_viz] using latest scan folder: %s", latest_folder.c_str());
+        } else {
+            ROS_WARN("[field_map_csv_viz] no scan folders found, using base path: %s", csv_.c_str());
+        }
+    }
+
     pub_ = nh_.advertise<visualization_msgs::MarkerArray>(marker_topic_, 1, true);
-    loadCsv();
+    if(!loadCsv()){
+      ROS_ERROR("[field_map_csv_viz] aborting due to CSV load failure: %s", csv_.c_str());
+      ros::shutdown();
+      return;
+    }
     publishOnce();
   }
 private:
-  void loadCsv(){
+  bool loadCsv(){
     std::ifstream f(csv_);
-    if(!f.is_open()) throw std::runtime_error(std::string("无法打开CSV: ")+csv_);
+    if(!f.is_open()){
+      ROS_ERROR("[field_map_csv_viz] 无法打开CSV: %s", csv_.c_str());
+      return false;
+    }
     std::string line; bool first=true; samples_.clear(); samples_.reserve(100000);
     while(std::getline(f,line)){
       if(line.empty()) continue; if(first){first=false; if(line.find("timestamp")!=std::string::npos) continue;} // skip header
@@ -40,6 +118,7 @@ private:
       samples_.push_back(s);
     }
     ROS_INFO("[field_map_csv_viz] loaded %zu samples from %s", samples_.size(), csv_.c_str());
+    return true;
   }
   Color colormap(double mag) const{
     double m = std::max(0.0, std::min(mag, color_max_));

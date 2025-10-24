@@ -4,13 +4,9 @@ Panels:
     Name: Displays
     Property Tree Widget:
       Expanded:
-        - /Global Options1
-        - /Status1
-        - /TF1
-        - /MarkerArray1
-        - /TF2
+        - /MarkerArray1/Status1
       Splitter Ratio: 0.3852458894252777
-    Tree Height: 511
+    Tree Height: 752
   - Class: rviz/Selection
     Name: Selection
   - Class: rviz/Tool Properties
@@ -54,23 +50,6 @@ Visualization Manager:
       Plane Cell Count: 10
       Reference Frame: <Fixed Frame>
       Value: true
-    - Class: rviz/TF
-      Enabled: true
-      Filter (blacklist): ""
-      Filter (whitelist): ""
-      Frame Timeout: 15
-      Frames:
-        All Enabled: true
-      Marker Alpha: 1
-      Marker Scale: 0.05000000074505806
-      Name: TF
-      Show Arrows: true
-      Show Axes: true
-      Show Names: false
-      Tree:
-        {}
-      Update Interval: 0
-      Value: true
     - Class: rviz/MarkerArray
       Enabled: true
       Marker Topic: /mag_viz/markers
@@ -86,14 +65,155 @@ Visualization Manager:
       Frame Timeout: 15
       Frames:
         All Enabled: true
+        frrobot_base0_link:
+          Value: true
+        frrobot_base1_link:
+          Value: true
+        frrobot_base2_link:
+          Value: true
+        frrobot_j1_link:
+          Value: true
+        frrobot_j2_link:
+          Value: true
+        frrobot_j3_link:
+          Value: true
+        frrobot_j4_link:
+          Value: true
+        frrobot_j5_link:
+          Value: true
+        frrobot_j6_link:
+          Value: true
+        frrobot_tool_link:
+          Value: true
+        sensor_1:
+          Value: true
+        sensor_10:
+          Value: true
+        sensor_11:
+          Value: true
+        sensor_12:
+          Value: true
+        sensor_13:
+          Value: true
+        sensor_14:
+          Value: true
+        sensor_15:
+          Value: true
+        sensor_16:
+          Value: true
+        sensor_17:
+          Value: true
+        sensor_18:
+          Value: true
+        sensor_19:
+          Value: true
+        sensor_2:
+          Value: true
+        sensor_20:
+          Value: true
+        sensor_21:
+          Value: true
+        sensor_22:
+          Value: true
+        sensor_23:
+          Value: true
+        sensor_24:
+          Value: true
+        sensor_25:
+          Value: true
+        sensor_3:
+          Value: true
+        sensor_4:
+          Value: true
+        sensor_5:
+          Value: true
+        sensor_6:
+          Value: true
+        sensor_7:
+          Value: true
+        sensor_8:
+          Value: true
+        sensor_9:
+          Value: true
+        sensor_array:
+          Value: true
+        tool_frame:
+          Value: true
+        tool_tcp:
+          Value: true
+        world:
+          Value: true
       Marker Alpha: 1
-      Marker Scale: 1
+      Marker Scale: 0.009999999776482582
       Name: TF
       Show Arrows: true
       Show Axes: true
       Show Names: true
       Tree:
-        {}
+        world:
+          frrobot_base0_link:
+            frrobot_base1_link:
+              frrobot_base2_link:
+                frrobot_j1_link:
+                  frrobot_j2_link:
+                    frrobot_j3_link:
+                      frrobot_j4_link:
+                        frrobot_j5_link:
+                          frrobot_j6_link:
+                            frrobot_tool_link:
+                              tool_frame:
+                                tool_tcp:
+                                  sensor_array:
+                                    sensor_1:
+                                      {}
+                                    sensor_10:
+                                      {}
+                                    sensor_11:
+                                      {}
+                                    sensor_12:
+                                      {}
+                                    sensor_13:
+                                      {}
+                                    sensor_14:
+                                      {}
+                                    sensor_15:
+                                      {}
+                                    sensor_16:
+                                      {}
+                                    sensor_17:
+                                      {}
+                                    sensor_18:
+                                      {}
+                                    sensor_19:
+                                      {}
+                                    sensor_2:
+                                      {}
+                                    sensor_20:
+                                      {}
+                                    sensor_21:
+                                      {}
+                                    sensor_22:
+                                      {}
+                                    sensor_23:
+                                      {}
+                                    sensor_24:
+                                      {}
+                                    sensor_25:
+                                      {}
+                                    sensor_3:
+                                      {}
+                                    sensor_4:
+                                      {}
+                                    sensor_5:
+                                      {}
+                                    sensor_6:
+                                      {}
+                                    sensor_7:
+                                      {}
+                                    sensor_8:
+                                      {}
+                                    sensor_9:
+                                      {}
       Update Interval: 0
       Value: true
   Enabled: true
@@ -124,7 +244,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 0.06342823803424835
+      Distance: 0.9565955400466919
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -132,25 +252,25 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 0.007619522511959076
-        Y: 0.0014301534974947572
-        Z: -0.0030394094064831734
+        X: -0.0616268627345562
+        Y: 0.07670263200998306
+        Z: -0.0748445987701416
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.4497964382171631
+      Pitch: 1.0897971391677856
       Target Frame: <Fixed Frame>
-      Yaw: 5.853180885314941
+      Yaw: 6.175029277801514
     Saved: ~
 Window Geometry:
   Displays:
     collapsed: false
-  Height: 900
+  Height: 1141
   Hide Left Dock: false
   Hide Right Dock: false
-  QMainWindow State: 000000ff00000000fd0000000400000000000001ea000002c6fc0200000008fb0000001200530065006c0065006300740069006f006e00000001e10000009b0000005c00fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000b0fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c006100790073010000003d000002c6000000c900fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261000000010000015f000002c6fc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a00560069006500770073010000003d000002c6000000a400fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e10000019700000003000006400000005efc0100000002fb0000000800540069006d0065010000000000000640000003bc00fffffffb0000000800540069006d00650100000000000004500000000000000000000002eb000002c600000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  QMainWindow State: 000000ff00000000fd00000004000000000000026b000003b7fc0200000008fb0000001200530065006c0065006300740069006f006e00000001e10000009b0000005c00fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000b0fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c006100790073010000003d000003b7000000c900fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261000000010000015f000003b7fc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a00560069006500770073010000003d000003b7000000a400fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e10000019700000003000007800000005efc0100000002fb0000000800540069006d0065010000000000000780000003bc00fffffffb0000000800540069006d00650100000000000004500000000000000000000003aa000003b700000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   Selection:
     collapsed: false
   Time:
@@ -159,6 +279,6 @@ Window Geometry:
     collapsed: false
   Views:
     collapsed: false
-  Width: 1600
+  Width: 1920
   X: 0
   Y: 27

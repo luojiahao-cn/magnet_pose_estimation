@@ -6,6 +6,7 @@
 #include <tf2_ros/transform_listener.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <std_msgs/Bool.h>
+#include <std_msgs/String.h>
 #include <std_srvs/Trigger.h>
 #include <mag_sensor_node/MagSensorData.h>
 
@@ -71,6 +72,9 @@ public:
     nh_.param<std::string>("export_csv", export_csv_, std::string(""));
     nh_.param<std::string>("output_base_dir", output_base_dir_, std::string(""));
     
+    // 解析output_base_dir中的$(find ...)语法
+    output_base_dir_ = resolveRelativePath(output_base_dir_);
+    
     // 如果设置了export_csv，创建时间戳目录
     if (!export_csv_.empty()) {
         createTimestampDirectory();
@@ -84,6 +88,7 @@ public:
     pub_ = nh_.advertise<visualization_msgs::MarkerArray>(marker_topic_, 5);
     clear_srv_ = nh_.advertiseService("clear_map", &FieldMapAggregator::clearMap, this);
     at_position_sub_ = nh_.subscribe("/scan_at_position", 1, &FieldMapAggregator::atPositionCallback, this);
+    scan_complete_sub_ = nh_.subscribe("/scan_complete", 1, &FieldMapAggregator::scanCompleteCallback, this);
 
     pub_timer_ = nh_.createTimer(ros::Duration(0.5), &FieldMapAggregator::publishMarkersTimer, this);
 
@@ -125,6 +130,52 @@ private:
 
   void atPositionCallback(const std_msgs::Bool::ConstPtr& msg) {
     at_position_ = msg->data;
+  }
+
+  void scanCompleteCallback(const std_msgs::String::ConstPtr& msg) {
+    ROS_INFO("[field_map_aggregator] received scan completion: %s", msg->data.c_str());
+    
+    // 扫描完成后，确保所有待处理的数据都被导出
+    if (!export_csv_.empty()) {
+      exportToCsv();
+      ROS_INFO("[field_map_aggregator] final data export completed after scan");
+    }
+    
+    // 发布最终的可视化状态
+    publishMarkersTimer(ros::TimerEvent());
+    ROS_INFO("[field_map_aggregator] published final visualization after scan completion");
+  }
+
+  void exportToCsv() {
+    if (export_csv_.empty()) return;
+    
+    std::ofstream f(export_csv_, std::ios::app);
+    if (!f.is_open()) {
+      ROS_ERROR("[field_map_aggregator] failed to open export file: %s", export_csv_.c_str());
+      return;
+    }
+    
+    // 导出所有网格单元的聚合数据
+    for (const auto& kv : cell_map_) {
+      const CellKey& key = kv.first;
+      const CellAgg& cell = kv.second;
+      if (cell.n == 0) continue;
+      
+      // 计算平均值
+      double avg_bx = cell.b_sum.x / cell.n;
+      double avg_by = cell.b_sum.y / cell.n;
+      double avg_bz = cell.b_sum.z / cell.n;
+      double avg_x = cell.pos_sum.x / cell.n;
+      double avg_y = cell.pos_sum.y / cell.n;
+      double avg_z = cell.pos_sum.z / cell.n;
+      
+      // 导出聚合数据：timestamp(使用当前时间),Bx,By,Bz,x,y,z,n_samples
+      f << ros::Time::now().toSec() << "," << avg_bx << "," << avg_by << "," << avg_bz << ","
+        << avg_x << "," << avg_y << "," << avg_z << "," << cell.n << "\n";
+    }
+    
+    f.close();
+    ROS_INFO("[field_map_aggregator] exported %zu aggregated samples to %s", cell_map_.size(), export_csv_.c_str());
   }
 
   void onMag(const mag_sensor_node::MagSensorData::ConstPtr& msg){
@@ -200,11 +251,36 @@ private:
   ros::Publisher pub_;
   ros::ServiceServer clear_srv_;
   ros::Subscriber at_position_sub_;
+  ros::Subscriber scan_complete_sub_;
   ros::Timer pub_timer_;
   tf2_ros::Buffer tf_buffer_;
   tf2_ros::TransformListener tf_listener_;
 
-  void createTimestampDirectory()
+  std::string resolveRelativePath(const std::string& path)
+  {
+    std::string result = path;
+
+    // 处理相对路径（相对于工作空间根目录）
+    if (!result.empty() && result[0] != '/') {
+      // 获取工作空间根目录（通过当前包的路径向上查找src目录的父目录）
+      std::string current_package_path;
+      try {
+        current_package_path = ros::package::getPath("mag_viz");
+        // 从包路径向上查找，直到找到src目录的父目录
+        size_t src_pos = current_package_path.find("/src/");
+        if (src_pos != std::string::npos) {
+          std::string workspace_root = current_package_path.substr(0, src_pos);
+          result = workspace_root + "/" + result;
+        } else {
+          ROS_WARN("[field_map_aggregator] could not determine workspace root, using absolute path");
+        }
+      } catch (const std::exception& e) {
+        ROS_ERROR("[field_map_aggregator] failed to get current package path: %s", e.what());
+      }
+    }
+
+    return result;
+  }  void createTimestampDirectory()
   {
     // 获取当前时间
     std::time_t now = std::time(nullptr);
@@ -214,7 +290,7 @@ private:
     char timestamp[20];
     std::strftime(timestamp, sizeof(timestamp), "%Y%m%d_%H%M", tm);
     
-    // 使用配置的基目录创建时间戳文件夹
+    // 使用已解析的基目录创建时间戳文件夹
     std::string timestamp_dir = output_base_dir_ + "/scan_" + timestamp;
     
     // 创建目录

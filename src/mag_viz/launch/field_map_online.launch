@@ -1,6 +1,21 @@
 <launch>
-  <!-- 在线聚合可视化 -->
+  <!-- 测试field_map_aggregator的路径解析功能 -->
+
+  <!-- 磁传感器仿真节点 -->
+  <param name="/use_sim_time" value="true" />
+  <node pkg="mag_sensor_node" type="mag_sensor_sim_node" name="mag_sensor_sim" output="screen">
+    <rosparam file="$(find mag_sensor_node)/config/sensor_array.yaml" command="load" />
+    <rosparam file="$(find mag_sensor_node)/config/mag_sensor_sim_node.yaml" command="load" />
+  </node>
+
+  <!-- 传感器 TF 发布器 -->
+  <node pkg="mag_sensor_node" type="sensor_tf_publisher_node" name="sensor_tf_publisher" output="screen">
+    <rosparam file="$(find mag_sensor_node)/config/sensor_array.yaml" command="load" />
+  </node>
+
+  <!-- 实时磁场可视化 -->
   <node pkg="mag_viz" type="field_map_aggregator_node" name="field_map_aggregator" output="screen">
     <rosparam file="$(find mag_viz)/config/field_map_aggregator.yaml" command="load"/>
   </node>
+
 </launch>
