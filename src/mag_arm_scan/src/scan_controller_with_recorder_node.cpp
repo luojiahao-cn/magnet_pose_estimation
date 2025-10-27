@@ -117,6 +117,7 @@ void ScanControllerWithRecorderNode::loadParams() {
 		max_samples_per_sensor_ = static_cast<std::size_t>(frames_per_sensor_);
 	}
 
+
 	ros::NodeHandle viz_nh(pnh_, "visualization");
 	viz_nh.param("enabled", visualization_enabled_, false);
 	viz_nh.param("topic", visualization_topic_, std::string("mag_field_vectors"));
@@ -224,6 +225,7 @@ double ScanControllerWithRecorderNode::poseDistance(const geometry_msgs::Pose &p
 	return std::sqrt(dx * dx + dy * dy + dz * dz);
 }
 
+// 使用 MoveIt 规划并执行到指定位姿；成功返回 true
 bool ScanControllerWithRecorderNode::moveToPose(const geometry_msgs::Pose &pose) {
 	move_group_->setPoseTarget(pose);
 
@@ -232,11 +234,14 @@ bool ScanControllerWithRecorderNode::moveToPose(const geometry_msgs::Pose &pose)
 
 	if (success) {
 		success = move_group_->execute(plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS;
+		// Try to force stop any residual motion promptly
+		move_group_->stop();
 	}
 
 	return success;
 }
 
+// 移动到命名的 ready 姿态（由 MoveIt 配置）
 bool ScanControllerWithRecorderNode::moveToReadyPose() {
 	ROS_INFO("[scan_controller_with_recorder] moving to ready position using named target");
 
@@ -247,11 +252,14 @@ bool ScanControllerWithRecorderNode::moveToReadyPose() {
 
 	if (success) {
 		success = move_group_->execute(plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS;
+		// 结束后主动 stop，尽快消除尾迹
+		move_group_->stop();
 	}
 
 	return success;
 }
 
+// 单点流程：移动→短等待→采样提取/均值→写 CSV→发布可视化 Marker
 void ScanControllerWithRecorderNode::collectDataAtPoint(const geometry_msgs::Pose &pose) {
 	std_msgs::Bool at_pos_msg;
 	at_pos_msg.data = false;
@@ -267,17 +275,6 @@ void ScanControllerWithRecorderNode::collectDataAtPoint(const geometry_msgs::Pos
 
 	ros::Duration(wait_time_).sleep();
 
-	ros::Time start_wait = ros::Time::now();
-	const ros::Duration max_stable_wait(max_stable_wait_time_);
-	while (!isArmStable() && (ros::Time::now() - start_wait) < max_stable_wait) {
-		ros::Duration(0.1).sleep();
-	}
-
-	if (isArmStable()) {
-		ROS_INFO("[scan_controller_with_recorder] arm is stable at position");
-	} else {
-		ROS_WARN("[scan_controller_with_recorder] arm did not stabilize within timeout, proceeding anyway");
-	}
 
 	at_pos_msg.data = true;
 	at_position_pub_.publish(at_pos_msg);
@@ -547,17 +544,7 @@ bool ScanControllerWithRecorderNode::startScan(std_srvs::Trigger::Request &req, 
 	return true;
 }
 
-bool ScanControllerWithRecorderNode::isArmStable(double velocity_threshold) {
-	if (latest_joint_state_.velocity.empty()) {
-		return false;
-	}
-	for (double vel : latest_joint_state_.velocity) {
-		if (std::abs(vel) > velocity_threshold) {
-			return false;
-		}
-	}
-	return true;
-}
+// Stability check removed: rely on MoveIt execution completion and optional wait_time
 
 void ScanControllerWithRecorderNode::magDataCallback(const mag_sensor_node::MagSensorData::ConstPtr &msg) {
 	std::lock_guard<std::mutex> lock(data_mutex_);
@@ -572,6 +559,7 @@ void ScanControllerWithRecorderNode::jointStateCallback(const sensor_msgs::Joint
 	latest_joint_state_ = *msg;
 }
 
+// 加载阵列配置，确定期望的 sensor_id 列表；若失败则 best-effort 采样
 void ScanControllerWithRecorderNode::loadSensorConfig() {
 	expected_sensor_ids_.clear();
 	num_sensors_ = 0;
@@ -603,6 +591,7 @@ void ScanControllerWithRecorderNode::loadSensorConfig() {
 	}
 }
 
+// 是否已满足每个传感器 frames_per_sensor 的要求（需在持锁条件下调用）
 bool ScanControllerWithRecorderNode::hasEnoughSamplesLocked() const {
 	if (num_sensors_ <= 0) {
 		return false;
@@ -632,6 +621,7 @@ bool ScanControllerWithRecorderNode::hasEnoughSamplesLocked() const {
 	return true;
 }
 
+// 从各传感器缓冲中提取样本到 out；best_effort=true 时尽可能取可用的最近帧
 void ScanControllerWithRecorderNode::extractSamplesLocked(std::vector<mag_sensor_node::MagSensorData> &out,
 																 bool best_effort) {
 	out.clear();
@@ -682,6 +672,7 @@ void ScanControllerWithRecorderNode::extractSamplesLocked(std::vector<mag_sensor
 	ROS_INFO_STREAM("[scan_controller_with_recorder] extracted samples: total=" << total << ", sensors=" << per_sensor_counts.size());
 }
 
+// 清空每个传感器的环形缓冲，开启新一轮采样
 void ScanControllerWithRecorderNode::resetSampleBuffers() {
 	std::lock_guard<std::mutex> lock(data_mutex_);
 	for (auto &entry : sensor_samples_buffer_) {
@@ -689,6 +680,7 @@ void ScanControllerWithRecorderNode::resetSampleBuffers() {
 	}
 }
 
+// 线性插值颜色：magnitude_min_ → color_low_, magnitude_max_ → color_high_
 ScanControllerWithRecorderNode::ColorRGBA ScanControllerWithRecorderNode::interpolateColor(double magnitude) const {
 	if (magnitude_max_ <= magnitude_min_ + kEpsilon) {
 		return magnitude <= magnitude_min_ ? color_low_ : color_high_;
@@ -702,6 +694,7 @@ ScanControllerWithRecorderNode::ColorRGBA ScanControllerWithRecorderNode::interp
 	return color;
 }
 
+// 通过 TF 查询 frame_id_ ← sensor_<id> 的平移，成功填充 out_position
 bool ScanControllerWithRecorderNode::lookupSensorPosition(std::uint32_t sensor_id, geometry_msgs::Point &out_position) const {
 	if (!use_tf_sensor_pose_) {
 		return false;

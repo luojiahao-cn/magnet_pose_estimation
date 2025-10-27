@@ -27,17 +27,17 @@ required_num_sensors: 25
 sensor_detect_time: 10.0
 
 visualization:
-	enabled: true
-	topic: /mag_field_vectors
-	vector_scale: 0.05
-	arrow_shaft_diameter: 0.003
-	arrow_head_diameter: 0.006
-	arrow_head_length: 0.01
-	magnitude_min: 0.0
-	magnitude_max: 5.0
-	alpha: 1.0
-	color_low: [0.0, 0.0, 1.0]
-	color_high: [1.0, 0.0, 0.0]
-	use_tf_sensor_pose: true
-	sensor_frame_prefix: sensor_
-	tf_lookup_timeout: 0.05
+  enabled: true
+  topic: /mag_field_vectors
+  vector_scale: 0.0003
+  arrow_shaft_diameter: 0.001
+  arrow_head_diameter: 0.002
+  arrow_head_length: 0.004
+  magnitude_min: 0.0
+  magnitude_max: 5.0
+  alpha: 1.0
+  color_low: [0.0, 0.0, 1.0]
+  color_high: [1.0, 0.0, 0.0]
+  use_tf_sensor_pose: true
+  sensor_frame_prefix: sensor_
+  tf_lookup_timeout: 0.05

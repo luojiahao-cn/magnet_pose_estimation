@@ -5,7 +5,7 @@
   <arg name="use_gazebo" default="true" />
   <arg name="move_group_output" default="log"/>
   <arg name="use_attached_tool" default="true" />
-  <arg name="start_rviz" default="true" />
+  <arg name="start_rviz" default="false" />
   <arg name="use_sim_sensor" default="true" />
 
   <!-- 1) MoveIt 与机械臂环境 -->
