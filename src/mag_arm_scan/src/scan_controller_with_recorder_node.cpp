@@ -11,6 +11,9 @@
 #include <cstdio>
 #include <sys/stat.h>
 
+#include <filesystem>
+#include <map>
+
 #include <geometry_msgs/TransformStamped.h>
 #include <geometry_msgs/Vector3Stamped.h>
 #include <mag_sensor_node/sensor_config.hpp>
@@ -18,6 +21,7 @@
 #include <moveit/planning_scene_interface/planning_scene_interface.h>
 #include <ros/package.h>
 #include <tf2/LinearMath/Quaternion.h>
+#include <tf2/exceptions.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
 namespace {
@@ -43,6 +47,9 @@ ScanControllerWithRecorderNode::ScanControllerWithRecorderNode(ros::NodeHandle &
 	clear_client_ = nh_.serviceClient<std_srvs::Trigger>("/field_map_aggregator/clear_map");
 	at_position_pub_ = nh_.advertise<std_msgs::Bool>("/scan_at_position", 1);
 	scan_complete_pub_ = nh_.advertise<std_msgs::String>("/scan_complete", 1);
+	if (visualization_enabled_) {
+		marker_pub_ = nh_.advertise<visualization_msgs::MarkerArray>(visualization_topic_, 10);
+	}
 
 	ROS_INFO_STREAM("[scan_controller_with_recorder] initialized with " << scan_points_.size()
 									<< " scan points");
@@ -93,6 +100,10 @@ void ScanControllerWithRecorderNode::loadParams() {
 	output_base_dir_ = resolveRelativePath(output_base_dir_);
 	createTimestampDirectory();
 
+	// 可选参数：期望的传感器数（例如 25），以及在自动检测时等待的最长时间
+	pnh_.param("required_num_sensors", required_num_sensors_, 0);
+	pnh_.param("sensor_detect_time", sensor_detect_time_, 5.0);
+
 	pnh_.param("frames_per_sensor", frames_per_sensor_, 10);
 	if (frames_per_sensor_ < 1) {
 		frames_per_sensor_ = 1;
@@ -105,6 +116,45 @@ void ScanControllerWithRecorderNode::loadParams() {
 	if (max_samples_per_sensor_ < static_cast<std::size_t>(frames_per_sensor_)) {
 		max_samples_per_sensor_ = static_cast<std::size_t>(frames_per_sensor_);
 	}
+
+	ros::NodeHandle viz_nh(pnh_, "visualization");
+	viz_nh.param("enabled", visualization_enabled_, false);
+	viz_nh.param("topic", visualization_topic_, std::string("mag_field_vectors"));
+	viz_nh.param("vector_scale", vector_scale_, 0.05);
+	viz_nh.param("arrow_shaft_diameter", marker_shaft_diameter_, 0.003);
+	viz_nh.param("arrow_head_diameter", marker_head_diameter_, 0.006);
+	viz_nh.param("arrow_head_length", marker_head_length_, 0.01);
+	viz_nh.param("magnitude_min", magnitude_min_, 0.0);
+	viz_nh.param("magnitude_max", magnitude_max_, 10.0);
+	viz_nh.param("alpha", visualization_alpha_, 1.0);
+	viz_nh.param("use_tf_sensor_pose", use_tf_sensor_pose_, true);
+	viz_nh.param("sensor_frame_prefix", sensor_frame_prefix_, std::string("sensor_"));
+	viz_nh.param("tf_lookup_timeout", tf_lookup_timeout_, 0.05);
+	if (tf_lookup_timeout_ < 0.0) {
+		tf_lookup_timeout_ = 0.0;
+	}
+	visualization_alpha_ = std::clamp(visualization_alpha_, 0.0, 1.0);
+
+	std::vector<double> color_low_param;
+	if (viz_nh.getParam("color_low", color_low_param) && (color_low_param.size() == 3U || color_low_param.size() == 4U)) {
+		color_low_.r = color_low_param[0];
+		color_low_.g = color_low_param[1];
+		color_low_.b = color_low_param[2];
+		if (color_low_param.size() == 4U) {
+			color_low_.a = color_low_param[3];
+		}
+	}
+	std::vector<double> color_high_param;
+	if (viz_nh.getParam("color_high", color_high_param) && (color_high_param.size() == 3U || color_high_param.size() == 4U)) {
+		color_high_.r = color_high_param[0];
+		color_high_.g = color_high_param[1];
+		color_high_.b = color_high_param[2];
+		if (color_high_param.size() == 4U) {
+			color_high_.a = color_high_param[3];
+		}
+	}
+	color_low_.a = visualization_alpha_;
+	color_high_.a = visualization_alpha_;
 }
 
 void ScanControllerWithRecorderNode::generateScanPoints() {
@@ -288,6 +338,15 @@ void ScanControllerWithRecorderNode::collectDataAtPoint(const geometry_msgs::Pos
 		return;
 	}
 
+	struct AggregatedSensorAccumulator {
+		double sum_x{0.0};
+		double sum_y{0.0};
+		double sum_z{0.0};
+		std::size_t count{0U};
+		geometry_msgs::Point fallback_position{};
+	};
+	std::map<std::uint32_t, AggregatedSensorAccumulator> averaged_data;
+
 	for (const auto &data : collected_samples_) {
 		geometry_msgs::Pose pose_w = data.sensor_pose;
 		geometry_msgs::TransformStamped transform;
@@ -295,7 +354,7 @@ void ScanControllerWithRecorderNode::collectDataAtPoint(const geometry_msgs::Pos
 
 		if (!frame_id_.empty() && frame_id_ != data.header.frame_id) {
 			try {
-				transform = tf_buffer_.lookupTransform(frame_id_, data.header.frame_id, ros::Time(0), ros::Duration(0.05));
+				transform = tf_buffer_.lookupTransform(frame_id_, data.header.frame_id, ros::Time(0), ros::Duration(tf_lookup_timeout_));
 				tf2::doTransform(data.sensor_pose, pose_w, transform);
 				did_tf = true;
 			} catch (const std::exception &e) {
@@ -327,8 +386,85 @@ void ScanControllerWithRecorderNode::collectDataAtPoint(const geometry_msgs::Pos
 		}
 
 		const geometry_msgs::Point record_point = pose_w.position;
+		const geometry_msgs::Quaternion record_ori = pose_w.orientation;
+		// 增加 orientation 与 sensor_id 与 frame_id 字段，便于后续区分和可视化
 		file << data.header.stamp.toSec() << ',' << bx << ',' << by << ',' << bz << ',' << record_point.x << ','
-		     << record_point.y << ',' << record_point.z << '\n';
+		     << record_point.y << ',' << record_point.z << ',' << record_ori.x << ',' << record_ori.y << ','
+		     << record_ori.z << ',' << record_ori.w << ',' << data.sensor_id << ',' << data.header.frame_id << '\n';
+
+		auto &acc = averaged_data[data.sensor_id];
+		if (acc.count == 0U) {
+			acc.fallback_position = record_point;
+		}
+		acc.sum_x += bx;
+		acc.sum_y += by;
+		acc.sum_z += bz;
+		acc.count += 1U;
+	}
+	// 确保数据已写入磁盘，降低崩溃丢失风险
+	file.flush();
+	file.close();
+
+	if (visualization_enabled_ && marker_pub_) {
+		visualization_msgs::MarkerArray markers;
+		markers.markers.reserve(averaged_data.size());
+		const ros::Time now = ros::Time::now();
+		for (const auto &entry : averaged_data) {
+			const std::uint32_t sensor_id = entry.first;
+			const AggregatedSensorAccumulator &acc = entry.second;
+			if (acc.count == 0U) {
+				continue;
+			}
+			geometry_msgs::Point start_point;
+			bool has_tf_pose = lookupSensorPosition(sensor_id, start_point);
+			if (!has_tf_pose) {
+				start_point = acc.fallback_position;
+			}
+
+			if (frame_id_.empty()) {
+				ROS_WARN_THROTTLE(5.0, "[scan_controller_with_recorder] Missing frame_id for visualization");
+				continue;
+			}
+
+			geometry_msgs::Vector3 avg_vector;
+			avg_vector.x = acc.sum_x / static_cast<double>(acc.count);
+			avg_vector.y = acc.sum_y / static_cast<double>(acc.count);
+			avg_vector.z = acc.sum_z / static_cast<double>(acc.count);
+			double magnitude = std::sqrt(avg_vector.x * avg_vector.x + avg_vector.y * avg_vector.y + avg_vector.z * avg_vector.z);
+			if (magnitude < kEpsilon) {
+				continue;
+			}
+
+			geometry_msgs::Point end_point = start_point;
+			end_point.x += avg_vector.x * vector_scale_;
+			end_point.y += avg_vector.y * vector_scale_;
+			end_point.z += avg_vector.z * vector_scale_;
+
+			visualization_msgs::Marker marker;
+			marker.header.frame_id = frame_id_;
+			marker.header.stamp = now;
+			marker.ns = "mag_field";
+			marker.id = static_cast<int>(marker_id_counter_++);
+			marker.type = visualization_msgs::Marker::ARROW;
+			marker.action = visualization_msgs::Marker::ADD;
+			marker.points.push_back(start_point);
+			marker.points.push_back(end_point);
+			marker.scale.x = marker_shaft_diameter_;
+			marker.scale.y = marker_head_diameter_;
+			marker.scale.z = marker_head_length_;
+			marker.pose.orientation.w = 1.0;
+			ColorRGBA color = interpolateColor(magnitude);
+			marker.color.r = static_cast<float>(std::clamp(color.r, 0.0, 1.0));
+			marker.color.g = static_cast<float>(std::clamp(color.g, 0.0, 1.0));
+			marker.color.b = static_cast<float>(std::clamp(color.b, 0.0, 1.0));
+			marker.color.a = static_cast<float>(std::clamp(color.a, 0.0, 1.0));
+			marker.lifetime = ros::Duration(0.0);
+			markers.markers.push_back(marker);
+		}
+
+		if (!markers.markers.empty()) {
+			marker_pub_.publish(markers);
+		}
 	}
 }
 
@@ -336,6 +472,38 @@ bool ScanControllerWithRecorderNode::startScan(std_srvs::Trigger::Request &req, 
 	(void)req;
 
 	ROS_INFO_STREAM("[scan_controller_with_recorder] starting scan with " << scan_points_.size() << " points");
+
+	// 如果没有从配置中得到传感器数量，且用户指定了 required_num_sensors_，则在开始前尝试自动检测
+	if (num_sensors_ <= 0 && required_num_sensors_ > 0) {
+		ROS_INFO_STREAM("[scan_controller_with_recorder] attempting to detect required_num_sensors=" << required_num_sensors_ << " (timeout=" << sensor_detect_time_ << "s)");
+		const ros::Time detect_start = ros::Time::now();
+		const ros::Duration timeout(sensor_detect_time_);
+		while (ros::ok() && (ros::Time::now() - detect_start) < timeout) {
+			{
+				std::lock_guard<std::mutex> lock(data_mutex_);
+				if (static_cast<int>(sensor_samples_buffer_.size()) >= required_num_sensors_) {
+					break;
+				}
+			}
+			ros::Duration(0.1).sleep();
+		}
+		// 将当前缓冲中出现过的 sensor ids 记录为期望列表（有可能小于 required_num_sensors_）
+		{
+			std::lock_guard<std::mutex> lock(data_mutex_);
+			expected_sensor_ids_.clear();
+			for (const auto &entry : sensor_samples_buffer_) {
+				expected_sensor_ids_.push_back(static_cast<int>(entry.first));
+			}
+			std::sort(expected_sensor_ids_.begin(), expected_sensor_ids_.end());
+			expected_sensor_ids_.erase(std::unique(expected_sensor_ids_.begin(), expected_sensor_ids_.end()), expected_sensor_ids_.end());
+			num_sensors_ = static_cast<int>(expected_sensor_ids_.size());
+		}
+		if (num_sensors_ < required_num_sensors_) {
+			ROS_WARN_STREAM("[scan_controller_with_recorder] detected " << num_sensors_ << " sensors, less than required " << required_num_sensors_);
+		} else {
+			ROS_INFO_STREAM("[scan_controller_with_recorder] detected required sensors: " << num_sensors_);
+		}
+	}
 
 	if (!moveToReadyPose()) {
 		ROS_ERROR("[scan_controller_with_recorder] failed to move to ready position");
@@ -357,7 +525,8 @@ bool ScanControllerWithRecorderNode::startScan(std_srvs::Trigger::Request &req, 
 		res.message = "Failed to open output file";
 		return true;
 	}
-	file << "timestamp,mag_x,mag_y,mag_z,pos_x,pos_y,pos_z\n";
+	// 增加 sensor_id 与 frame_id 字段以及传感器姿态四元数，方便后处理区分来源与可视化
+	file << "timestamp,mag_x,mag_y,mag_z,pos_x,pos_y,pos_z,ori_x,ori_y,ori_z,ori_w,sensor_id,frame_id\n";
 	file.close();
 
 	std_msgs::Bool at_pos_msg;
@@ -467,17 +636,21 @@ void ScanControllerWithRecorderNode::extractSamplesLocked(std::vector<mag_sensor
 																 bool best_effort) {
 	out.clear();
 
-	auto append_from_queue = [&](const std::deque<mag_sensor_node::MagSensorData> &queue) {
+	// 记录每个 sensor 实际提取的帧数，便于调试与统计
+	std::map<std::uint32_t, std::size_t> per_sensor_counts;
+
+	auto append_from_queue = [&](const std::deque<mag_sensor_node::MagSensorData> &queue) -> std::size_t {
 		const std::size_t target = static_cast<std::size_t>(frames_per_sensor_);
 		const std::size_t available = queue.size();
 		const std::size_t count = best_effort ? available : std::min(available, target);
 		if (count == 0) {
-			return;
+			return 0U;
 		}
 		const std::size_t start_index = available > count ? available - count : 0U;
 		for (std::size_t i = start_index; i < available; ++i) {
 			out.push_back(queue[i]);
 		}
+		return count;
 	};
 
 	if (!expected_sensor_ids_.empty()) {
@@ -489,20 +662,64 @@ void ScanControllerWithRecorderNode::extractSamplesLocked(std::vector<mag_sensor
 				}
 				continue;
 			}
-			append_from_queue(it->second);
+			const std::size_t c = append_from_queue(it->second);
+			per_sensor_counts[static_cast<std::uint32_t>(sensor_id)] = c;
 		}
+		// 日志每个传感器提取的帧数
+		std::size_t total = 0;
+		for (const auto &p : per_sensor_counts) total += p.second;
+		ROS_INFO_STREAM("[scan_controller_with_recorder] extracted samples (expected list): total=" << total << ", sensors=" << per_sensor_counts.size());
 		return;
 	}
 
 	for (const auto &entry : sensor_samples_buffer_) {
-		append_from_queue(entry.second);
+		const std::size_t c = append_from_queue(entry.second);
+		per_sensor_counts[entry.first] = c;
 	}
+
+	std::size_t total = 0;
+	for (const auto &p : per_sensor_counts) total += p.second;
+	ROS_INFO_STREAM("[scan_controller_with_recorder] extracted samples: total=" << total << ", sensors=" << per_sensor_counts.size());
 }
 
 void ScanControllerWithRecorderNode::resetSampleBuffers() {
 	std::lock_guard<std::mutex> lock(data_mutex_);
 	for (auto &entry : sensor_samples_buffer_) {
 		entry.second.clear();
+	}
+}
+
+ScanControllerWithRecorderNode::ColorRGBA ScanControllerWithRecorderNode::interpolateColor(double magnitude) const {
+	if (magnitude_max_ <= magnitude_min_ + kEpsilon) {
+		return magnitude <= magnitude_min_ ? color_low_ : color_high_;
+	}
+	const double normalized = std::clamp((magnitude - magnitude_min_) / (magnitude_max_ - magnitude_min_), 0.0, 1.0);
+	ColorRGBA color;
+	color.r = color_low_.r + (color_high_.r - color_low_.r) * normalized;
+	color.g = color_low_.g + (color_high_.g - color_low_.g) * normalized;
+	color.b = color_low_.b + (color_high_.b - color_low_.b) * normalized;
+	color.a = color_low_.a + (color_high_.a - color_low_.a) * normalized;
+	return color;
+}
+
+bool ScanControllerWithRecorderNode::lookupSensorPosition(std::uint32_t sensor_id, geometry_msgs::Point &out_position) const {
+	if (!use_tf_sensor_pose_) {
+		return false;
+	}
+	if (sensor_frame_prefix_.empty()) {
+		return false;
+	}
+	try {
+		const std::string sensor_frame = sensor_frame_prefix_ + std::to_string(sensor_id);
+		const geometry_msgs::TransformStamped transform =
+				tf_buffer_.lookupTransform(frame_id_, sensor_frame, ros::Time(0), ros::Duration(tf_lookup_timeout_));
+		out_position.x = transform.transform.translation.x;
+		out_position.y = transform.transform.translation.y;
+		out_position.z = transform.transform.translation.z;
+		return true;
+	} catch (const tf2::TransformException &ex) {
+		ROS_WARN_THROTTLE(5.0, "[scan_controller_with_recorder] TF lookup for sensor %u failed: %s", sensor_id, ex.what());
+		return false;
 	}
 }
 
@@ -568,13 +785,23 @@ void ScanControllerWithRecorderNode::createTimestampDirectory() {
 	}
 
 	std::string timestamp_dir = output_base_dir_ + "/scan_" + timestamp;
-	if (mkdir(timestamp_dir.c_str(), 0755) == 0) {
-		ROS_INFO_STREAM("[scan_controller_with_recorder] created timestamp directory: " << timestamp_dir);
-	} else if (errno == EEXIST) {
-		ROS_INFO_STREAM("[scan_controller_with_recorder] timestamp directory already exists: " << timestamp_dir);
-	} else {
-		ROS_WARN_STREAM("[scan_controller_with_recorder] failed to create directory: " << timestamp_dir
-										<< " (errno: " << errno << ")");
+	try {
+		if (std::filesystem::create_directories(timestamp_dir)) {
+			ROS_INFO_STREAM("[scan_controller_with_recorder] created timestamp directory: " << timestamp_dir);
+		} else {
+			ROS_INFO_STREAM("[scan_controller_with_recorder] timestamp directory already exists or no action needed: " << timestamp_dir);
+		}
+	} catch (const std::exception &e) {
+		ROS_WARN_STREAM("[scan_controller_with_recorder] failed to create directory using filesystem: " << timestamp_dir
+										<< ", error: " << e.what() << ". Falling back to mkdir.");
+		if (mkdir(timestamp_dir.c_str(), 0755) == 0) {
+			ROS_INFO_STREAM("[scan_controller_with_recorder] created timestamp directory (mkdir fallback): " << timestamp_dir);
+		} else if (errno == EEXIST) {
+			ROS_INFO_STREAM("[scan_controller_with_recorder] timestamp directory already exists (mkdir fallback): " << timestamp_dir);
+		} else {
+			ROS_WARN_STREAM("[scan_controller_with_recorder] failed to create directory (mkdir fallback): " << timestamp_dir
+											<< " (errno: " << errno << ")");
+		}
 	}
 
 	output_file_ = timestamp_dir + "/scan_data.csv";
