@@ -325,6 +325,58 @@ Visualization Manager:
           Value: true
         frrobot_tool_link:
           Value: true
+        sensor_1:
+          Value: true
+        sensor_10:
+          Value: true
+        sensor_11:
+          Value: true
+        sensor_12:
+          Value: true
+        sensor_13:
+          Value: true
+        sensor_14:
+          Value: true
+        sensor_15:
+          Value: true
+        sensor_16:
+          Value: true
+        sensor_17:
+          Value: true
+        sensor_18:
+          Value: true
+        sensor_19:
+          Value: true
+        sensor_2:
+          Value: true
+        sensor_20:
+          Value: true
+        sensor_21:
+          Value: true
+        sensor_22:
+          Value: true
+        sensor_23:
+          Value: true
+        sensor_24:
+          Value: true
+        sensor_25:
+          Value: true
+        sensor_3:
+          Value: true
+        sensor_4:
+          Value: true
+        sensor_5:
+          Value: true
+        sensor_6:
+          Value: true
+        sensor_7:
+          Value: true
+        sensor_8:
+          Value: true
+        sensor_9:
+          Value: true
+        sensor_array:
+          Value: true
         tool_frame:
           Value: true
         tool_tcp:
@@ -351,12 +403,62 @@ Visualization Manager:
                             frrobot_tool_link:
                               tool_frame:
                                 tool_tcp:
-                                  {}
+                                  sensor_array:
+                                    sensor_1:
+                                      {}
+                                    sensor_10:
+                                      {}
+                                    sensor_11:
+                                      {}
+                                    sensor_12:
+                                      {}
+                                    sensor_13:
+                                      {}
+                                    sensor_14:
+                                      {}
+                                    sensor_15:
+                                      {}
+                                    sensor_16:
+                                      {}
+                                    sensor_17:
+                                      {}
+                                    sensor_18:
+                                      {}
+                                    sensor_19:
+                                      {}
+                                    sensor_2:
+                                      {}
+                                    sensor_20:
+                                      {}
+                                    sensor_21:
+                                      {}
+                                    sensor_22:
+                                      {}
+                                    sensor_23:
+                                      {}
+                                    sensor_24:
+                                      {}
+                                    sensor_25:
+                                      {}
+                                    sensor_3:
+                                      {}
+                                    sensor_4:
+                                      {}
+                                    sensor_5:
+                                      {}
+                                    sensor_6:
+                                      {}
+                                    sensor_7:
+                                      {}
+                                    sensor_8:
+                                      {}
+                                    sensor_9:
+                                      {}
       Update Interval: 0
       Value: true
     - Class: rviz/MarkerArray
       Enabled: true
-      Marker Topic: /mag_viz/markers
+      Marker Topic: /mag_field_vectors
       Name: MarkerArray
       Namespaces:
         {}
@@ -396,7 +498,7 @@ Visualization Manager:
       Near Clip Distance: 0.009999999776482582
       Pitch: 0.7199997901916504
       Target Frame: world
-      Yaw: 5.724955081939697
+      Yaw: 5.719954967498779
     Saved: ~
 Window Geometry:
   Displays:

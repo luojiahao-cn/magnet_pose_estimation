@@ -19,10 +19,14 @@
 #include <mag_sensor_node/sensor_config.hpp>
 #include <moveit/move_group_interface/move_group_interface.h>
 #include <moveit/planning_scene_interface/planning_scene_interface.h>
+#include <moveit/robot_model/robot_model.h>
+#include <moveit/robot_state/robot_state.h>
+#include <moveit/kinematics_base/kinematics_base.h>
 #include <ros/package.h>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/exceptions.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+#include <xmlrpcpp/XmlRpcValue.h>
 
 namespace {
 
@@ -37,9 +41,25 @@ ScanControllerWithRecorderNode::ScanControllerWithRecorderNode(ros::NodeHandle &
 	loadParams();
 	loadSensorConfig();
 	generateScanPoints();
+	loadTestPoints();
+	if (use_test_points_) {
+		ROS_INFO_STREAM("[scan_controller_with_recorder] configured with " << scan_points_.size()
+					<< " grid points plus " << test_points_.size() << " test points");
+	}
 
 	// 延迟初始化 MoveGroupInterface，确保 ROS 节点已经完全就绪。
 	move_group_ = std::make_shared<moveit::planning_interface::MoveGroupInterface>("fr5v6_arm");
+	move_group_->setPlanningTime(planning_time_);
+	move_group_->setNumPlanningAttempts(static_cast<unsigned int>(std::max(1, num_planning_attempts_)));
+	move_group_->setGoalJointTolerance(goal_joint_tolerance_);
+	move_group_->setGoalPositionTolerance(goal_position_tolerance_);
+	move_group_->setGoalOrientationTolerance(goal_orientation_tolerance_);
+	move_group_->setMaxVelocityScalingFactor(max_velocity_scaling_);
+	move_group_->setMaxAccelerationScalingFactor(max_acceleration_scaling_);
+	move_group_->allowReplanning(false);
+	if (!planner_id_.empty()) {
+		move_group_->setPlannerId(planner_id_);
+	}
 
 	start_scan_srv_ = pnh_.advertiseService("start_scan", &ScanControllerWithRecorderNode::startScan, this);
 	mag_data_sub_ = nh_.subscribe(mag_topic_, 100, &ScanControllerWithRecorderNode::magDataCallback, this);
@@ -51,8 +71,10 @@ ScanControllerWithRecorderNode::ScanControllerWithRecorderNode(ros::NodeHandle &
 		marker_pub_ = nh_.advertise<visualization_msgs::MarkerArray>(visualization_topic_, 10);
 	}
 
-	ROS_INFO_STREAM("[scan_controller_with_recorder] initialized with " << scan_points_.size()
-									<< " scan points");
+	if (!use_test_points_) {
+		ROS_INFO_STREAM("[scan_controller_with_recorder] initialized with " << scan_points_.size()
+					<< " scan points");
+	}
 }
 
 void ScanControllerWithRecorderNode::loadParams() {
@@ -116,15 +138,39 @@ void ScanControllerWithRecorderNode::loadParams() {
 	if (max_samples_per_sensor_ < static_cast<std::size_t>(frames_per_sensor_)) {
 		max_samples_per_sensor_ = static_cast<std::size_t>(frames_per_sensor_);
 	}
+	pnh_.param("max_velocity_scaling", max_velocity_scaling_, 0.2);
+	max_velocity_scaling_ = std::clamp(max_velocity_scaling_, 0.01, 1.0);
+	pnh_.param("max_acceleration_scaling", max_acceleration_scaling_, 0.1);
+	max_acceleration_scaling_ = std::clamp(max_acceleration_scaling_, 0.01, 1.0);
+	pnh_.param("planning_time", planning_time_, 2.0);
+	planning_time_ = std::max(0.1, planning_time_);
+	pnh_.param("num_planning_attempts", num_planning_attempts_, 1);
+	if (num_planning_attempts_ < 1) {
+		num_planning_attempts_ = 1;
+	}
+	pnh_.param("goal_joint_tolerance", goal_joint_tolerance_, 1e-3);
+	goal_joint_tolerance_ = std::max(1e-5, goal_joint_tolerance_);
+	pnh_.param("goal_position_tolerance", goal_position_tolerance_, 5e-4);
+	goal_position_tolerance_ = std::max(1e-6, goal_position_tolerance_);
+	pnh_.param("goal_orientation_tolerance", goal_orientation_tolerance_, 1e-3);
+	goal_orientation_tolerance_ = std::max(1e-5, goal_orientation_tolerance_);
+	pnh_.param("ik_timeout", ik_timeout_, 0.1);
+	ik_timeout_ = std::max(0.01, ik_timeout_);
+	pnh_.param("ik_consistency_limit", ik_consistency_limit_, 0.2);
+	if (ik_consistency_limit_ < 0.0) {
+		ik_consistency_limit_ = 0.0;
+	}
+	pnh_.param("use_preferred_ik", use_preferred_ik_, true);
+	pnh_.param("planner_id", planner_id_, std::string());
 
 
 	ros::NodeHandle viz_nh(pnh_, "visualization");
 	viz_nh.param("enabled", visualization_enabled_, false);
 	viz_nh.param("topic", visualization_topic_, std::string("mag_field_vectors"));
-	viz_nh.param("vector_scale", vector_scale_, 0.05);
-	viz_nh.param("arrow_shaft_diameter", marker_shaft_diameter_, 0.003);
-	viz_nh.param("arrow_head_diameter", marker_head_diameter_, 0.006);
-	viz_nh.param("arrow_head_length", marker_head_length_, 0.01);
+	viz_nh.param("arrow_length", arrow_length_, 0.05);
+	viz_nh.param("arrow_shaft_ratio", arrow_shaft_ratio_, 0.12);
+	viz_nh.param("arrow_head_ratio", arrow_head_ratio_, 0.25);
+	viz_nh.param("arrow_head_length_ratio", arrow_head_length_ratio_, 0.35);
 	viz_nh.param("magnitude_min", magnitude_min_, 0.0);
 	viz_nh.param("magnitude_max", magnitude_max_, 10.0);
 	viz_nh.param("alpha", visualization_alpha_, 1.0);
@@ -135,6 +181,10 @@ void ScanControllerWithRecorderNode::loadParams() {
 		tf_lookup_timeout_ = 0.0;
 	}
 	visualization_alpha_ = std::clamp(visualization_alpha_, 0.0, 1.0);
+	arrow_length_ = std::max(arrow_length_, 1e-4);
+	arrow_shaft_ratio_ = std::clamp(arrow_shaft_ratio_, 1e-3, 0.5);
+	arrow_head_ratio_ = std::clamp(arrow_head_ratio_, arrow_shaft_ratio_ * 1.2, 0.8);
+	arrow_head_length_ratio_ = std::clamp(arrow_head_length_ratio_, arrow_head_ratio_ * 0.6, 1.0);
 
 	std::vector<double> color_low_param;
 	if (viz_nh.getParam("color_low", color_low_param) && (color_low_param.size() == 3U || color_low_param.size() == 4U)) {
@@ -156,6 +206,105 @@ void ScanControllerWithRecorderNode::loadParams() {
 	}
 	color_low_.a = visualization_alpha_;
 	color_high_.a = visualization_alpha_;
+}
+
+void ScanControllerWithRecorderNode::loadTestPoints() {
+	XmlRpc::XmlRpcValue xml_points;
+	if (!pnh_.getParam("test_points", xml_points)) {
+		use_test_points_ = false;
+		test_points_.clear();
+		return;
+	}
+
+	if (xml_points.getType() != XmlRpc::XmlRpcValue::TypeArray || xml_points.size() == 0) {
+		ROS_WARN("[scan_controller_with_recorder] ~test_points must be an array of poses");
+		use_test_points_ = false;
+		test_points_.clear();
+		return;
+	}
+
+	auto getNumeric = [](XmlRpc::XmlRpcValue &value, double &out) -> bool {
+		switch (value.getType()) {
+			case XmlRpc::XmlRpcValue::TypeDouble:
+				out = static_cast<double>(value);
+				return true;
+			case XmlRpc::XmlRpcValue::TypeInt:
+				out = static_cast<int>(value);
+				return true;
+			default:
+				return false;
+		}
+	};
+
+	auto appendPose = [this](double x, double y, double z, double roll, double pitch, double yaw) {
+		geometry_msgs::Pose pose;
+		pose.position.x = x;
+		pose.position.y = y;
+		pose.position.z = z;
+		tf2::Quaternion q;
+		q.setRPY(roll, pitch, yaw);
+		pose.orientation = tf2::toMsg(q);
+		test_points_.push_back(pose);
+	};
+
+	bool parsed = false;
+	if (xml_points[0].getType() == XmlRpc::XmlRpcValue::TypeArray) {
+		test_points_.clear();
+		test_points_.reserve(xml_points.size());
+		for (int i = 0; i < xml_points.size(); ++i) {
+			XmlRpc::XmlRpcValue &entry = xml_points[i];
+			if (entry.getType() != XmlRpc::XmlRpcValue::TypeArray || entry.size() != 6) {
+				ROS_WARN("[scan_controller_with_recorder] each ~test_points entry must be an array with 6 elements (x y z roll pitch yaw)");
+				test_points_.clear();
+				use_test_points_ = false;
+				return;
+			}
+			double values[6];
+			for (int j = 0; j < 6; ++j) {
+				if (!getNumeric(entry[j], values[j])) {
+					ROS_WARN("[scan_controller_with_recorder] ~test_points values must be numeric");
+					test_points_.clear();
+					use_test_points_ = false;
+					return;
+				}
+			}
+			appendPose(values[0], values[1], values[2], values[3], values[4], values[5]);
+		}
+		parsed = true;
+	} else {
+		std::vector<double> flat;
+		flat.reserve(static_cast<std::size_t>(xml_points.size()));
+		for (int i = 0; i < xml_points.size(); ++i) {
+			double value = 0.0;
+			if (!getNumeric(xml_points[i], value)) {
+				ROS_WARN("[scan_controller_with_recorder] ~test_points values must be numeric");
+				test_points_.clear();
+				use_test_points_ = false;
+				return;
+			}
+			flat.push_back(value);
+		}
+
+		if (flat.size() % 6 != 0 || flat.empty()) {
+			ROS_WARN("[scan_controller_with_recorder] ~test_points must contain multiples of 6 values (x y z roll pitch yaw)");
+			test_points_.clear();
+			use_test_points_ = false;
+			return;
+		}
+
+		const std::size_t count = flat.size() / 6;
+		test_points_.clear();
+		test_points_.reserve(count);
+		for (std::size_t i = 0; i < count; ++i) {
+			appendPose(flat[i * 6 + 0], flat[i * 6 + 1], flat[i * 6 + 2], flat[i * 6 + 3], flat[i * 6 + 4], flat[i * 6 + 5]);
+		}
+		parsed = true;
+	}
+
+	use_test_points_ = parsed && !test_points_.empty();
+	if (use_test_points_) {
+		ROS_INFO_STREAM("[scan_controller_with_recorder] loaded " << test_points_.size() << " test points from configuration");
+	}
 }
 
 void ScanControllerWithRecorderNode::generateScanPoints() {
@@ -227,15 +376,49 @@ double ScanControllerWithRecorderNode::poseDistance(const geometry_msgs::Pose &p
 
 // 使用 MoveIt 规划并执行到指定位姿；成功返回 true
 bool ScanControllerWithRecorderNode::moveToPose(const geometry_msgs::Pose &pose) {
-	move_group_->setPoseTarget(pose);
+	if (!move_group_) {
+		ROS_ERROR("[scan_controller_with_recorder] MoveGroup not initialized");
+		return false;
+	}
+
+	move_group_->setStartStateToCurrentState();
+	move_group_->setMaxVelocityScalingFactor(max_velocity_scaling_);
+	move_group_->setMaxAccelerationScalingFactor(max_acceleration_scaling_);
+	move_group_->setPlanningTime(planning_time_);
+	move_group_->setNumPlanningAttempts(static_cast<unsigned int>(std::max(1, num_planning_attempts_)));
+	move_group_->setGoalJointTolerance(goal_joint_tolerance_);
+	move_group_->setGoalPositionTolerance(goal_position_tolerance_);
+	move_group_->setGoalOrientationTolerance(goal_orientation_tolerance_);
+
+	std::vector<double> joint_goal;
+	bool using_joint_target = false;
+	bool target_ok = false;
+	if (computePreferredIK(pose, joint_goal)) {
+		target_ok = move_group_->setJointValueTarget(joint_goal);
+		using_joint_target = target_ok;
+	} else {
+		target_ok = move_group_->setPoseTarget(pose);
+	}
+
+	if (!target_ok) {
+		ROS_WARN("[scan_controller_with_recorder] failed to set motion target");
+		if (!using_joint_target) {
+			move_group_->clearPoseTargets();
+		}
+		return false;
+	}
 
 	moveit::planning_interface::MoveGroupInterface::Plan plan;
-	bool success = move_group_->plan(plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS;
+	const auto plan_result = move_group_->plan(plan);
+	bool success = plan_result == moveit::planning_interface::MoveItErrorCode::SUCCESS;
 
 	if (success) {
 		success = move_group_->execute(plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS;
-		// Try to force stop any residual motion promptly
 		move_group_->stop();
+	}
+
+	if (!using_joint_target) {
+		move_group_->clearPoseTargets();
 	}
 
 	return success;
@@ -244,6 +427,20 @@ bool ScanControllerWithRecorderNode::moveToPose(const geometry_msgs::Pose &pose)
 // 移动到命名的 ready 姿态（由 MoveIt 配置）
 bool ScanControllerWithRecorderNode::moveToReadyPose() {
 	ROS_INFO("[scan_controller_with_recorder] moving to ready position using named target");
+
+	if (!move_group_) {
+		ROS_ERROR("[scan_controller_with_recorder] MoveGroup not initialized");
+		return false;
+	}
+
+	move_group_->setStartStateToCurrentState();
+	move_group_->setMaxVelocityScalingFactor(max_velocity_scaling_);
+	move_group_->setMaxAccelerationScalingFactor(max_acceleration_scaling_);
+	move_group_->setPlanningTime(planning_time_);
+	move_group_->setNumPlanningAttempts(static_cast<unsigned int>(std::max(1, num_planning_attempts_)));
+	move_group_->setGoalJointTolerance(goal_joint_tolerance_);
+	move_group_->setGoalPositionTolerance(goal_position_tolerance_);
+	move_group_->setGoalOrientationTolerance(goal_orientation_tolerance_);
 
 	move_group_->setNamedTarget("ready");
 
@@ -257,6 +454,53 @@ bool ScanControllerWithRecorderNode::moveToReadyPose() {
 	}
 
 	return success;
+}
+
+bool ScanControllerWithRecorderNode::computePreferredIK(const geometry_msgs::Pose &pose,
+		std::vector<double> &joint_goal) {
+	if (!use_preferred_ik_ || !move_group_) {
+		return false;
+	}
+
+	moveit::core::RobotStatePtr current_state = move_group_->getCurrentState();
+	if (!current_state) {
+		return false;
+	}
+
+	moveit::core::RobotModelConstPtr robot_model = move_group_->getRobotModel();
+	if (!robot_model) {
+		return false;
+	}
+
+	const moveit::core::JointModelGroup *joint_model_group = robot_model->getJointModelGroup(move_group_->getName());
+	if (!joint_model_group) {
+		return false;
+	}
+
+	moveit::core::RobotState target_state(*current_state);
+	kinematics::KinematicsQueryOptions ik_options;
+	ik_options.lock_redundant_joints = false;
+	bool ik_success = target_state.setFromIK(joint_model_group, pose, ik_timeout_,
+			moveit::core::GroupStateValidityCallbackFn(), ik_options);
+
+	if (!ik_success) {
+		return false;
+	}
+
+	std::vector<double> current_positions(joint_model_group->getVariableCount());
+	current_state->copyJointGroupPositions(joint_model_group, current_positions);
+	joint_goal.resize(joint_model_group->getVariableCount());
+	target_state.copyJointGroupPositions(joint_model_group, joint_goal);
+
+	if (ik_consistency_limit_ > 0.0) {
+		for (std::size_t i = 0; i < joint_goal.size(); ++i) {
+			if (std::abs(joint_goal[i] - current_positions[i]) > ik_consistency_limit_) {
+				return false;
+			}
+		}
+	}
+
+	return true;
 }
 
 // 单点流程：移动→短等待→采样提取/均值→写 CSV→发布可视化 Marker
@@ -432,10 +676,11 @@ void ScanControllerWithRecorderNode::collectDataAtPoint(const geometry_msgs::Pos
 				continue;
 			}
 
+			const double arrow_length_current = std::max(magnitude * arrow_length_, 1e-6);
 			geometry_msgs::Point end_point = start_point;
-			end_point.x += avg_vector.x * vector_scale_;
-			end_point.y += avg_vector.y * vector_scale_;
-			end_point.z += avg_vector.z * vector_scale_;
+			end_point.x += avg_vector.x * arrow_length_;
+			end_point.y += avg_vector.y * arrow_length_;
+			end_point.z += avg_vector.z * arrow_length_;
 
 			visualization_msgs::Marker marker;
 			marker.header.frame_id = frame_id_;
@@ -446,9 +691,12 @@ void ScanControllerWithRecorderNode::collectDataAtPoint(const geometry_msgs::Pos
 			marker.action = visualization_msgs::Marker::ADD;
 			marker.points.push_back(start_point);
 			marker.points.push_back(end_point);
-			marker.scale.x = marker_shaft_diameter_;
-			marker.scale.y = marker_head_diameter_;
-			marker.scale.z = marker_head_length_;
+			const double shaft_diameter = std::max(arrow_shaft_ratio_ * arrow_length_current, 1e-4);
+			const double head_diameter = std::max(arrow_head_ratio_ * arrow_length_current, shaft_diameter * 1.2);
+			const double head_length = std::max(arrow_head_length_ratio_ * arrow_length_current, head_diameter * 0.8);
+			marker.scale.x = shaft_diameter;
+			marker.scale.y = head_diameter;
+			marker.scale.z = head_length;
 			marker.pose.orientation.w = 1.0;
 			ColorRGBA color = interpolateColor(magnitude);
 			marker.color.r = static_cast<float>(std::clamp(color.r, 0.0, 1.0));
@@ -468,7 +716,7 @@ void ScanControllerWithRecorderNode::collectDataAtPoint(const geometry_msgs::Pos
 bool ScanControllerWithRecorderNode::startScan(std_srvs::Trigger::Request &req, std_srvs::Trigger::Response &res) {
 	(void)req;
 
-	ROS_INFO_STREAM("[scan_controller_with_recorder] starting scan with " << scan_points_.size() << " points");
+	ROS_INFO_STREAM("[scan_controller_with_recorder] starting scan with " << scan_points_.size() << " grid points");
 
 	// 如果没有从配置中得到传感器数量，且用户指定了 required_num_sensors_，则在开始前尝试自动检测
 	if (num_sensors_ <= 0 && required_num_sensors_ > 0) {
@@ -534,8 +782,20 @@ bool ScanControllerWithRecorderNode::startScan(std_srvs::Trigger::Request &req, 
 		collectDataAtPoint(pose);
 	}
 
+	if (use_test_points_) {
+		ROS_INFO_STREAM("[scan_controller_with_recorder] starting test point sequence with "
+			<< test_points_.size() << " poses");
+		for (const auto &pose : test_points_) {
+			collectDataAtPoint(pose);
+		}
+	}
+
 	at_pos_msg.data = false;
 	at_position_pub_.publish(at_pos_msg);
+
+	if (!moveToReadyPose()) {
+		ROS_WARN("[scan_controller_with_recorder] failed to return to ready pose after scan");
+	}
 
 	finalizeScan();
 

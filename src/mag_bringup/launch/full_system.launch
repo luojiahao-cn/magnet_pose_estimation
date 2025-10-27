@@ -2,11 +2,11 @@
   <!-- 完整磁场扫描系统：传感器 + 机械臂扫描 + 实时可视化 -->
 
   <!-- 参数配置 -->
-  <arg name="use_gazebo" default="true" />
+  <arg name="use_gazebo" default="false" />
   <arg name="move_group_output" default="log"/>
   <arg name="use_attached_tool" default="true" />
-  <arg name="start_rviz" default="false" />
-  <arg name="use_sim_sensor" default="true" />
+  <arg name="start_rviz" default="true" />
+  <arg name="use_sim_sensor" default="false" />
 
   <!-- 1) MoveIt 与机械臂环境 -->
   <group if="$(arg use_gazebo)">

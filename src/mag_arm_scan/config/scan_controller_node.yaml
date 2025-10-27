@@ -29,10 +29,10 @@ sensor_detect_time: 10.0
 visualization:
   enabled: true
   topic: /mag_field_vectors
-  vector_scale: 0.0003
-  arrow_shaft_diameter: 0.001
-  arrow_head_diameter: 0.002
-  arrow_head_length: 0.004
+  arrow_length: 0.02
+  arrow_shaft_ratio: 0.1
+  arrow_head_ratio: 0.25
+  arrow_head_length_ratio: 0.3
   magnitude_min: 0.0
   magnitude_max: 5.0
   alpha: 1.0
@@ -41,3 +41,11 @@ visualization:
   use_tf_sensor_pose: true
   sensor_frame_prefix: sensor_
   tf_lookup_timeout: 0.05
+
+# 可选：如果希望覆盖特定测试点，可在此给出若干 (x, y, z, roll, pitch, yaw) 组合。
+# 如果设置，将覆盖默认的网格扫描顺序，按列表顺序执行。
+test_points:
+  - [0.38, 0.00, 1.05, 0.0, -3.14159, 0.0]
+  - [0.44, 0.12, 1.18, 0.0, -3.05433, 0.30]
+  - [0.46, -0.10, 1.22, 0.0, -3.05433, -0.30]
+  - [0.34, 0.00, 1.15, 0.0, -3.14159, 0.785398]

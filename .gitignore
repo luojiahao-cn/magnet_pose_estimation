@@ -1,5 +1,5 @@
 build
 devel
-data/*
+data/scan*
 *.bag
 doc

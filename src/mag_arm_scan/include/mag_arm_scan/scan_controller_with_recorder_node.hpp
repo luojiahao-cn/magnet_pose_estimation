@@ -65,6 +65,8 @@ private:
   bool moveToPose(const geometry_msgs::Pose &pose);
   // 移动到预置的 "ready" 命名姿态。
   bool moveToReadyPose();
+  // 计算最接近当前关节状态的 IK 解，若成功将关节目标写入 joint_goal。
+  bool computePreferredIK(const geometry_msgs::Pose &pose, std::vector<double> &joint_goal);
   // 在单个扫描点执行：移动→短暂停（wait_time）→采样→写CSV→发布Marker。
   void collectDataAtPoint(const geometry_msgs::Pose &pose);
   // 扫描完成后的收尾：发布完成消息、清缓冲。
@@ -86,6 +88,8 @@ private:
   void extractSamplesLocked(std::vector<mag_sensor_node::MagSensorData> &out, bool best_effort);
   // 清空环形缓冲，开始新一轮采样。
   void resetSampleBuffers();
+  // 如果配置提供测试点，加载并启用 test_points_。
+  void loadTestPoints();
   struct ColorRGBA {
     double r{0.0};
     double g{0.0};
@@ -134,17 +138,32 @@ private:
   std::vector<double> volume_max_;
   std::vector<double> step_;
 
+  // MoveIt 运动学与规划调参，帮助获得稳定、接近当前姿态的解。
+  double max_velocity_scaling_{0.2};
+  double max_acceleration_scaling_{0.1};
+  double planning_time_{2.0};
+  int num_planning_attempts_{1};
+  double goal_joint_tolerance_{1e-3};
+  double goal_position_tolerance_{1e-4};
+  double goal_orientation_tolerance_{1e-3};
+  double ik_timeout_{0.1};
+  double ik_consistency_limit_{0.2};
+  bool use_preferred_ik_{true};
+  std::string planner_id_;
+
   std::vector<geometry_msgs::Pose> scan_points_;
+  std::vector<geometry_msgs::Pose> test_points_;
+  bool use_test_points_{false};
   std::unordered_map<std::uint32_t, std::deque<mag_sensor_node::MagSensorData>> sensor_samples_buffer_;
   std::vector<mag_sensor_node::MagSensorData> collected_samples_;
   mutable std::mutex data_mutex_;
 
   bool visualization_enabled_{false};
   std::string visualization_topic_{"mag_field_vectors"};
-  double vector_scale_{0.05};
-  double marker_shaft_diameter_{0.003};
-  double marker_head_diameter_{0.006};
-  double marker_head_length_{0.01};
+  double arrow_length_{0.05};
+  double arrow_shaft_ratio_{0.12};
+  double arrow_head_ratio_{0.25};
+  double arrow_head_length_ratio_{0.35};
   double magnitude_min_{0.0};
   double magnitude_max_{10.0};
   double visualization_alpha_{1.0};
