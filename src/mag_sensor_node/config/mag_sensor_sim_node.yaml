@@ -16,10 +16,12 @@ sim_config:
     velocity: 0.01
   motion:
     # mode: translate_only
-    mode: static
+    # mode: static
+    mode: translate_and_rotate
+    # mode: rotate_only
     axis: z
-    angular_velocity: 0.1
-    initial_roll: 0.0
+    angular_velocity: 1
+    initial_roll: 0.5
     initial_pitch: 0.0
     initial_yaw: 0.0
     static_position: [0.02, 0.02, 0.03]

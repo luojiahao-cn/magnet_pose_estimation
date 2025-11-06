@@ -1,12 +1,12 @@
 estimator_config:
   # 选择算法：optimization 或 kalman（必填）
-  estimator_type: kalman
+  estimator_type: optimization
 
   # 触发估计所需的最少测量数量（建议设置为传感器数量，必填）
   min_sensors: 25
 
   # 全局坐标系（必填）
-  global_frame: world
+  global_frame: sensor_array
 
   # 订阅和发布话题（必填）
   mag_topic: /mag_sensor/data_mT
