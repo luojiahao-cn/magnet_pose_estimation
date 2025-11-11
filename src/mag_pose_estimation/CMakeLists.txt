@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
-  mag_sensor_node
+  magnet_msgs
   roscpp
   sensor_msgs
   std_msgs
@@ -22,7 +22,7 @@ find_package(Ceres REQUIRED)
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES magnetic_field_calculator mag_pose_estimation_lib
-  CATKIN_DEPENDS geometry_msgs roscpp sensor_msgs std_msgs std_srvs tf2 tf2_ros mag_sensor_node
+  CATKIN_DEPENDS geometry_msgs roscpp sensor_msgs std_msgs std_srvs tf2 tf2_ros magnet_msgs
   DEPENDS Eigen3 Ceres
 )
 

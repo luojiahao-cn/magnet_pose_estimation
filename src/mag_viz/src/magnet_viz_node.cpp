@@ -1,6 +1,6 @@
 #include <mag_viz/magnet_viz_node.hpp>
 
-#include <mag_sensor_node/MagnetPose.h>
+#include <magnet_msgs/MagnetPose.h>
 #include <ros/ros.h>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/LinearMath/Vector3.h>
@@ -68,7 +68,7 @@ MagnetPoseViz::MagnetPoseViz(ros::NodeHandle &nh)
             }
 
             sources_.push_back(cfg);
-            subs_.push_back(nh_.subscribe<mag_sensor_node::MagnetPose>(
+            subs_.push_back(nh_.subscribe<magnet_msgs::MagnetPose>(
                 cfg.topic, 10, boost::bind(&MagnetPoseViz::onMsg, this, boost::placeholders::_1, static_cast<std::size_t>(i))));
 
             ROS_INFO_STREAM("[magnet_pose_viz] subscribing: " << cfg.topic << ", namespace: " << cfg.ns);
@@ -86,7 +86,7 @@ MagnetPoseViz::MagnetPoseViz(ros::NodeHandle &nh)
         nh_.param<std::string>("label", cfg.label, cfg.ns);
 
         sources_.push_back(cfg);
-        subs_.push_back(nh_.subscribe<mag_sensor_node::MagnetPose>(
+        subs_.push_back(nh_.subscribe<magnet_msgs::MagnetPose>(
             cfg.topic, 10, boost::bind(&MagnetPoseViz::onMsg, this, boost::placeholders::_1, static_cast<std::size_t>(0))));
 
         ROS_INFO_STREAM("[magnet_pose_viz] subscribing: " << cfg.topic << ", namespace: " << cfg.ns);
@@ -96,7 +96,7 @@ MagnetPoseViz::MagnetPoseViz(ros::NodeHandle &nh)
                      << ", target_frame: " << target_frame_);
 }
 
-void MagnetPoseViz::onMsg(const mag_sensor_node::MagnetPose::ConstPtr &msg, std::size_t source_index)
+void MagnetPoseViz::onMsg(const magnet_msgs::MagnetPose::ConstPtr &msg, std::size_t source_index)
 {
     if (source_index >= sources_.size())
     {

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <mag_sensor_node/MagSensorData.h>
+#include <magnet_msgs/MagSensorData.h>
 #include <ros/ros.h>
 #include <serial/serial.h>
 

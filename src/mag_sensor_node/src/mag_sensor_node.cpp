@@ -1,4 +1,4 @@
-#include <mag_sensor_node/MagSensorData.h>
+#include <magnet_msgs/MagSensorData.h>
 #include <mag_sensor_node/mag_sensor_node.hpp>
 #include <ros/ros.h>
 #include <serial/serial.h>
@@ -16,8 +16,8 @@ MagSerialNode::MagSerialNode(ros::NodeHandle &nh, ros::NodeHandle &pnh) : nh_(nh
     loadConfig();
     openSerial();
     mT_topic_ = topic_ + "_mT";
-    pub_raw_ = nh_.advertise<mag_sensor_node::MagSensorData>(topic_, 100);
-    pub_mT_ = nh_.advertise<mag_sensor_node::MagSensorData>(mT_topic_, 100);
+    pub_raw_ = nh_.advertise<magnet_msgs::MagSensorData>(topic_, 100);
+    pub_mT_ = nh_.advertise<magnet_msgs::MagSensorData>(mT_topic_, 100);
 }
 
 void MagSerialNode::start()
@@ -118,7 +118,7 @@ void MagSerialNode::publishMeasurement(int id, double mx, double my, double mz)
     if (!mag_sensor_node::SensorConfig::getInstance().getSensorById(id, info))
         return; // 未知 ID 直接忽略
     ros::Time stamp = ros::Time::now();
-    mag_sensor_node::MagSensorData msg_raw;
+    magnet_msgs::MagSensorData msg_raw;
     msg_raw.header.stamp = stamp;
     msg_raw.header.frame_id = frame_id_;
     msg_raw.sensor_id = id;
@@ -127,11 +127,11 @@ void MagSerialNode::publishMeasurement(int id, double mx, double my, double mz)
     msg_raw.mag_z = mz;
     // 在消息帧（通常为 sensor_array）下发布局部传感器位姿：直接使用 array->sensor_i 的位姿
     // 注：array_offset（parent->array）仅应用于 TF 发布，不应混入本消息的 sensor_pose
-    msg_raw.sensor_pose = info.pose;
+    // msg_raw.sensor_pose = info.pose; // 已移除
     pub_raw_.publish(msg_raw);
 
     // mT 数据发布：复用同一消息类型，mag_* 字段写转换值
-    mag_sensor_node::MagSensorData msg_mT = msg_raw;
+    magnet_msgs::MagSensorData msg_mT = msg_raw;
     msg_mT.mag_x = rawToMilliTesla(mx);
     msg_mT.mag_y = rawToMilliTesla(my);
     msg_mT.mag_z = rawToMilliTesla(mz);

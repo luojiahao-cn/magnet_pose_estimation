@@ -5,7 +5,8 @@
 #include <tf2_ros/transform_listener.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
-#include <mag_sensor_node/MagSensorData.h>
+#include <mag_sensor_node/sensor_config.hpp>
+#include <magnet_msgs/MagSensorData.h>
 #include <mag_viz/mag_sensor_viz_node.hpp>
 
 #include <algorithm>
@@ -58,7 +59,7 @@ Color MagSensorViz::colormap(double mag) const
         return lerp({0, 1, 0, 1}, {1, 0, 0, 1}, (t - 0.5) * 2.0);
 }
 
-void MagSensorViz::onMsg(const mag_sensor_node::MagSensorData::ConstPtr &msg)
+void MagSensorViz::onMsg(const magnet_msgs::MagSensorData::ConstPtr &msg)
 {
     visualization_msgs::Marker m;
     m.header.stamp = msg->header.stamp;
@@ -72,7 +73,12 @@ void MagSensorViz::onMsg(const mag_sensor_node::MagSensorData::ConstPtr &msg)
     m.scale.z = 0.0025;
     m.lifetime = ros::Duration(marker_lifetime_);
 
-    geometry_msgs::Pose pose_in = msg->sensor_pose;
+    mag_sensor_node::SensorInfo sensor_info;
+    if (!mag_sensor_node::SensorConfig::getInstance().getSensorById(msg->sensor_id, sensor_info)) {
+        ROS_WARN_THROTTLE(5.0, "Unknown sensor ID: %d", msg->sensor_id);
+        return;
+    }
+    geometry_msgs::Pose pose_in = sensor_info.pose;
     geometry_msgs::Pose pose_tf = pose_in;
     bool did_tf = false;
     try

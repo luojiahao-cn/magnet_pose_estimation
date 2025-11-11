@@ -13,8 +13,8 @@
 #include <stdexcept>
 #include <vector>
 
-using mag_sensor_node::MagSensorData;
-using mag_sensor_node::MagnetPose;
+using magnet_msgs::MagSensorData;
+using magnet_msgs::MagnetPose;
 using mag_sensor_node::SensorConfig;
 
 namespace
@@ -448,7 +448,6 @@ void MagSensorWorldSimNode::publishSensorMagneticFields(const MagnetPose &magnet
         msg.header.stamp = magnet_pose.header.stamp;
         msg.header.frame_id = world_frame_id_;
         msg.sensor_id = sensors[i].id;
-        msg.sensor_pose = sensor_world_poses[i];
 
         Eigen::Vector3d noise = Eigen::Vector3d::Zero();
         if (noise_enable_)

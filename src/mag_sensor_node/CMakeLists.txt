@@ -10,23 +10,14 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   std_msgs
   geometry_msgs
-  message_generation
+  magnet_msgs
   serial
   tf2
   tf2_ros
 )
 
-add_message_files(FILES
-  MagSensorData.msg
-  MagnetPose.msg
-)
-
-generate_messages(
-  DEPENDENCIES std_msgs geometry_msgs
-)
-
 catkin_package(
-  CATKIN_DEPENDS roscpp std_msgs geometry_msgs serial message_runtime tf2 tf2_ros
+  CATKIN_DEPENDS roscpp std_msgs geometry_msgs magnet_msgs serial tf2 tf2_ros
   INCLUDE_DIRS include
   LIBRARIES sensor_config
 )

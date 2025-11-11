@@ -1,8 +1,8 @@
 #pragma once
 
 #include <geometry_msgs/Point.h>
-#include <mag_sensor_node/MagSensorData.h>
-#include <mag_sensor_node/MagnetPose.h>
+#include <magnet_msgs/MagSensorData.h>
+#include <magnet_msgs/MagnetPose.h>
 #include <ros/ros.h>
 #include <tf2/LinearMath/Quaternion.h>
 
@@ -25,12 +25,12 @@ private:
     void setupPublishers();
     void initializeMotionSystem();
     void onTimer(const ros::TimerEvent &);
-    void updateMagnetPose(mag_sensor_node::MagnetPose &magnet_pose);
-    void updateMagnetPosition(mag_sensor_node::MagnetPose &magnet_pose);
-    void updateMagnetOrientation(mag_sensor_node::MagnetPose &magnet_pose);
+    void updateMagnetPose(magnet_msgs::MagnetPose &magnet_pose);
+    void updateMagnetPosition(magnet_msgs::MagnetPose &magnet_pose);
+    void updateMagnetOrientation(magnet_msgs::MagnetPose &magnet_pose);
     void calculateDynamicOrientation(double &roll, double &pitch, double &yaw);
     geometry_msgs::Point calculatePositionFromVelocity(double elapsed_time);
-    void publishSensorMagneticFields(const mag_sensor_node::MagnetPose &magnet_pose);
+    void publishSensorMagneticFields(const magnet_msgs::MagnetPose &magnet_pose);
 
     enum class MotionType
     {

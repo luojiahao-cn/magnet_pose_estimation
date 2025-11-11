@@ -1,5 +1,7 @@
 #include "mag_arm_scan/scan_controller_with_recorder_node.hpp"
 
+#include <mag_sensor_node/sensor_config.hpp>
+
 #include <algorithm>
 #include <cerrno>
 #include <cmath>
@@ -589,18 +591,22 @@ void ScanControllerWithRecorderNode::collectDataAtPoint(const geometry_msgs::Pos
 	std::map<std::uint32_t, AggregatedSensorAccumulator> averaged_data;
 
 	for (const auto &data : collected_samples_) {
-		geometry_msgs::Pose pose_w = data.sensor_pose;
+		mag_sensor_node::SensorInfo sensor_info;
+		if (!mag_sensor_node::SensorConfig::getInstance().getSensorById(data.sensor_id, sensor_info)) {
+			ROS_WARN_THROTTLE(5.0, "Unknown sensor ID: %d", data.sensor_id);
+			continue;
+		}
+		geometry_msgs::Pose pose_w = sensor_info.pose;
 		geometry_msgs::TransformStamped transform;
 		bool did_tf = false;
 
 		if (!frame_id_.empty() && frame_id_ != data.header.frame_id) {
 			try {
 				transform = tf_buffer_.lookupTransform(frame_id_, data.header.frame_id, ros::Time(0), ros::Duration(tf_lookup_timeout_));
-				tf2::doTransform(data.sensor_pose, pose_w, transform);
+				tf2::doTransform(pose_w, pose_w, transform);
 				did_tf = true;
 			} catch (const std::exception &e) {
 				ROS_WARN_THROTTLE(5.0, "TF to '%s' failed: %s; using source frame.", frame_id_.c_str(), e.what());
-				pose_w = data.sensor_pose;
 				did_tf = false;
 			}
 		}
@@ -806,7 +812,7 @@ bool ScanControllerWithRecorderNode::startScan(std_srvs::Trigger::Request &req, 
 
 // Stability check removed: rely on MoveIt execution completion and optional wait_time
 
-void ScanControllerWithRecorderNode::magDataCallback(const mag_sensor_node::MagSensorData::ConstPtr &msg) {
+void ScanControllerWithRecorderNode::magDataCallback(const magnet_msgs::MagSensorData::ConstPtr &msg) {
 	std::lock_guard<std::mutex> lock(data_mutex_);
 	auto &queue = sensor_samples_buffer_[msg->sensor_id];
 	queue.push_back(*msg);
@@ -882,14 +888,14 @@ bool ScanControllerWithRecorderNode::hasEnoughSamplesLocked() const {
 }
 
 // 从各传感器缓冲中提取样本到 out；best_effort=true 时尽可能取可用的最近帧
-void ScanControllerWithRecorderNode::extractSamplesLocked(std::vector<mag_sensor_node::MagSensorData> &out,
+void ScanControllerWithRecorderNode::extractSamplesLocked(std::vector<magnet_msgs::MagSensorData> &out,
 																 bool best_effort) {
 	out.clear();
 
 	// 记录每个 sensor 实际提取的帧数，便于调试与统计
 	std::map<std::uint32_t, std::size_t> per_sensor_counts;
 
-	auto append_from_queue = [&](const std::deque<mag_sensor_node::MagSensorData> &queue) -> std::size_t {
+	auto append_from_queue = [&](const std::deque<magnet_msgs::MagSensorData> &queue) -> std::size_t {
 		const std::size_t target = static_cast<std::size_t>(frames_per_sensor_);
 		const std::size_t available = queue.size();
 		const std::size_t count = best_effort ? available : std::min(available, target);

@@ -8,7 +8,7 @@
 #include <std_msgs/Bool.h>
 #include <std_msgs/String.h>
 #include <std_srvs/Trigger.h>
-#include <mag_sensor_node/MagSensorData.h>
+#include <magnet_msgs/MagSensorData.h>
 
 #include <vector>
 #include <string>
@@ -178,11 +178,23 @@ private:
     ROS_INFO("[field_map_aggregator] exported %zu aggregated samples to %s", cell_map_.size(), export_csv_.c_str());
   }
 
-  void onMag(const mag_sensor_node::MagSensorData::ConstPtr& msg){
+  void onMag(const magnet_msgs::MagSensorData::ConstPtr& msg){
     if (!at_position_) return;  // Only accumulate when at scan position
 
-    // 将传感器姿态与向量转换到 target frame
-    geometry_msgs::Pose pose_in = msg->sensor_pose;
+    // 获取传感器姿态通过TF
+    geometry_msgs::Pose pose_in;
+    try {
+      std::string sensor_frame = "sensor_" + std::to_string(msg->sensor_id);
+      geometry_msgs::TransformStamped sensor_tf = tf_buffer_.lookupTransform(msg->header.frame_id, sensor_frame, msg->header.stamp, ros::Duration(0.1));
+      pose_in.position.x = sensor_tf.transform.translation.x;
+      pose_in.position.y = sensor_tf.transform.translation.y;
+      pose_in.position.z = sensor_tf.transform.translation.z;
+      pose_in.orientation = sensor_tf.transform.rotation;
+    } catch (const std::exception& e) {
+      ROS_WARN_THROTTLE(5.0, "无法获取传感器 %d 的TF: %s", msg->sensor_id, e.what());
+      return;
+    }
+
     geometry_msgs::Pose pose_w = pose_in; // in frame_
     bool did_tf=false;
     try{

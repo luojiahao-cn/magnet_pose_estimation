@@ -75,6 +75,7 @@ namespace mag_pose_estimation
     }
 
     bool OptimizationMagnetPoseEstimator::estimate(const std::map<int, MagneticField> &measurements,
+                                                   const std::map<int, geometry_msgs::Pose> &sensor_poses,
                                                    MagnetPose &out_pose,
                                                    double *out_error)
     {
@@ -86,8 +87,12 @@ namespace mag_pose_estimation
 
         for (const auto &m : measurements)
         {
-            Eigen::Vector3d sensor_pos(
-                m.second.sensor_pose.position.x, m.second.sensor_pose.position.y, m.second.sensor_pose.position.z);
+            auto it = sensor_poses.find(m.first);
+            if (it == sensor_poses.end()) {
+                ROS_ERROR("[optimization] 传感器位置缺失 ID=%d", m.first);
+                return false;
+            }
+            Eigen::Vector3d sensor_pos(it->second.position.x, it->second.position.y, it->second.position.z);
             Eigen::Vector3d measured_field(m.second.mag_x, m.second.mag_y, m.second.mag_z);
 
             if (optimize_strength_)

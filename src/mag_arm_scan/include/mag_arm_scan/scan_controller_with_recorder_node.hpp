@@ -27,7 +27,7 @@
 #include <vector>
 
 #include <geometry_msgs/Pose.h>
-#include <mag_sensor_node/MagSensorData.h>
+#include <magnet_msgs/MagSensorData.h>
 #include <ros/ros.h>
 #include <sensor_msgs/JointState.h>
 #include <std_msgs/Bool.h>
@@ -75,7 +75,7 @@ private:
   // 服务回调：按当前网格依次采样，写 CSV 并发布可视化。
   bool startScan(std_srvs::Trigger::Request &req, std_srvs::Trigger::Response &res);
   // 传感器与关节回调：维护采样环形缓冲与最新关节态。
-  void magDataCallback(const mag_sensor_node::MagSensorData::ConstPtr &msg);
+  void magDataCallback(const magnet_msgs::MagSensorData::ConstPtr &msg);
   void jointStateCallback(const sensor_msgs::JointState::ConstPtr &msg);
 
   // 将相对路径解析到工作区根路径（catkin 工作区内）。
@@ -85,7 +85,7 @@ private:
   // 判断是否满足每个传感器 frames_per_sensor 的采样帧数（严格/期望列表）。
   bool hasEnoughSamplesLocked() const;
   // 从缓冲提取样本到 out；best_effort 为真时尽可能提取现有帧。
-  void extractSamplesLocked(std::vector<mag_sensor_node::MagSensorData> &out, bool best_effort);
+  void extractSamplesLocked(std::vector<magnet_msgs::MagSensorData> &out, bool best_effort);
   // 清空环形缓冲，开始新一轮采样。
   void resetSampleBuffers();
   // 如果配置提供测试点，加载并启用 test_points_。
@@ -154,8 +154,8 @@ private:
   std::vector<geometry_msgs::Pose> scan_points_;
   std::vector<geometry_msgs::Pose> test_points_;
   bool use_test_points_{false};
-  std::unordered_map<std::uint32_t, std::deque<mag_sensor_node::MagSensorData>> sensor_samples_buffer_;
-  std::vector<mag_sensor_node::MagSensorData> collected_samples_;
+  std::unordered_map<std::uint32_t, std::deque<magnet_msgs::MagSensorData>> sensor_samples_buffer_;
+  std::vector<magnet_msgs::MagSensorData> collected_samples_;
   mutable std::mutex data_mutex_;
 
   bool visualization_enabled_{false};

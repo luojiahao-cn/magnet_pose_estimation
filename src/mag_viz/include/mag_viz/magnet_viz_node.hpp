@@ -2,7 +2,7 @@
 
 #include <geometry_msgs/Pose.h>
 #include <geometry_msgs/TransformStamped.h>
-#include <mag_sensor_node/MagnetPose.h>
+#include <magnet_msgs/MagnetPose.h>
 #include <ros/ros.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf2_ros/transform_listener.h>
@@ -24,7 +24,7 @@ private:
         std::string label;
     };
 
-    void onMsg(const mag_sensor_node::MagnetPose::ConstPtr &msg, std::size_t source_index);
+    void onMsg(const magnet_msgs::MagnetPose::ConstPtr &msg, std::size_t source_index);
 
     ros::NodeHandle &nh_;
     std::vector<ros::Subscriber> subs_;

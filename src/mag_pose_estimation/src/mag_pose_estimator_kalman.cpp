@@ -76,6 +76,7 @@ namespace mag_pose_estimation
     }
 
     bool KalmanMagnetPoseEstimator::estimate(const std::map<int, MagneticField> &measurements,
+                                             const std::map<int, geometry_msgs::Pose> &sensor_poses,
                                              MagnetPose &out_pose,
                                              double *out_error)
     {
@@ -88,8 +89,12 @@ namespace mag_pose_estimation
         for (const auto &m : measurements)
         {
             measurement.segment<3>(i * 3) = Eigen::Vector3d(m.second.mag_x, m.second.mag_y, m.second.mag_z);
-            sensor_positions.row(i) << m.second.sensor_pose.position.x, m.second.sensor_pose.position.y,
-                m.second.sensor_pose.position.z;
+            auto it = sensor_poses.find(m.first);
+            if (it == sensor_poses.end()) {
+                ROS_ERROR("[kalman] 传感器位置缺失 ID=%d", m.first);
+                return false;
+            }
+            sensor_positions.row(i) << it->second.position.x, it->second.position.y, it->second.position.z;
             i++;
         }
         predict();

@@ -1,0 +1,11 @@
+# TrackMagnet.action
+# Goal
+bool enable_tracking
+geometry_msgs/Pose target_offset
+---
+# Result
+bool success
+string message
+---
+# Feedback
+geometry_msgs/Pose current_magnet_pose

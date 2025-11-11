@@ -1,6 +1,6 @@
 #include <geometry_msgs/Point.h>
-#include <mag_sensor_node/MagSensorData.h>
-#include <mag_sensor_node/MagnetPose.h>
+#include <magnet_msgs/MagSensorData.h>
+#include <magnet_msgs/MagnetPose.h>
 #include <mag_sensor_node/mag_sensor_sim_node.hpp>
 #include <ros/ros.h>
 #include <tf2/LinearMath/Quaternion.h>
@@ -11,6 +11,9 @@
 #include <cmath>
 #include <mag_sensor_node/sensor_config.hpp>
 #include <random>
+
+using magnet_msgs::MagSensorData;
+using magnet_msgs::MagnetPose;
 
 MagSensorSimNode::MagSensorSimNode(ros::NodeHandle &nh) : nh_(nh)
 {
@@ -121,8 +124,8 @@ void MagSensorSimNode::setupPublishers()
     if (!pnh.getParam("sim_config/topics/magnetic_field_topic", magnetic_field_topic))
         throw std::runtime_error("缺少必需参数: sim_config/topics/magnetic_field_topic");
 
-    magnet_pose_pub_ = nh_.advertise<mag_sensor_node::MagnetPose>(magnet_pose_topic, 25);
-    magnetic_field_pub_ = nh_.advertise<mag_sensor_node::MagSensorData>(magnetic_field_topic, 25);
+    magnet_pose_pub_ = nh_.advertise<MagnetPose>(magnet_pose_topic, 25);
+    magnetic_field_pub_ = nh_.advertise<MagSensorData>(magnetic_field_topic, 25);
     ROS_INFO_STREAM("[mag_sensor_sim] topics: magnet_pose='" << magnet_pose_topic << "', magnetic_field='" << magnetic_field_topic << "'");
 }
 
@@ -137,7 +140,7 @@ void MagSensorSimNode::initializeMotionSystem()
 
 void MagSensorSimNode::onTimer(const ros::TimerEvent &)
 {
-    mag_sensor_node::MagnetPose magnet_pose;
+    MagnetPose magnet_pose;
     magnet_pose.header.stamp = ros::Time::now();
     magnet_pose.header.frame_id = frame_id_;
     updateMagnetPose(magnet_pose);
@@ -146,13 +149,13 @@ void MagSensorSimNode::onTimer(const ros::TimerEvent &)
     publishSensorMagneticFields(magnet_pose);
 }
 
-void MagSensorSimNode::updateMagnetPose(mag_sensor_node::MagnetPose &magnet_pose)
+void MagSensorSimNode::updateMagnetPose(MagnetPose &magnet_pose)
 {
     updateMagnetPosition(magnet_pose);
     updateMagnetOrientation(magnet_pose);
 }
 
-void MagSensorSimNode::updateMagnetPosition(mag_sensor_node::MagnetPose &magnet_pose)
+void MagSensorSimNode::updateMagnetPosition(MagnetPose &magnet_pose)
 {
     switch (getMotionType())
     {
@@ -193,7 +196,7 @@ MagSensorSimNode::MotionType MagSensorSimNode::getMotionType() const
     return MotionType::CENTER_FIXED;
 }
 
-void MagSensorSimNode::updateMagnetOrientation(mag_sensor_node::MagnetPose &magnet_pose)
+void MagSensorSimNode::updateMagnetOrientation(MagnetPose &magnet_pose)
 {
     double roll, pitch, yaw;
     if (motion_mode_ == "static")
@@ -277,7 +280,7 @@ geometry_msgs::Point MagSensorSimNode::calculatePositionFromVelocity(double elap
     return position;
 }
 
-void MagSensorSimNode::publishSensorMagneticFields(const mag_sensor_node::MagnetPose &magnet_pose)
+void MagSensorSimNode::publishSensorMagneticFields(const MagnetPose &magnet_pose)
 {
     const auto &cfg = mag_sensor_node::SensorConfig::getInstance();
     const auto &sensors = cfg.getAllSensors();
@@ -307,13 +310,10 @@ void MagSensorSimNode::publishSensorMagneticFields(const mag_sensor_node::Magnet
 
     for (size_t i = 0; i < sensors.size(); ++i)
     {
-        mag_sensor_node::MagSensorData msg;
+        MagSensorData msg;
         msg.header.stamp = magnet_pose.header.stamp;
         msg.header.frame_id = magnet_pose.header.frame_id;
         msg.sensor_id = sensors[i].id;
-        // 在消息帧（sensor_array）下发布局部传感器位姿：直接使用 array->sensor_i 的位姿
-        // 注：array_offset 定义的是 parent->array 的变换，不应混入 sensor_pose（其帧为 sensor_array）
-        msg.sensor_pose = sensors[i].pose;
         Eigen::Vector3d noise = Eigen::Vector3d::Zero();
         if (noise_enable_)
         {

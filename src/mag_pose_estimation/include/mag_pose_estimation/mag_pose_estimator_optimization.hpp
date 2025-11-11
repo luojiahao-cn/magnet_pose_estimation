@@ -78,7 +78,7 @@ namespace mag_pose_estimation
         explicit OptimizationMagnetPoseEstimator(ros::NodeHandle &pnh);
 
         void reset() override;
-        bool estimate(const std::map<int, MagneticField> &measurements, MagnetPose &out_pose, double *out_error) override;
+        bool estimate(const std::map<int, MagneticField> &measurements, const std::map<int, geometry_msgs::Pose> &sensor_poses, MagnetPose &out_pose, double *out_error) override;
 
     private:
         void loadParameters();

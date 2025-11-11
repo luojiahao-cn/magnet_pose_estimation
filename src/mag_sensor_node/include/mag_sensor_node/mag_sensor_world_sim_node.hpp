@@ -3,8 +3,8 @@
 #include <geometry_msgs/Point.h>
 #include <geometry_msgs/Pose.h>
 #include <geometry_msgs/PoseStamped.h>
-#include <mag_sensor_node/MagSensorData.h>
-#include <mag_sensor_node/MagnetPose.h>
+#include <magnet_msgs/MagSensorData.h>
+#include <magnet_msgs/MagnetPose.h>
 #include <ros/ros.h>
 #include <tf2_ros/transform_broadcaster.h>
 
@@ -47,13 +47,13 @@ private:
     void setupPublishers();
     void initializeMotionSystem();
     void onTimer(const ros::TimerEvent &event);
-    void updateMagnetPose(mag_sensor_node::MagnetPose &magnet_pose);
-    void updateMagnetPosition(mag_sensor_node::MagnetPose &magnet_pose);
-    void updateMagnetOrientation(mag_sensor_node::MagnetPose &magnet_pose);
+    void updateMagnetPose(magnet_msgs::MagnetPose &magnet_pose);
+    void updateMagnetPosition(magnet_msgs::MagnetPose &magnet_pose);
+    void updateMagnetOrientation(magnet_msgs::MagnetPose &magnet_pose);
     void calculateDynamicOrientation(double &roll, double &pitch, double &yaw);
     geometry_msgs::Point calculatePositionFromVelocity(double elapsed_time);
     MotionType getMotionType() const;
-    void publishSensorMagneticFields(const mag_sensor_node::MagnetPose &magnet_pose);
+    void publishSensorMagneticFields(const magnet_msgs::MagnetPose &magnet_pose);
     bool getCurrentArrayPose(geometry_msgs::Pose &pose) const;
     void handleArrayPose(const geometry_msgs::PoseStamped::ConstPtr &msg);
     void publishArrayTf(const geometry_msgs::Pose &array_pose_world, const ros::Time &stamp);

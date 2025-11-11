@@ -7,7 +7,7 @@
 #include <tf2_ros/transform_listener.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
-#include <mag_sensor_node/MagSensorData.h>
+#include <magnet_msgs/MagSensorData.h>
 
 #include <string>
 
@@ -21,7 +21,7 @@ public:
 private:
     static Color lerp(const Color &a, const Color &b, double t);
     Color colormap(double mag) const;
-    void onMsg(const mag_sensor_node::MagSensorData::ConstPtr &msg);
+    void onMsg(const magnet_msgs::MagSensorData::ConstPtr &msg);
 
     ros::NodeHandle &nh_;
     ros::Subscriber sub_;
