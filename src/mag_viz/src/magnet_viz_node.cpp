@@ -18,14 +18,11 @@
 MagnetPoseViz::MagnetPoseViz(ros::NodeHandle &nh)
     : nh_(nh), tf_buffer_(), tf_listener_(tf_buffer_)
 {
-    if (!nh_.getParam("frame", target_frame_))
-        throw std::runtime_error("缺少参数: ~frame");
-    if (!nh_.getParam("marker_topic", marker_topic_))
-        throw std::runtime_error("缺少参数: ~marker_topic");
-    if (!nh_.getParam("marker_lifetime", marker_lifetime_))
-        throw std::runtime_error("缺少参数: ~marker_lifetime");
-    if (!nh_.getParam("magnet_scale", magnet_scale_))
-        throw std::runtime_error("缺少参数: ~magnet_scale");
+    auto require = [&](const std::string &key, auto &var){ if(!nh_.getParam(key, var)) throw std::runtime_error(std::string("缺少必需参数: ~")+key); };
+    require("frame", target_frame_);
+    require("marker_topic", marker_topic_);
+    require("marker_lifetime", marker_lifetime_);
+    require("magnet_scale", magnet_scale_);
 
     pub_ = nh_.advertise<visualization_msgs::MarkerArray>(marker_topic_, 10);
 
@@ -77,8 +74,7 @@ MagnetPoseViz::MagnetPoseViz(ros::NodeHandle &nh)
     else
     {
         std::string topic;
-        if (!nh_.getParam("topic", topic))
-            throw std::runtime_error("缺少参数: ~topic");
+        require("topic", topic);
 
         SourceConfig cfg;
         cfg.topic = topic;

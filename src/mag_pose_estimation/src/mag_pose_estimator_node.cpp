@@ -24,11 +24,13 @@ public:
     {
         ros::NodeHandle pnh("~");
         // 仅从私有命名空间读取配置
+        auto require = [&](const std::string &key, auto &var) {
+            if (!pnh.getParam(key, var))
+                throw std::runtime_error(std::string("缺少参数: ~") + key);
+        };
+
         std::string estimator_type;
-        if (!pnh.getParam("estimator_config/estimator_type", estimator_type))
-        {
-            throw std::runtime_error("缺少参数: ~estimator_config/estimator_type");
-        }
+        require("estimator_config/estimator_type", estimator_type);
 
         if (estimator_type == "optimization")
         {
@@ -46,16 +48,12 @@ public:
         }
 
         // 必需参数：全局坐标系和话题
-        if (!pnh.getParam("estimator_config/global_frame", global_frame_))
-            throw std::runtime_error("缺少参数: ~estimator_config/global_frame");
-        if (!pnh.getParam("estimator_config/mag_topic", mag_topic_))
-            throw std::runtime_error("缺少参数: ~estimator_config/mag_topic");
-        if (!pnh.getParam("estimator_config/output_topic", output_topic_))
-            throw std::runtime_error("缺少参数: ~estimator_config/output_topic");
+        require("estimator_config/global_frame", global_frame_);
+        require("estimator_config/mag_topic", mag_topic_);
+        require("estimator_config/output_topic", output_topic_);
 
         // 触发所需最少测量数量
-        if (!pnh.getParam("estimator_config/min_sensors", min_sensors_))
-            throw std::runtime_error("缺少参数: ~estimator_config/min_sensors");
+        require("estimator_config/min_sensors", min_sensors_);
         if (min_sensors_ < 0)
             min_sensors_ = 0;
 

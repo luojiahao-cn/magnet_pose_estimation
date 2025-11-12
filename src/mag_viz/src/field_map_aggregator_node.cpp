@@ -60,15 +60,22 @@ class FieldMapAggregator {
 public:
   FieldMapAggregator(ros::NodeHandle& nh): nh_(nh), tf_buffer_(), tf_listener_(tf_buffer_) {
     // 读取参数（全部在私有命名空间 ~ 下）
-    if (!nh_.getParam("topic", topic_)) throw std::runtime_error("缺少参数: ~topic");
-    if (!nh_.getParam("frame", frame_)) throw std::runtime_error("缺少参数: ~frame");
-    if (!nh_.getParam("marker_topic", marker_topic_)) throw std::runtime_error("缺少参数: ~marker_topic");
-    if (!nh_.getParam("volume_min", volume_min_) || volume_min_.size()!=3) throw std::runtime_error("缺少或非法参数: ~volume_min[3]");
-    if (!nh_.getParam("volume_max", volume_max_) || volume_max_.size()!=3) throw std::runtime_error("缺少或非法参数: ~volume_max[3]");
-    if (!nh_.getParam("step", step_) || step_.size()!=3) throw std::runtime_error("缺少或非法参数: ~step[3]");
-    if (!nh_.getParam("field_scale", field_scale_)) throw std::runtime_error("缺少参数: ~field_scale");
-    if (!nh_.getParam("marker_lifetime", marker_lifetime_)) throw std::runtime_error("缺少参数: ~marker_lifetime");
-    if (!nh_.getParam("color_max", color_max_)) throw std::runtime_error("缺少参数: ~color_max");
+    auto require = [&](const std::string &key, auto &var) {
+      if (!nh_.getParam(key, var)) throw std::runtime_error(std::string("缺少参数: ~") + key);
+    };
+    auto requireVec3 = [&](const std::string &key, std::vector<double> &out) {
+      if (!nh_.getParam(key, out) || out.size() != 3) throw std::runtime_error(std::string("缺少或非法参数: ~") + key + "[3]");
+    };
+
+    require("topic", topic_);
+    require("frame", frame_);
+    require("marker_topic", marker_topic_);
+    requireVec3("volume_min", volume_min_);
+    requireVec3("volume_max", volume_max_);
+    requireVec3("step", step_);
+    require("field_scale", field_scale_);
+    require("marker_lifetime", marker_lifetime_);
+    require("color_max", color_max_);
     nh_.param<std::string>("export_csv", export_csv_, std::string(""));
     nh_.param<std::string>("output_base_dir", output_base_dir_, std::string(""));
     

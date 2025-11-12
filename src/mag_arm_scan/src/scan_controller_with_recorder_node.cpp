@@ -80,40 +80,25 @@ ScanControllerWithRecorderNode::ScanControllerWithRecorderNode(ros::NodeHandle &
 }
 
 void ScanControllerWithRecorderNode::loadParams() {
-	if (!pnh_.getParam("frame_id", frame_id_)) {
-		throw std::runtime_error("缺少参数: ~frame_id");
-	}
-	if (!pnh_.getParam("yaw", yaw_)) {
-		throw std::runtime_error("缺少参数: ~yaw");
-	}
-	if (!pnh_.getParam("pitch", pitch_)) {
-		throw std::runtime_error("缺少参数: ~pitch");
-	}
-	if (!pnh_.getParam("autostart", autostart_)) {
-		throw std::runtime_error("缺少参数: ~autostart");
-	}
-	if (!pnh_.getParam("mag_topic", mag_topic_)) {
-		throw std::runtime_error("缺少参数: ~mag_topic");
-	}
-	if (!pnh_.getParam("wait_time", wait_time_)) {
-		throw std::runtime_error("缺少参数: ~wait_time");
-	}
-	if (!pnh_.getParam("max_stable_wait_time", max_stable_wait_time_)) {
-		throw std::runtime_error("缺少参数: ~max_stable_wait_time");
-	}
-	if (!pnh_.getParam("output_base_dir", output_base_dir_)) {
-		throw std::runtime_error("缺少参数: ~output_base_dir");
-	}
+	auto require = [&](const std::string &key, auto &var) {
+		if (!pnh_.getParam(key, var)) throw std::runtime_error(std::string("缺少参数: ~") + key);
+	};
+	auto requireVec3 = [&](const std::string &key, std::vector<double> &out) {
+		if (!pnh_.getParam(key, out) || out.size() != 3U) throw std::runtime_error(std::string("缺少或非法参数: ~") + key + "[3]");
+	};
 
-	if (!pnh_.getParam("volume_min", volume_min_) || volume_min_.size() != 3U) {
-		throw std::runtime_error("缺少或非法参数: ~volume_min[3]");
-	}
-	if (!pnh_.getParam("volume_max", volume_max_) || volume_max_.size() != 3U) {
-		throw std::runtime_error("缺少或非法参数: ~volume_max[3]");
-	}
-	if (!pnh_.getParam("step", step_) || step_.size() != 3U) {
-		throw std::runtime_error("缺少或非法参数: ~step[3]");
-	}
+	require("frame_id", frame_id_);
+	require("yaw", yaw_);
+	require("pitch", pitch_);
+	require("autostart", autostart_);
+	require("mag_topic", mag_topic_);
+	require("wait_time", wait_time_);
+	require("max_stable_wait_time", max_stable_wait_time_);
+	require("output_base_dir", output_base_dir_);
+
+	requireVec3("volume_min", volume_min_);
+	requireVec3("volume_max", volume_max_);
+	requireVec3("step", step_);
 
 	for (std::size_t i = 0; i < step_.size(); ++i) {
 		if (step_[i] <= 0.0) {
@@ -187,25 +172,21 @@ void ScanControllerWithRecorderNode::loadParams() {
 	arrow_shaft_ratio_ = std::clamp(arrow_shaft_ratio_, 1e-3, 0.5);
 	arrow_head_ratio_ = std::clamp(arrow_head_ratio_, arrow_shaft_ratio_ * 1.2, 0.8);
 	arrow_head_length_ratio_ = std::clamp(arrow_head_length_ratio_, arrow_head_ratio_ * 0.6, 1.0);
+	auto optColor = [&](const std::string &key, ScanControllerWithRecorderNode::ColorRGBA &out) {
+		std::vector<double> v;
+		if (viz_nh.getParam(key, v)) {
+			if (v.size() == 3U) {
+				out.r = v[0]; out.g = v[1]; out.b = v[2];
+			} else if (v.size() == 4U) {
+				out.r = v[0]; out.g = v[1]; out.b = v[2]; out.a = v[3];
+			} else {
+				throw std::runtime_error(std::string("非法参数: ~visualization/") + key + " [3|4]");
+			}
+		}
+	};
 
-	std::vector<double> color_low_param;
-	if (viz_nh.getParam("color_low", color_low_param) && (color_low_param.size() == 3U || color_low_param.size() == 4U)) {
-		color_low_.r = color_low_param[0];
-		color_low_.g = color_low_param[1];
-		color_low_.b = color_low_param[2];
-		if (color_low_param.size() == 4U) {
-			color_low_.a = color_low_param[3];
-		}
-	}
-	std::vector<double> color_high_param;
-	if (viz_nh.getParam("color_high", color_high_param) && (color_high_param.size() == 3U || color_high_param.size() == 4U)) {
-		color_high_.r = color_high_param[0];
-		color_high_.g = color_high_param[1];
-		color_high_.b = color_high_param[2];
-		if (color_high_param.size() == 4U) {
-			color_high_.a = color_high_param[3];
-		}
-	}
+	optColor("color_low", color_low_);
+	optColor("color_high", color_high_);
 	color_low_.a = visualization_alpha_;
 	color_high_.a = visualization_alpha_;
 }

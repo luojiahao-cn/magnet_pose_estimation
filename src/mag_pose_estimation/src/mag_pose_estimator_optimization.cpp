@@ -18,22 +18,21 @@ namespace mag_pose_estimation
     void OptimizationMagnetPoseEstimator::loadParameters()
     {
         std::vector<double> position_vec, direction_vec;
-        if (!pnh_.getParam("estimator_config/magnet/position", position_vec) || position_vec.size() != 3)
-        {
-            throw std::runtime_error("缺少或非法参数: ~estimator_config/magnet/position[3]");
-        }
-        if (!pnh_.getParam("estimator_config/magnet/direction", direction_vec) || direction_vec.size() != 3)
-        {
-            throw std::runtime_error("缺少或非法参数: ~estimator_config/magnet/direction[3]");
-        }
-        if (!pnh_.getParam("estimator_config/magnet/strength", initial_strength_))
-        {
-            throw std::runtime_error("缺少参数: ~estimator_config/magnet/strength");
-        }
-        if (!pnh_.getParam("estimator_config/magnet/strength_delta", strength_delta_))
-        {
-            throw std::runtime_error("缺少参数: ~estimator_config/magnet/strength_delta");
-        }
+        auto require = [&](const std::string &key, auto &var) {
+            if (!pnh_.getParam(key, var))
+                throw std::runtime_error(std::string("缺少参数: ~") + key);
+        };
+        auto requireVec3 = [&](const std::string &key, Eigen::Vector3d &out) {
+            std::vector<double> v;
+            if (!pnh_.getParam(key, v) || v.size() != 3)
+                throw std::runtime_error(std::string("缺少或非法参数: ~") + key + "[3]");
+            out = Eigen::Vector3d(v[0], v[1], v[2]);
+        };
+
+        requireVec3("estimator_config/magnet/position", initial_position_);
+        requireVec3("estimator_config/magnet/direction", initial_direction_);
+        require("estimator_config/magnet/strength", initial_strength_);
+        require("estimator_config/magnet/strength_delta", strength_delta_);
 
         optimize_strength_ = (strength_delta_ != 0.0);
         strength_min_ = std::max(0.0, initial_strength_ - (optimize_strength_ ? strength_delta_ : 0.0));
@@ -45,22 +44,15 @@ namespace mag_pose_estimation
         magnetic_direction_ = initial_direction_;
         magnet_strength_ = initial_strength_;
 
-        if (!pnh_.getParam("estimator_config/optimization/max_iterations", max_iterations_))
-            throw std::runtime_error("缺少参数: ~estimator_config/optimization/max_iterations");
-        if (!pnh_.getParam("estimator_config/optimization/function_tolerance", function_tolerance_))
-            throw std::runtime_error("缺少参数: ~estimator_config/optimization/function_tolerance");
-        if (!pnh_.getParam("estimator_config/optimization/gradient_tolerance", gradient_tolerance_))
-            throw std::runtime_error("缺少参数: ~estimator_config/optimization/gradient_tolerance");
-        if (!pnh_.getParam("estimator_config/optimization/parameter_tolerance", parameter_tolerance_))
-            throw std::runtime_error("缺少参数: ~estimator_config/optimization/parameter_tolerance");
-        if (!pnh_.getParam("estimator_config/optimization/num_threads", num_threads_))
-            throw std::runtime_error("缺少参数: ~estimator_config/optimization/num_threads");
-        if (!pnh_.getParam("estimator_config/optimization/minimizer_progress_to_stdout", minimizer_progress_to_stdout_))
-            throw std::runtime_error("缺少参数: ~estimator_config/optimization/minimizer_progress_to_stdout");
+        require("estimator_config/optimization/max_iterations", max_iterations_);
+        require("estimator_config/optimization/function_tolerance", function_tolerance_);
+        require("estimator_config/optimization/gradient_tolerance", gradient_tolerance_);
+        require("estimator_config/optimization/parameter_tolerance", parameter_tolerance_);
+        require("estimator_config/optimization/num_threads", num_threads_);
+        require("estimator_config/optimization/minimizer_progress_to_stdout", minimizer_progress_to_stdout_);
 
         std::string linear_solver_str;
-        if (!pnh_.getParam("estimator_config/optimization/linear_solver_type", linear_solver_str))
-            throw std::runtime_error("缺少参数: ~estimator_config/optimization/linear_solver_type");
+        require("estimator_config/optimization/linear_solver_type", linear_solver_str);
         if (linear_solver_str == "DENSE_QR")
             linear_solver_type_ = ceres::DENSE_QR;
         else

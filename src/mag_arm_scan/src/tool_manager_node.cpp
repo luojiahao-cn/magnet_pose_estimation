@@ -47,28 +47,33 @@ ROS/MoveIt 接口:
 
 ToolManagerNode::ToolManagerNode(ros::NodeHandle &nh, ros::NodeHandle &pnh)
   : nh_(nh), pnh_(pnh), move_group_("fr5v6_arm"), planning_scene_interface_() {
-    // Params (strict private namespace)
-    if (!pnh_.getParam("parent_link", parent_link_))
-      throw std::runtime_error("缺少参数: ~parent_link");
-    if (!pnh_.getParam("object_name", object_name_))
-      throw std::runtime_error("缺少参数: ~object_name");
-    if (!pnh_.getParam("mesh_path", mesh_path_))
-      throw std::runtime_error("缺少参数: ~mesh_path");
-    if (!pnh_.getParam("xyz", xyz_) || xyz_.size() != 3)
-      throw std::runtime_error("缺少或非法参数: ~xyz[3]");
-    if (!pnh_.getParam("rpy", rpy_) || rpy_.size() != 3)
-      throw std::runtime_error("缺少或非法参数: ~rpy[3]");
-    if (!pnh_.getParam("scale", scale_) || scale_.size() != 3)
-      throw std::runtime_error("缺少或非法参数: ~scale[3]");
-    pnh_.getParam("touch_links", touch_links_); // 可空
-    if (!pnh_.getParam("auto_attach", auto_attach_))
-      throw std::runtime_error("缺少参数: ~auto_attach");
+    // local small helpers for required params
+    auto require = [&](const std::string &key, auto &var) {
+      if (!pnh_.getParam(key, var)) throw std::runtime_error(std::string("缺少参数: ~") + key);
+    };
+    auto requireVec3 = [&](const std::string &key, std::vector<double> &out) {
+      if (!pnh_.getParam(key, out) || out.size() != 3) throw std::runtime_error(std::string("缺少或非法参数: ~") + key + "[3]");
+    };
+    auto optVec3 = [&](const std::string &key, std::vector<double> &out) {
+      if (pnh_.getParam(key, out)) {
+        if (out.size() != 3) throw std::runtime_error(std::string("非法参数: ~") + key + "[3]");
+      }
+    };
 
-    // 支架末端参数（可选）
-    pnh_.getParam("tip_xyz", tip_xyz_);
-    pnh_.getParam("tip_rpy", tip_rpy_);
-    if (!pnh_.getParam("tcp_frame_name", tcp_frame_name_))
-      throw std::runtime_error("缺少参数: ~tcp_frame_name");
+    // Params (strict private namespace)
+    require("parent_link", parent_link_);
+    require("object_name", object_name_);
+    require("mesh_path", mesh_path_);
+    requireVec3("xyz", xyz_);
+    requireVec3("rpy", rpy_);
+    requireVec3("scale", scale_);
+  pnh_.getParam("touch_links", touch_links_); // 可空
+  require("auto_attach", auto_attach_);
+
+  // 支架末端参数（可选）
+  optVec3("tip_xyz", tip_xyz_);
+  optVec3("tip_rpy", tip_rpy_);
+    require("tcp_frame_name", tcp_frame_name_);
 
     // Resolve parent_link automatically from MoveGroup if requested
     if (parent_link_ == "auto" || parent_link_.empty()) {

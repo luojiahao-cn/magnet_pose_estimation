@@ -45,15 +45,13 @@ std::string findLatestScanFolder(const std::string& data_dir) {
 class FieldMapCsvViz{
 public:
   FieldMapCsvViz(ros::NodeHandle& nh): nh_(nh){
-    if(!nh_.getParam("csv_path", csv_)) {
-      ROS_ERROR("[field_map_csv_viz] missing parameter: ~csv_path");
-      throw std::runtime_error("缺少参数: ~csv_path");
-    }
-    if(!nh_.getParam("frame", frame_)) throw std::runtime_error("缺少参数: ~frame");
-    if(!nh_.getParam("marker_topic", marker_topic_)) throw std::runtime_error("缺少参数: ~marker_topic");
-    if(!nh_.getParam("field_scale", field_scale_)) throw std::runtime_error("缺少参数: ~field_scale");
-    if(!nh_.getParam("marker_lifetime", marker_lifetime_)) throw std::runtime_error("缺少参数: ~marker_lifetime");
-    if(!nh_.getParam("color_max", color_max_)) throw std::runtime_error("缺少参数: ~color_max");
+    auto require = [&](const std::string &key, auto &var){ if(!nh_.getParam(key, var)) throw std::runtime_error(std::string("缺少必需参数: ~")+key); };
+    require("csv_path", csv_);
+    require("frame", frame_);
+    require("marker_topic", marker_topic_);
+    require("field_scale", field_scale_);
+    require("marker_lifetime", marker_lifetime_);
+    require("color_max", color_max_);
     nh_.param<int>("stride", stride_, 1);
 
     std::string subfolder;
