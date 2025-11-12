@@ -2,25 +2,30 @@
 #include <visualization_msgs/MarkerArray.h>
 #include <geometry_msgs/TransformStamped.h>
 #include <geometry_msgs/Pose.h>
+#include <geometry_msgs/PoseStamped.h>
 #include <tf2_ros/transform_listener.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
-
-#include <mag_sensor_node/sensor_config.hpp>
 #include <magnet_msgs/MagSensorData.h>
 #include <mag_viz/mag_sensor_viz_node.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <string>
 #include <vector>
 
 MagSensorViz::MagSensorViz(ros::NodeHandle &nh)
     : nh_(nh), tf_buffer_(), tf_listener_(tf_buffer_)
 {
-    // Load shared sensor configuration so getSensorById() can find IDs.
-    if (!mag_sensor_node::SensorConfig::getInstance().loadConfig(nh_)) {
-        ROS_WARN("[mag_sensor_viz] 无法加载 sensor_config，后续基于 ID 的查找可能失败");
-    } else {
-        ROS_INFO_STREAM("[mag_sensor_viz] 已加载 sensor_config: " << mag_sensor_node::SensorConfig::getInstance().getSensorCount() << " 个传感器");
+    try
+    {
+        sensor_array_.load(nh_, "array");
+        sensor_array_loaded_ = true;
+        ROS_INFO_STREAM("[mag_sensor_viz] 已加载阵列配置: " << sensor_array_.sensors().size() << " 个传感器");
+    }
+    catch (const std::exception &e)
+    {
+        sensor_array_loaded_ = false;
+        ROS_WARN("[mag_sensor_viz] 无法加载 array 配置: %s", e.what());
     }
     // 仅从私有命名空间读取；缺少即报错
     auto require = [&](const std::string &key, auto &var) {
@@ -67,7 +72,6 @@ void MagSensorViz::onMsg(const magnet_msgs::MagSensorData::ConstPtr &msg)
 {
     visualization_msgs::Marker m;
     m.header.stamp = msg->header.stamp;
-    m.header.frame_id = target_frame_.empty() ? msg->header.frame_id : target_frame_;
     m.ns = "sensor_field";
     m.id = static_cast<int>(msg->sensor_id);
     m.type = visualization_msgs::Marker::ARROW;
@@ -77,57 +81,78 @@ void MagSensorViz::onMsg(const magnet_msgs::MagSensorData::ConstPtr &msg)
     m.scale.z = 0.0025;
     m.lifetime = ros::Duration(marker_lifetime_);
 
-    mag_sensor_node::SensorInfo sensor_info;
-    if (!mag_sensor_node::SensorConfig::getInstance().getSensorById(msg->sensor_id, sensor_info)) {
-        ROS_WARN_THROTTLE(5.0, "Unknown sensor ID: %d", msg->sensor_id);
+    if (!sensor_array_loaded_)
+    {
+        ROS_WARN_THROTTLE(5.0, "[mag_sensor_viz] 阵列配置未加载，忽略传感器 %u", msg->sensor_id);
         return;
     }
-    geometry_msgs::Pose pose_in = sensor_info.pose;
-    geometry_msgs::Pose pose_tf = pose_in;
-    bool did_tf = false;
-    try
+
+    const auto *entry = sensor_array_.findSensor(static_cast<int>(msg->sensor_id));
+    if (!entry)
     {
-        if (!target_frame_.empty())
-        {
-            geometry_msgs::TransformStamped T = tf_buffer_.lookupTransform(
-                target_frame_, msg->header.frame_id, msg->header.stamp, ros::Duration(0.05));
-            tf2::doTransform(pose_in, pose_tf, T);
-            did_tf = true;
-        }
-    }
-    catch (const std::exception &e)
-    {
-        m.header.frame_id = msg->header.frame_id;
-        ROS_WARN_THROTTLE(5.0,
-                          "TF to target_frame '%s' unavailable (e.g., %s). Falling back to source frame '%s' for sensor %u.",
-                          target_frame_.c_str(), e.what(), msg->header.frame_id.c_str(), msg->sensor_id);
+        ROS_WARN_THROTTLE(5.0, "[mag_sensor_viz] 未知传感器 id=%u", msg->sensor_id);
+        return;
     }
 
-    double fx = msg->mag_x, fy = msg->mag_y, fz = msg->mag_z;
-    if (did_tf)
+    const std::string sensor_frame = entry->frame_id.empty() ? msg->header.frame_id : entry->frame_id;
+
+    geometry_msgs::PoseStamped pose_in;
+    pose_in.header.frame_id = sensor_frame;
+    pose_in.header.stamp = msg->header.stamp;
+    pose_in.pose.orientation.w = 1.0;
+
+    geometry_msgs::PoseStamped pose_out = pose_in;
+    geometry_msgs::TransformStamped sensor_to_target;
+    bool has_transform = false;
+
+    if (!target_frame_.empty())
+    {
+        try
+        {
+            sensor_to_target = tf_buffer_.lookupTransform(
+                target_frame_, sensor_frame, msg->header.stamp, ros::Duration(0.05));
+            tf2::doTransform(pose_in, pose_out, sensor_to_target);
+            has_transform = true;
+        }
+        catch (const std::exception &e)
+        {
+            ROS_WARN_THROTTLE(5.0,
+                              "[mag_sensor_viz] 无法获取 %s -> %s 的 TF (%s)，回退到传感器坐标系",
+                              target_frame_.c_str(), sensor_frame.c_str(), e.what());
+        }
+    }
+
+    double fx = msg->mag_x;
+    double fy = msg->mag_y;
+    double fz = msg->mag_z;
+
+    if (has_transform)
     {
         geometry_msgs::Vector3Stamped vin, vout;
-        vin.header.frame_id = msg->header.frame_id;
+        vin.header.frame_id = sensor_frame;
         vin.header.stamp = msg->header.stamp;
         vin.vector.x = fx;
         vin.vector.y = fy;
         vin.vector.z = fz;
+
         try
         {
-            geometry_msgs::TransformStamped T = tf_buffer_.lookupTransform(
-                target_frame_, msg->header.frame_id, msg->header.stamp, ros::Duration(0.05));
-            tf2::doTransform(vin, vout, T);
+            tf2::doTransform(vin, vout, sensor_to_target);
             fx = vout.vector.x;
             fy = vout.vector.y;
             fz = vout.vector.z;
         }
         catch (const std::exception &e)
         {
-            ROS_WARN_THROTTLE(5.0, "TF for field vector failed; using original vector. (%s)", e.what());
+            ROS_WARN_THROTTLE(5.0, "[mag_sensor_viz] 磁场向量转换失败，使用原始值 (%s)", e.what());
+            has_transform = false;
         }
     }
+
     const double norm = std::sqrt(fx * fx + fy * fy + fz * fz);
-    double dx = 1.0, dy = 0.0, dz = 0.0;
+    double dx = 1.0;
+    double dy = 0.0;
+    double dz = 0.0;
     if (norm > 1e-9)
     {
         dx = fx / norm;
@@ -143,7 +168,8 @@ void MagSensorViz::onMsg(const magnet_msgs::MagSensorData::ConstPtr &msg)
     m.points[1].y = dy * field_scale_;
     m.points[1].z = dz * field_scale_;
 
-    m.pose = pose_tf;
+    m.header.frame_id = has_transform ? target_frame_ : sensor_frame;
+    m.pose = has_transform ? pose_out.pose : pose_in.pose;
 
     Color c = (norm > 1e-12) ? colormap(norm) : zero_color_;
     m.color.r = c.r;

@@ -1,7 +1,5 @@
 #include "mag_arm_scan/scan_controller_with_recorder_node.hpp"
 
-#include <mag_sensor_node/sensor_config.hpp>
-
 #include <algorithm>
 #include <cerrno>
 #include <cmath>
@@ -18,7 +16,6 @@
 
 #include <geometry_msgs/TransformStamped.h>
 #include <geometry_msgs/Vector3Stamped.h>
-#include <mag_sensor_node/sensor_config.hpp>
 #include <moveit/move_group_interface/move_group_interface.h>
 #include <moveit/planning_scene_interface/planning_scene_interface.h>
 #include <moveit/robot_model/robot_model.h>
@@ -572,12 +569,13 @@ void ScanControllerWithRecorderNode::collectDataAtPoint(const geometry_msgs::Pos
 	std::map<std::uint32_t, AggregatedSensorAccumulator> averaged_data;
 
 	for (const auto &data : collected_samples_) {
-		mag_sensor_node::SensorInfo sensor_info;
-		if (!mag_sensor_node::SensorConfig::getInstance().getSensorById(data.sensor_id, sensor_info)) {
+		const mag_sensor_node::SensorEntry *sensor_entry = sensor_array_loaded_ ? sensor_array_.findSensor(static_cast<int>(data.sensor_id)) : nullptr;
+		if (!sensor_entry)
+		{
 			ROS_WARN_THROTTLE(5.0, "Unknown sensor ID: %d", data.sensor_id);
 			continue;
 		}
-		geometry_msgs::Pose pose_w = sensor_info.pose;
+		geometry_msgs::Pose pose_w = sensor_entry->pose;
 		geometry_msgs::TransformStamped transform;
 		bool did_tf = false;
 
@@ -810,24 +808,30 @@ void ScanControllerWithRecorderNode::jointStateCallback(const sensor_msgs::Joint
 void ScanControllerWithRecorderNode::loadSensorConfig() {
 	expected_sensor_ids_.clear();
 	num_sensors_ = 0;
-
-	mag_sensor_node::SensorConfig &config = mag_sensor_node::SensorConfig::getInstance();
-	if (!config.loadConfig(pnh_)) {
-		ROS_WARN("[scan_controller_with_recorder] failed to load sensor configuration parameters");
-		int param_sensor_count = 0;
-		if (pnh_.getParam("sensor_config/num_sensors", param_sensor_count) && param_sensor_count > 0) {
-			num_sensors_ = param_sensor_count;
-		}
-	} else {
-		const auto &sensors = config.getAllSensors();
+	sensor_array_loaded_ = false;
+	try
+	{
+		sensor_array_.load(pnh_, "array");
+		sensor_array_loaded_ = true;
+		const auto &sensors = sensor_array_.sensors();
 		expected_sensor_ids_.reserve(sensors.size());
-		for (const auto &info : sensors) {
-			expected_sensor_ids_.push_back(info.id);
+		for (const auto &entry : sensors)
+		{
+			expected_sensor_ids_.push_back(entry.id);
 		}
 		std::sort(expected_sensor_ids_.begin(), expected_sensor_ids_.end());
 		expected_sensor_ids_.erase(std::unique(expected_sensor_ids_.begin(), expected_sensor_ids_.end()),
-		                         expected_sensor_ids_.end());
+			                     expected_sensor_ids_.end());
 		num_sensors_ = static_cast<int>(expected_sensor_ids_.size());
+	}
+	catch (const std::exception &e)
+	{
+		ROS_WARN("[scan_controller_with_recorder] 读取 array 配置失败: %s", e.what());
+		int fallback_count = 0;
+		if (pnh_.getParam("array/expected_sensor_count", fallback_count) && fallback_count > 0)
+		{
+			num_sensors_ = fallback_count;
+		}
 	}
 
 	if (num_sensors_ <= 0) {

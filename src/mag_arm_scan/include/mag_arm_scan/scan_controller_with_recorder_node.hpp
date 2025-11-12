@@ -27,6 +27,7 @@
 #include <vector>
 
 #include <geometry_msgs/Pose.h>
+#include <mag_sensor_node/array_description.hpp>
 #include <magnet_msgs/MagSensorData.h>
 #include <ros/ros.h>
 #include <sensor_msgs/JointState.h>
@@ -103,6 +104,9 @@ private:
   ros::NodeHandle nh_;
   ros::NodeHandle pnh_;
   std::shared_ptr<moveit::planning_interface::MoveGroupInterface> move_group_;
+
+  mag_sensor_node::SensorArrayDescription sensor_array_;
+  bool sensor_array_loaded_{false};
 
   ros::ServiceServer start_scan_srv_;
   ros::Subscriber mag_data_sub_;

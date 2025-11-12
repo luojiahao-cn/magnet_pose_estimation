@@ -1,224 +1,339 @@
-#include <geometry_msgs/Point.h>
+#include <mag_sensor_node/array_description.hpp>
+
 #include <magnet_msgs/MagSensorData.h>
-#include <magnet_msgs/MagnetPose.h>
-#include <mag_sensor_node/mag_sensor_sim_node.hpp>
 #include <ros/ros.h>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/LinearMath/Transform.h>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
-#include <tf2_ros/transform_listener.h>
-#include <tf2_ros/buffer.h>
 #include <tf2/exceptions.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
 #include <geometry_msgs/TransformStamped.h>
 
 #include <Eigen/Dense>
-#include <cmath>
-#include <mag_sensor_node/sensor_config.hpp>
+
+#include <memory>
 #include <random>
+#include <stdexcept>
+#include <string>
+#include <vector>
 
-using magnet_msgs::MagSensorData;
-using magnet_msgs::MagnetPose;
-
-MagSensorSimNode::MagSensorSimNode(ros::NodeHandle &nh)
-    : nh_(nh), tf_listener_(tf_buffer_)
+namespace
 {
-    ros::NodeHandle pnh("~");
-    if (!mag_sensor_node::SensorConfig::getInstance().loadConfig(pnh))
-        throw std::runtime_error("sensor config not loaded");
+    // μ0/4π 常量（单位 V·s/A·m）
+    constexpr double kMu0Div4Pi = 1e-7;
+}
 
-    loadParams();
+class MagSensorSimNode
+{
+public:
+    MagSensorSimNode(ros::NodeHandle nh, ros::NodeHandle pnh);
+
+private:
+    static Eigen::MatrixXd computeField(const Eigen::Matrix<double, -1, 3> &sensor_positions,
+                                        const Eigen::Vector3d &magnet_position,
+                                        const Eigen::Vector3d &magnet_direction,
+                                        double dipole_strength);
+
+    void loadArrayDescription();
+    void loadParameters();
+    void setupPublishers();
+    void setupTimers();
+
+    void onSimulationTimer(const ros::TimerEvent &);
+    void onTfTimer(const ros::TimerEvent &);
+    void publishReadings(const geometry_msgs::TransformStamped &magnet_tf, const ros::Time &stamp);
+
+    Eigen::Vector3d sampleNoise();
+    double toMilliTesla(double raw) const { return (raw / raw_max_) * full_scale_mT_; }
+    double toRawCount(double mT) const { return (mT / full_scale_mT_) * raw_max_; }
+
+    ros::NodeHandle nh_;
+    ros::NodeHandle pnh_;
+
+    mag_sensor_node::SensorArrayDescription array_description_;
+    std::unique_ptr<mag_sensor_node::SensorArrayTfPublisher> tf_publisher_;
+
+    ros::Publisher raw_pub_;
+    ros::Publisher field_pub_;
+
+    tf2_ros::Buffer tf_buffer_;
+    tf2_ros::TransformListener tf_listener_;
+
+    ros::Timer simulation_timer_;
+    ros::Timer tf_timer_;
+
+    bool publish_tf_{true};
+    double tf_publish_rate_{30.0};
+    double update_rate_{100.0};
+
+    std::string topic_raw_;
+    std::string topic_field_;
+
+    std::string magnet_parent_frame_;
+    std::string magnet_child_frame_;
+    double dipole_strength_{10.0};
+    Eigen::Vector3d base_direction_{0.0, 0.0, 1.0};
+
+    bool noise_enable_{false};
+    std::string noise_type_ = "gaussian";
+    double noise_mean_{0.0};
+    double noise_stddev_{1.0};
+    double noise_amplitude_{0.0};
+
+    double full_scale_mT_{3.2};
+    double raw_max_{32767.0};
+
+    std::mt19937 rng_{std::random_device{}()};
+};
+
+MagSensorSimNode::MagSensorSimNode(ros::NodeHandle nh, ros::NodeHandle pnh)
+    : nh_(std::move(nh)), pnh_(std::move(pnh)), tf_listener_(tf_buffer_)
+{
+    loadArrayDescription();
+    loadParameters();
     setupPublishers();
-    timer_ = nh_.createTimer(ros::Duration(1.0 / update_rate_), &MagSensorSimNode::onTimer, this);
+    setupTimers();
 }
 
-// 计算磁偶极子模型的磁场（返回单位 mT）
-Eigen::MatrixXd MagSensorSimNode::computeMagneticField(const Eigen::Matrix<double, -1, 3> &sensor_positions,
-                                                       const Eigen::Vector3d &magnetic_position,
-                                                       const Eigen::Vector3d &magnetic_direction,
-                                                       double magnetic_moment_size)
+void MagSensorSimNode::loadArrayDescription()
 {
-    const double mu_0 = 4 * M_PI * 1e-7;
-    Eigen::MatrixXd r_vec = sensor_positions.rowwise() - magnetic_position.transpose();
-    Eigen::VectorXd r_norm = r_vec.rowwise().norm();
-    r_norm = r_norm.array().max(1e-12);
-    Eigen::Vector3d m = magnetic_moment_size * magnetic_direction;
-    Eigen::VectorXd m_dot_r = r_vec * m;
-    Eigen::MatrixXd B =
-        (mu_0 / (4 * M_PI)) * (3.0 * (r_vec.array().colwise() * (m_dot_r.array() / r_norm.array().pow(5))) -
-                               m.transpose().replicate(r_vec.rows(), 1).array().colwise() / r_norm.array().pow(3));
-    return B * 1e3;
+    // 仿真与实物共用同一份阵列描述，避免重复维护
+    array_description_.load(pnh_, "array");
+    tf_publish_rate_ = array_description_.tfPublishRate();
+    tf_publisher_ = std::make_unique<mag_sensor_node::SensorArrayTfPublisher>(array_description_);
 }
 
-void MagSensorSimNode::loadParams()
+void MagSensorSimNode::loadParameters()
 {
-    ros::NodeHandle pnh("~");
+    pnh_.param("topics/raw", topic_raw_, std::string());
+    pnh_.param("topics/field", topic_field_, std::string("/mag_sensor/data_mT"));
+    if (topic_raw_.empty() && topic_field_.empty())
+    {
+        throw std::runtime_error("仿真节点至少需要发布一个话题 (topics/raw 或 topics/field)");
+    }
 
-    // Helper: require a parameter or throw with a clear message.
-    auto require = [&](const std::string &key, auto &var) {
-        if (!pnh.getParam(key, var))
-            throw std::runtime_error("缺少必需参数: " + key);
-    };
+    pnh_.param("simulation/update_rate_hz", update_rate_, 100.0);
+    if (update_rate_ <= 0.0)
+    {
+        throw std::runtime_error("simulation/update_rate_hz 需为正数");
+    }
 
-    // Helper: optional 3-vector parameter
-    auto optVec3 = [&](const std::string &key, Eigen::Vector3d &out) -> bool {
-        std::vector<double> v;
-        if (!pnh.getParam(key, v) || v.size() != 3)
-            return false;
-        out = Eigen::Vector3d(v[0], v[1], v[2]);
-        return true;
-    };
+    if (!pnh_.getParam("simulation/magnet_frame/parent", magnet_parent_frame_))
+    {
+        throw std::runtime_error("缺少 simulation/magnet_frame/parent 配置");
+    }
+    if (!pnh_.getParam("simulation/magnet_frame/child", magnet_child_frame_))
+    {
+        throw std::runtime_error("缺少 simulation/magnet_frame/child 配置");
+    }
 
-    // Required parameters
-    if (!optVec3("sim_config/magnet/direction", magnetic_direction_))
-        throw std::runtime_error("缺少或非法参数: sim_config/magnet/direction");
+    pnh_.param("simulation/magnet/dipole_strength", dipole_strength_, 10.0);
+    if (dipole_strength_ <= 0.0)
+    {
+        throw std::runtime_error("simulation/magnet/dipole_strength 需为正数");
+    }
 
-    require("sensor_config/array/frame_id", frame_id_);
-    // Require array parent frame so we can publish array-level TF
-    require("sensor_config/array/parent_frame", array_parent_frame_);
-    // TF frames for magnet pose lookup. These are required now and must be supplied
-    // by the caller under sim_config/magnet_tf.
-    require("sim_config/magnet_tf/parent_frame", parent_frame_);
-    require("sim_config/magnet_tf/child_frame", child_frame_);
-    require("sim_config/magnet/strength", magnet_strength_);
+    std::vector<double> base_dir_raw;
+    if (pnh_.getParam("simulation/magnet/base_direction", base_dir_raw))
+    {
+        if (base_dir_raw.size() != 3)
+        {
+            throw std::runtime_error("simulation/magnet/base_direction 必须为长度 3 的数组");
+        }
+        base_direction_ = Eigen::Vector3d(base_dir_raw[0], base_dir_raw[1], base_dir_raw[2]);
+    }
+    if (base_direction_.norm() == 0.0)
+    {
+        throw std::runtime_error("simulation/magnet/base_direction 不可为零向量");
+    }
+    base_direction_.normalize();
 
-    // Only the update rate is needed by this node (for TF polling).
-    require("sim_config/path/update_rate", update_rate_);
+    pnh_.param("simulation/noise/enable", noise_enable_, false);
+    pnh_.param("simulation/noise/type", noise_type_, std::string("gaussian"));
+    pnh_.param("simulation/noise/mean", noise_mean_, 0.0);
+    pnh_.param("simulation/noise/stddev", noise_stddev_, 1.0);
+    pnh_.param("simulation/noise/amplitude", noise_amplitude_, 1.0);
 
-    // Noise configuration
-    require("sim_config/noise/enable", noise_enable_);
-    require("sim_config/noise/type", noise_type_);
-    require("sim_config/noise/mean", noise_mean_);
-    require("sim_config/noise/stddev", noise_stddev_);
-    require("sim_config/noise/amplitude", noise_amplitude_);
+    pnh_.param("calibration/full_scale_mT", full_scale_mT_, 3.2);
+    pnh_.param("calibration/raw_max", raw_max_, 32767.0);
+    if (full_scale_mT_ <= 0.0 || raw_max_ <= 0.0)
+    {
+        throw std::runtime_error("calibration.* 参数需为正数");
+    }
+
+    pnh_.param("tf/enable", publish_tf_, true);
+    if (pnh_.hasParam("tf/publish_rate"))
+    {
+        pnh_.param("tf/publish_rate", tf_publish_rate_, tf_publish_rate_);
+    }
 }
 
 void MagSensorSimNode::setupPublishers()
 {
-    std::string magnetic_field_topic;
-    ros::NodeHandle pnh("~");
-    if (!pnh.getParam("sim_config/topics/magnetic_field_topic", magnetic_field_topic))
-        throw std::runtime_error("缺少必需参数: sim_config/topics/magnetic_field_topic");
-
-    magnetic_field_pub_ = nh_.advertise<MagSensorData>(magnetic_field_topic, 25);
-    ROS_INFO_STREAM("[mag_sensor_sim] publishing magnetic field on '" << magnetic_field_topic << "'");
+    if (!topic_raw_.empty())
+    {
+        raw_pub_ = nh_.advertise<magnet_msgs::MagSensorData>(topic_raw_, 20);
+    }
+    if (!topic_field_.empty())
+    {
+        field_pub_ = nh_.advertise<magnet_msgs::MagSensorData>(topic_field_, 20);
+    }
 }
 
-void MagSensorSimNode::onTimer(const ros::TimerEvent &)
+void MagSensorSimNode::setupTimers()
 {
-    // First publish array and sensor TFs according to configuration so that frames exist
-    // even if the magnet TF is not currently available.
-    const auto &cfg = mag_sensor_node::SensorConfig::getInstance();
-    const auto &sensors = cfg.getAllSensors();
-    const geometry_msgs::Pose &array_off = cfg.getArrayOffset();
-
-    ros::Time now = ros::Time::now();
-
-    // publish array frame relative to array_parent_frame_
-    geometry_msgs::TransformStamped array_tf;
-    array_tf.header.stamp = now;
-    array_tf.header.frame_id = array_parent_frame_;
-    array_tf.child_frame_id = frame_id_;
-    array_tf.transform.translation.x = array_off.position.x;
-    array_tf.transform.translation.y = array_off.position.y;
-    array_tf.transform.translation.z = array_off.position.z;
-    array_tf.transform.rotation = array_off.orientation;
-    tf_broadcaster_.sendTransform(array_tf);
-
-    // publish each sensor as child of the array frame
-    for (size_t i = 0; i < sensors.size(); ++i)
+    simulation_timer_ = nh_.createTimer(ros::Duration(1.0 / update_rate_), &MagSensorSimNode::onSimulationTimer, this);
+    if (publish_tf_ && tf_publisher_)
     {
-        geometry_msgs::TransformStamped t;
-        t.header.stamp = now;
-        t.header.frame_id = frame_id_; // the array/frame id for sensors
-        t.child_frame_id = std::string("sensor_") + std::to_string(sensors[i].id);
-        t.transform.translation.x = sensors[i].pose.position.x;
-        t.transform.translation.y = sensors[i].pose.position.y;
-        t.transform.translation.z = sensors[i].pose.position.z;
-        t.transform.rotation = sensors[i].pose.orientation;
-        tf_broadcaster_.sendTransform(t);
+        if (tf_publish_rate_ > 0.0)
+        {
+            tf_timer_ = nh_.createTimer(ros::Duration(1.0 / tf_publish_rate_), &MagSensorSimNode::onTfTimer, this);
+        }
+        else
+        {
+            tf_publisher_->publishStatic();
+        }
     }
+}
 
-    // Now attempt to obtain magnet pose from TF between parent_frame_ and child_frame_
-    geometry_msgs::TransformStamped tfst;
+Eigen::MatrixXd MagSensorSimNode::computeField(const Eigen::Matrix<double, -1, 3> &sensor_positions,
+                                                const Eigen::Vector3d &magnet_position,
+                                                const Eigen::Vector3d &magnet_direction,
+                                                double dipole_strength)
+{
+    Eigen::MatrixXd r_vec = sensor_positions.rowwise() - magnet_position.transpose();
+    Eigen::VectorXd r_norm = r_vec.rowwise().norm();
+    r_norm = r_norm.array().max(1e-12);
+    Eigen::Vector3d m = dipole_strength * magnet_direction;
+    Eigen::VectorXd m_dot_r = r_vec * m;
+    Eigen::MatrixXd field = (kMu0Div4Pi * 1e3) *
+                            (3.0 * (r_vec.array().colwise() * (m_dot_r.array() / r_norm.array().pow(5))) -
+                             m.transpose().replicate(r_vec.rows(), 1).array().colwise() / r_norm.array().pow(3));
+    return field;
+}
+
+void MagSensorSimNode::onSimulationTimer(const ros::TimerEvent &)
+{
+    geometry_msgs::TransformStamped magnet_tf;
     try
     {
-        // lookup latest transform; allow small timeout
-        tfst = tf_buffer_.lookupTransform(parent_frame_, child_frame_, ros::Time(0), ros::Duration(0.1));
+        magnet_tf = tf_buffer_.lookupTransform(magnet_parent_frame_, magnet_child_frame_, ros::Time(0), ros::Duration(0.05));
     }
     catch (const tf2::TransformException &ex)
     {
-        ROS_WARN_THROTTLE(2.0, "无法从 TF 获取磁铁位姿 (from '%s' to '%s'): %s", parent_frame_.c_str(), child_frame_.c_str(), ex.what());
+        ROS_WARN_THROTTLE(2.0, "[mag_sensor_sim] 无法查询磁铁 TF (%s->%s): %s", magnet_parent_frame_.c_str(), magnet_child_frame_.c_str(), ex.what());
         return;
     }
 
-    MagnetPose magnet_pose;
-    magnet_pose.header.stamp = now;
-    magnet_pose.header.frame_id = parent_frame_;
-    magnet_pose.position.x = tfst.transform.translation.x;
-    magnet_pose.position.y = tfst.transform.translation.y;
-    magnet_pose.position.z = tfst.transform.translation.z;
-    magnet_pose.orientation = tfst.transform.rotation;
-    magnet_pose.magnetic_strength = magnet_strength_;
-
-    // Compute and publish magnetic field readings based on TF-obtained magnet pose
-    publishSensorMagneticFields(magnet_pose);
+    publishReadings(magnet_tf, ros::Time::now());
 }
 
-void MagSensorSimNode::publishSensorMagneticFields(const MagnetPose &magnet_pose)
+void MagSensorSimNode::onTfTimer(const ros::TimerEvent &)
 {
-    const auto &cfg = mag_sensor_node::SensorConfig::getInstance();
-    const auto &sensors = cfg.getAllSensors();
-    const geometry_msgs::Pose &array_off = cfg.getArrayOffset();
+    if (tf_publisher_)
+    {
+        tf_publisher_->publishDynamic(ros::Time::now());
+    }
+}
+
+Eigen::Vector3d MagSensorSimNode::sampleNoise()
+{
+    Eigen::Vector3d noise = Eigen::Vector3d::Zero();
+    if (!noise_enable_)
+    {
+        return noise;
+    }
+
+    if (noise_type_ == "gaussian")
+    {
+        std::normal_distribution<double> dist(noise_mean_, noise_stddev_);
+        noise.x() = dist(rng_);
+        noise.y() = dist(rng_);
+        noise.z() = dist(rng_);
+    }
+    else if (noise_type_ == "uniform")
+    {
+        std::uniform_real_distribution<double> dist(-noise_amplitude_, noise_amplitude_);
+        noise.x() = dist(rng_);
+        noise.y() = dist(rng_);
+        noise.z() = dist(rng_);
+    }
+    else
+    {
+        ROS_WARN_ONCE("[mag_sensor_sim] 未识别的噪声类型 %s，将忽略噪声", noise_type_.c_str());
+    }
+    return noise;
+}
+
+void MagSensorSimNode::publishReadings(const geometry_msgs::TransformStamped &magnet_tf, const ros::Time &stamp)
+{
+    const auto &sensors = array_description_.sensors();
     if (sensors.empty())
     {
-        ROS_WARN_THROTTLE(5.0, "未找到传感器配置，跳过磁场计算");
+        ROS_WARN_THROTTLE(5.0, "[mag_sensor_sim] 无可用传感器描述，跳过发布");
         return;
     }
-    Eigen::Matrix<double, Eigen::Dynamic, 3> positions(sensors.size(), 3);
+
+    Eigen::Matrix<double, Eigen::Dynamic, 3> sensor_positions(sensors.size(), 3);
+
+    tf2::Transform parent_array;
+    tf2::fromMsg(array_description_.arrayPose(), parent_array);
+
     for (size_t i = 0; i < sensors.size(); ++i)
     {
-        positions(i, 0) = sensors[i].pose.position.x;
-        positions(i, 1) = sensors[i].pose.position.y;
-        positions(i, 2) = sensors[i].pose.position.z;
+        tf2::Transform array_sensor;
+        tf2::fromMsg(sensors[i].pose, array_sensor);
+        tf2::Transform parent_sensor = parent_array * array_sensor;
+        const tf2::Vector3 &origin = parent_sensor.getOrigin();
+        sensor_positions(static_cast<int>(i), 0) = origin.x();
+        sensor_positions(static_cast<int>(i), 1) = origin.y();
+        sensor_positions(static_cast<int>(i), 2) = origin.z();
     }
-    
-    Eigen::Vector3d magnet_position(magnet_pose.position.x, magnet_pose.position.y, magnet_pose.position.z);
-    Eigen::Vector3d base_direction(0, 0, 1);
-    Eigen::Quaterniond q(
-        magnet_pose.orientation.w, magnet_pose.orientation.x, magnet_pose.orientation.y, magnet_pose.orientation.z);
-    Eigen::Vector3d magnet_direction = q * base_direction;
-    Eigen::MatrixXd fields = computeMagneticField(positions, magnet_position, magnet_direction, magnet_strength_);
 
-    static std::default_random_engine generator(std::random_device{}());
-    std::normal_distribution<double> gaussian_dist(noise_mean_, noise_stddev_);
-    std::uniform_real_distribution<double> uniform_dist(-noise_amplitude_, noise_amplitude_);
+    Eigen::Vector3d magnet_position(magnet_tf.transform.translation.x,
+                                    magnet_tf.transform.translation.y,
+                                    magnet_tf.transform.translation.z);
+
+    tf2::Quaternion magnet_q;
+    tf2::fromMsg(magnet_tf.transform.rotation, magnet_q);
+    tf2::Vector3 base_dir(base_direction_.x(), base_direction_.y(), base_direction_.z());
+    tf2::Vector3 rotated = tf2::quatRotate(magnet_q, base_dir);
+    Eigen::Vector3d magnet_direction(rotated.x(), rotated.y(), rotated.z());
+
+    Eigen::MatrixXd fields_mT = computeField(sensor_positions, magnet_position, magnet_direction.normalized(), dipole_strength_);
 
     for (size_t i = 0; i < sensors.size(); ++i)
     {
-        MagSensorData msg;
-        msg.header.stamp = magnet_pose.header.stamp;
-        msg.header.frame_id = magnet_pose.header.frame_id;
-        msg.sensor_id = sensors[i].id;
-        Eigen::Vector3d noise = Eigen::Vector3d::Zero();
-        if (noise_enable_)
+        Eigen::Vector3d noise = sampleNoise();
+        Eigen::Vector3d value_mT(fields_mT(static_cast<int>(i), 0),
+                                 fields_mT(static_cast<int>(i), 1),
+                                 fields_mT(static_cast<int>(i), 2));
+        value_mT += noise;
+
+        if (raw_pub_)
         {
-            if (noise_type_ == "gaussian")
-            {
-                noise.x() = gaussian_dist(generator);
-                noise.y() = gaussian_dist(generator);
-                noise.z() = gaussian_dist(generator);
-            }
-            else if (noise_type_ == "uniform")
-            {
-                noise.x() = uniform_dist(generator);
-                noise.y() = uniform_dist(generator);
-                noise.z() = uniform_dist(generator);
-            }
+            magnet_msgs::MagSensorData msg;
+            msg.header.stamp = stamp;
+            msg.header.frame_id = sensors[i].frame_id;
+            msg.sensor_id = sensors[i].id;
+            msg.mag_x = toRawCount(value_mT.x());
+            msg.mag_y = toRawCount(value_mT.y());
+            msg.mag_z = toRawCount(value_mT.z());
+            raw_pub_.publish(msg);
         }
-        msg.mag_x = fields(i, 0) + noise.x();
-        msg.mag_y = fields(i, 1) + noise.y();
-        msg.mag_z = fields(i, 2) + noise.z();
-        magnetic_field_pub_.publish(msg);
+
+        if (field_pub_)
+        {
+            magnet_msgs::MagSensorData msg;
+            msg.header.stamp = stamp;
+            msg.header.frame_id = sensors[i].frame_id;
+            msg.sensor_id = sensors[i].id;
+            msg.mag_x = value_mT.x();
+            msg.mag_y = value_mT.y();
+            msg.mag_z = value_mT.z();
+            field_pub_.publish(msg);
+        }
     }
 }
 
@@ -227,14 +342,15 @@ int main(int argc, char **argv)
     setlocale(LC_ALL, "zh_CN.UTF-8");
     ros::init(argc, argv, "mag_sensor_sim_node");
     ros::NodeHandle nh;
+    ros::NodeHandle pnh("~");
     try
     {
-        MagSensorSimNode node(nh);
+        MagSensorSimNode node(nh, pnh);
         ros::spin();
     }
     catch (const std::exception &e)
     {
-        ROS_FATAL("mag_sensor_sim_node 退出: %s", e.what());
+        ROS_FATAL("mag_sensor_sim_node 启动失败: %s", e.what());
         return 1;
     }
     return 0;

@@ -33,6 +33,7 @@
     </group>
 
     <node pkg="mag_arm_scan" type="scan_controller_with_recorder_node" name="scan_controller_with_recorder" output="screen">
+        <rosparam file="$(find mag_sensor_node)/config/array.yaml" command="load" />
         <rosparam file="$(find mag_arm_scan)/config/scan_controller_node.yaml" command="load" />
     </node>
 

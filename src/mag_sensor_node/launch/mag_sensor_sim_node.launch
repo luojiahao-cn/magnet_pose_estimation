@@ -1,10 +1,14 @@
 <launch>
     <param name="/use_sim_time" value="false"/>
+
+    <arg name="magnet_parent_frame" default="world" />
+    <arg name="magnet_child_frame" default="magnet" />
+
     <node pkg="mag_sensor_node" type="mag_sensor_sim_node" name="mag_sensor_sim" output="screen">
-        <!-- 共享的传感器阵列定义（sensor_config/*） -->
-        <rosparam command="load" file="$(find mag_sensor_node)/config/sensor_array.yaml" />
-        <!-- 仿真节点专属配置（sim_config/*），如需覆盖可在此文件中添加 ~sensor_config 局部键 -->
-        <rosparam command="load" file="$(find mag_sensor_node)/config/mag_sensor_sim_node.yaml" />
+        <rosparam command="load" file="$(find mag_sensor_node)/config/array.yaml" />
+        <rosparam command="load" file="$(find mag_sensor_node)/config/simulation.yaml" />
+
+        <param name="simulation/magnet_frame/parent" value="$(arg magnet_parent_frame)" />
+        <param name="simulation/magnet_frame/child" value="$(arg magnet_child_frame)" />
     </node>
-    
 </launch>
