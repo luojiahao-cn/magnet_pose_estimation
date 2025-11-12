@@ -14,18 +14,7 @@ sim_config:
       y: 0.02
     update_rate: 100.0
     velocity: 0.01
-  motion:
-    # mode: translate_only
-    # mode: static
-    mode: translate_and_rotate
-    # mode: rotate_only
-    axis: z
-    angular_velocity: 1
-    initial_roll: 0.5
-    initial_pitch: 0.0
-    initial_yaw: 0.0
-    static_position: [0.02, 0.02, 0.03]
-    static_orientation: [0.0, 0.5, 0.0]
+  # motion parameters are handled by magnet_motion_node (TF publisher). Keep below for legacy or debugging.
   noise:
     enable: false
     type: gaussian

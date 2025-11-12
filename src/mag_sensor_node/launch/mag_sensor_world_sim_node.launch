@@ -1,7 +1,0 @@
-<launch>
-    <param name="/use_sim_time" value="false"/>
-    <node pkg="mag_sensor_node" type="mag_sensor_world_sim_node" name="mag_sensor_world_sim" output="screen">
-        <rosparam command="load" file="$(find mag_sensor_node)/config/sensor_array.yaml" />
-        <rosparam command="load" file="$(find mag_sensor_node)/config/mag_sensor_world_sim_node.yaml" />
-    </node>
-</launch>

@@ -5,6 +5,8 @@
 #include <magnet_msgs/MagnetPose.h>
 #include <ros/ros.h>
 #include <tf2/LinearMath/Quaternion.h>
+#include <tf2_ros/transform_listener.h>
+#include <tf2_ros/buffer.h>
 
 #include <Eigen/Dense>
 #include <string>
@@ -46,6 +48,10 @@ private:
     ros::Publisher magnet_pose_pub_;
     ros::Publisher magnetic_field_pub_;
     ros::Timer timer_;
+    tf2_ros::Buffer tf_buffer_;
+    tf2_ros::TransformListener tf_listener_;
+    std::string parent_frame_;
+    std::string child_frame_;
     double magnet_strength_{};
     Eigen::Vector3d magnetic_direction_;
     double rect_width_{};

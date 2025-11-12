@@ -6,6 +6,10 @@
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/LinearMath/Transform.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+#include <tf2_ros/transform_listener.h>
+#include <tf2_ros/buffer.h>
+#include <tf2/exceptions.h>
+
 
 #include <Eigen/Dense>
 #include <cmath>
@@ -15,7 +19,8 @@
 using magnet_msgs::MagSensorData;
 using magnet_msgs::MagnetPose;
 
-MagSensorSimNode::MagSensorSimNode(ros::NodeHandle &nh) : nh_(nh)
+MagSensorSimNode::MagSensorSimNode(ros::NodeHandle &nh)
+    : nh_(nh), tf_listener_(tf_buffer_)
 {
     ros::NodeHandle pnh("~");
     if (!mag_sensor_node::SensorConfig::getInstance().loadConfig(pnh))
@@ -47,49 +52,57 @@ Eigen::MatrixXd MagSensorSimNode::computeMagneticField(const Eigen::Matrix<doubl
 void MagSensorSimNode::loadParams()
 {
     ros::NodeHandle pnh("~");
-    auto require = [&](const std::string &key, auto &var)
-    {
+    // local small helpers to keep this file self-contained
+    auto require = [&](const std::string &key, auto &var) {
         if (!pnh.getParam(key, var))
             throw std::runtime_error("缺少必需参数: " + key);
     };
+
     if (!pnh.getParam("sensor_config/array/frame_id", frame_id_))
         throw std::runtime_error("缺少必需参数: ~sensor_config/array/frame_id");
+    // TF frames (required)
+    require("sim_config/motion/parent_frame", parent_frame_);
+    require("sim_config/motion/child_frame", child_frame_);
 
+    // magnet properties (required)
     require("sim_config/magnet/strength", magnet_strength_);
-    std::vector<double> direction;
-    if (!pnh.getParam("sim_config/magnet/direction", direction) || direction.size() != 3)
+    auto optVec3 = [&](const std::string &key, Eigen::Vector3d &out) -> bool {
+        std::vector<double> v;
+        if (!pnh.getParam(key, v) || v.size() != 3)
+            return false;
+        out = Eigen::Vector3d(v[0], v[1], v[2]);
+        return true;
+    };
+    if (!optVec3("sim_config/magnet/direction", magnetic_direction_))
         throw std::runtime_error("缺少或非法参数: sim_config/magnet/direction");
-    magnetic_direction_ = Eigen::Vector3d(direction[0], direction[1], direction[2]);
 
-    require("sim_config/path/width", rect_width_);
-    require("sim_config/path/height", rect_height_);
-    require("sim_config/path/z", rect_z_);
-    require("sim_config/path/center/x", x_center_);
-    require("sim_config/path/center/y", y_center_);
+    // Path params: keep optional defaults, but require update_rate
+    pnh.param("sim_config/path/width", rect_width_, rect_width_);
+    pnh.param("sim_config/path/height", rect_height_, rect_height_);
+    pnh.param("sim_config/path/z", rect_z_, rect_z_);
+    pnh.param("sim_config/path/center/x", x_center_, x_center_);
+    pnh.param("sim_config/path/center/y", y_center_, y_center_);
     require("sim_config/path/update_rate", update_rate_);
-    require("sim_config/path/velocity", translation_velocity_);
+    pnh.param("sim_config/path/velocity", translation_velocity_, translation_velocity_);
 
-    require("sim_config/motion/mode", motion_mode_);
-    require("sim_config/motion/axis", rotation_axis_);
-    require("sim_config/motion/angular_velocity", angular_velocity_);
-    require("sim_config/motion/initial_roll", initial_roll_);
-    require("sim_config/motion/initial_pitch", initial_pitch_);
-    require("sim_config/motion/initial_yaw", initial_yaw_);
+    // Motion params: may be provided by motion node; load if present
+    pnh.param("sim_config/motion/mode", motion_mode_, motion_mode_);
+    pnh.param("sim_config/motion/axis", rotation_axis_, rotation_axis_);
+    pnh.param("sim_config/motion/angular_velocity", angular_velocity_, angular_velocity_);
+    pnh.param("sim_config/motion/initial_roll", initial_roll_, initial_roll_);
+    pnh.param("sim_config/motion/initial_pitch", initial_pitch_, initial_pitch_);
+    pnh.param("sim_config/motion/initial_yaw", initial_yaw_, initial_yaw_);
 
-    std::vector<double> static_pos;
-    std::vector<double> static_orient;
-    if (!pnh.getParam("sim_config/motion/static_position", static_pos) || static_pos.size() != 3)
-        throw std::runtime_error("缺少或非法参数: sim_config/motion/static_position");
-    if (!pnh.getParam("sim_config/motion/static_orientation", static_orient) || static_orient.size() != 3)
-        throw std::runtime_error("缺少或非法参数: sim_config/motion/static_orientation");
-    static_position_ = Eigen::Vector3d(static_pos[0], static_pos[1], static_pos[2]);
-    static_orientation_ = Eigen::Vector3d(static_orient[0], static_orient[1], static_orient[2]);
+    // static pose (optional)
+    optVec3("sim_config/motion/static_position", static_position_);
+    optVec3("sim_config/motion/static_orientation", static_orientation_);
 
-    require("sim_config/noise/enable", noise_enable_);
-    require("sim_config/noise/type", noise_type_);
-    require("sim_config/noise/mean", noise_mean_);
-    require("sim_config/noise/stddev", noise_stddev_);
-    require("sim_config/noise/amplitude", noise_amplitude_);
+    // noise params
+    pnh.param("sim_config/noise/enable", noise_enable_, noise_enable_);
+    pnh.param("sim_config/noise/type", noise_type_, noise_type_);
+    pnh.param("sim_config/noise/mean", noise_mean_, noise_mean_);
+    pnh.param("sim_config/noise/stddev", noise_stddev_, noise_stddev_);
+    pnh.param("sim_config/noise/amplitude", noise_amplitude_, noise_amplitude_);
 
     // Map motion_mode_ to flags
     translation_enable_ = false;
@@ -109,8 +122,6 @@ void MagSensorSimNode::loadParams()
         translation_enable_ = true;
         rotation_enable_ = true;
         follow_path_ = true;
-    } else {
-        throw std::runtime_error("非法 motion mode: " + motion_mode_);
     }
 }
 
@@ -140,11 +151,30 @@ void MagSensorSimNode::initializeMotionSystem()
 
 void MagSensorSimNode::onTimer(const ros::TimerEvent &)
 {
+    // Only obtain magnet pose from TF between parent_frame_ and child_frame_
+    ros::Time now = ros::Time::now();
+    geometry_msgs::TransformStamped tfst;
+    try
+    {
+        // lookup latest transform; allow small timeout
+        tfst = tf_buffer_.lookupTransform(parent_frame_, child_frame_, ros::Time(0), ros::Duration(0.1));
+    }
+    catch (const tf2::TransformException &ex)
+    {
+        ROS_WARN_THROTTLE(2.0, "无法从 TF 获取磁铁位姿 (from '%s' to '%s'): %s", parent_frame_.c_str(), child_frame_.c_str(), ex.what());
+        return;
+    }
+
     MagnetPose magnet_pose;
-    magnet_pose.header.stamp = ros::Time::now();
-    magnet_pose.header.frame_id = frame_id_;
-    updateMagnetPose(magnet_pose);
+    magnet_pose.header.stamp = now;
+    magnet_pose.header.frame_id = parent_frame_;
+    magnet_pose.position.x = tfst.transform.translation.x;
+    magnet_pose.position.y = tfst.transform.translation.y;
+    magnet_pose.position.z = tfst.transform.translation.z;
+    magnet_pose.orientation = tfst.transform.rotation;
     magnet_pose.magnetic_strength = magnet_strength_;
+
+    // Publish MagnetPose for compatibility and compute fields
     magnet_pose_pub_.publish(magnet_pose);
     publishSensorMagneticFields(magnet_pose);
 }
