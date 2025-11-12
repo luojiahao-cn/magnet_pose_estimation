@@ -1,20 +1,16 @@
 sim_config:
   topics:
-    magnet_pose_topic: "/magnet_pose/sim_true"
     magnetic_field_topic: "/mag_sensor/data_mT"
   magnet:
     strength: 10.0
     direction: [0.0, 0.0, 1.0]
   path:
-    width: 0.03
-    height: 0.03
-    z: 0.03
-    center:
-      x: 0.02
-      y: 0.02
     update_rate: 100.0
-    velocity: 0.01
-  # motion parameters are handled by magnet_motion_node (TF publisher). Keep below for legacy or debugging.
+  # TF frames used to lookup the magnet pose. These are REQUIRED for this node and
+  # must be provided under sim_config/magnet_tf.
+  magnet_tf:
+    parent_frame: "world"
+    child_frame: "magnet"
   noise:
     enable: false
     type: gaussian

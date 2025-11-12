@@ -16,6 +16,12 @@
 MagSensorViz::MagSensorViz(ros::NodeHandle &nh)
     : nh_(nh), tf_buffer_(), tf_listener_(tf_buffer_)
 {
+    // Load shared sensor configuration so getSensorById() can find IDs.
+    if (!mag_sensor_node::SensorConfig::getInstance().loadConfig(nh_)) {
+        ROS_WARN("[mag_sensor_viz] 无法加载 sensor_config，后续基于 ID 的查找可能失败");
+    } else {
+        ROS_INFO_STREAM("[mag_sensor_viz] 已加载 sensor_config: " << mag_sensor_node::SensorConfig::getInstance().getSensorCount() << " 个传感器");
+    }
     // 仅从私有命名空间读取；缺少即报错
     auto require = [&](const std::string &key, auto &var) {
         if (!nh_.getParam(key, var)) throw std::runtime_error(std::string("缺少参数: ~") + key);

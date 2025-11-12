@@ -1,7 +1,7 @@
 magnet_motion:
   motion:
     parent_frame: "world"
-    child_frame: "magnet_frame"
+    child_frame: "magnet"
     mode: translate_and_rotate
     axis: z
     angular_velocity: 1.0

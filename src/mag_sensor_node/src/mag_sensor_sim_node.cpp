@@ -9,7 +9,7 @@
 #include <tf2_ros/transform_listener.h>
 #include <tf2_ros/buffer.h>
 #include <tf2/exceptions.h>
-
+#include <geometry_msgs/TransformStamped.h>
 
 #include <Eigen/Dense>
 #include <cmath>
@@ -25,9 +25,9 @@ MagSensorSimNode::MagSensorSimNode(ros::NodeHandle &nh)
     ros::NodeHandle pnh("~");
     if (!mag_sensor_node::SensorConfig::getInstance().loadConfig(pnh))
         throw std::runtime_error("sensor config not loaded");
+
     loadParams();
     setupPublishers();
-    initializeMotionSystem();
     timer_ = nh_.createTimer(ros::Duration(1.0 / update_rate_), &MagSensorSimNode::onTimer, this);
 }
 
@@ -52,20 +52,14 @@ Eigen::MatrixXd MagSensorSimNode::computeMagneticField(const Eigen::Matrix<doubl
 void MagSensorSimNode::loadParams()
 {
     ros::NodeHandle pnh("~");
-    // local small helpers to keep this file self-contained
+
+    // Helper: require a parameter or throw with a clear message.
     auto require = [&](const std::string &key, auto &var) {
         if (!pnh.getParam(key, var))
             throw std::runtime_error("缺少必需参数: " + key);
     };
 
-    if (!pnh.getParam("sensor_config/array/frame_id", frame_id_))
-        throw std::runtime_error("缺少必需参数: ~sensor_config/array/frame_id");
-    // TF frames (required)
-    require("sim_config/motion/parent_frame", parent_frame_);
-    require("sim_config/motion/child_frame", child_frame_);
-
-    // magnet properties (required)
-    require("sim_config/magnet/strength", magnet_strength_);
+    // Helper: optional 3-vector parameter
     auto optVec3 = [&](const std::string &key, Eigen::Vector3d &out) -> bool {
         std::vector<double> v;
         if (!pnh.getParam(key, v) || v.size() != 3)
@@ -73,86 +67,78 @@ void MagSensorSimNode::loadParams()
         out = Eigen::Vector3d(v[0], v[1], v[2]);
         return true;
     };
+
+    // Required parameters
     if (!optVec3("sim_config/magnet/direction", magnetic_direction_))
         throw std::runtime_error("缺少或非法参数: sim_config/magnet/direction");
 
-    // Path params: keep optional defaults, but require update_rate
-    pnh.param("sim_config/path/width", rect_width_, rect_width_);
-    pnh.param("sim_config/path/height", rect_height_, rect_height_);
-    pnh.param("sim_config/path/z", rect_z_, rect_z_);
-    pnh.param("sim_config/path/center/x", x_center_, x_center_);
-    pnh.param("sim_config/path/center/y", y_center_, y_center_);
+    require("sensor_config/array/frame_id", frame_id_);
+    // Require array parent frame so we can publish array-level TF
+    require("sensor_config/array/parent_frame", array_parent_frame_);
+    // TF frames for magnet pose lookup. These are required now and must be supplied
+    // by the caller under sim_config/magnet_tf.
+    require("sim_config/magnet_tf/parent_frame", parent_frame_);
+    require("sim_config/magnet_tf/child_frame", child_frame_);
+    require("sim_config/magnet/strength", magnet_strength_);
+
+    // Only the update rate is needed by this node (for TF polling).
     require("sim_config/path/update_rate", update_rate_);
-    pnh.param("sim_config/path/velocity", translation_velocity_, translation_velocity_);
 
-    // Motion params: may be provided by motion node; load if present
-    pnh.param("sim_config/motion/mode", motion_mode_, motion_mode_);
-    pnh.param("sim_config/motion/axis", rotation_axis_, rotation_axis_);
-    pnh.param("sim_config/motion/angular_velocity", angular_velocity_, angular_velocity_);
-    pnh.param("sim_config/motion/initial_roll", initial_roll_, initial_roll_);
-    pnh.param("sim_config/motion/initial_pitch", initial_pitch_, initial_pitch_);
-    pnh.param("sim_config/motion/initial_yaw", initial_yaw_, initial_yaw_);
-
-    // static pose (optional)
-    optVec3("sim_config/motion/static_position", static_position_);
-    optVec3("sim_config/motion/static_orientation", static_orientation_);
-
-    // noise params
-    pnh.param("sim_config/noise/enable", noise_enable_, noise_enable_);
-    pnh.param("sim_config/noise/type", noise_type_, noise_type_);
-    pnh.param("sim_config/noise/mean", noise_mean_, noise_mean_);
-    pnh.param("sim_config/noise/stddev", noise_stddev_, noise_stddev_);
-    pnh.param("sim_config/noise/amplitude", noise_amplitude_, noise_amplitude_);
-
-    // Map motion_mode_ to flags
-    translation_enable_ = false;
-    rotation_enable_ = false;
-    follow_path_ = true;
-    if (motion_mode_ == "static") {
-        translation_enable_ = false;
-        rotation_enable_ = false;
-    } else if (motion_mode_ == "translate_only") {
-        translation_enable_ = true;
-        rotation_enable_ = false;
-        follow_path_ = true;
-    } else if (motion_mode_ == "rotate_only") {
-        translation_enable_ = false;
-        rotation_enable_ = true;
-    } else if (motion_mode_ == "translate_and_rotate") {
-        translation_enable_ = true;
-        rotation_enable_ = true;
-        follow_path_ = true;
-    }
+    // Noise configuration
+    require("sim_config/noise/enable", noise_enable_);
+    require("sim_config/noise/type", noise_type_);
+    require("sim_config/noise/mean", noise_mean_);
+    require("sim_config/noise/stddev", noise_stddev_);
+    require("sim_config/noise/amplitude", noise_amplitude_);
 }
 
 void MagSensorSimNode::setupPublishers()
 {
-    std::string magnet_pose_topic;
     std::string magnetic_field_topic;
     ros::NodeHandle pnh("~");
-    if (!pnh.getParam("sim_config/topics/magnet_pose_topic", magnet_pose_topic))
-        throw std::runtime_error("缺少必需参数: sim_config/topics/magnet_pose_topic");
     if (!pnh.getParam("sim_config/topics/magnetic_field_topic", magnetic_field_topic))
         throw std::runtime_error("缺少必需参数: sim_config/topics/magnetic_field_topic");
 
-    magnet_pose_pub_ = nh_.advertise<MagnetPose>(magnet_pose_topic, 25);
     magnetic_field_pub_ = nh_.advertise<MagSensorData>(magnetic_field_topic, 25);
-    ROS_INFO_STREAM("[mag_sensor_sim] topics: magnet_pose='" << magnet_pose_topic << "', magnetic_field='" << magnetic_field_topic << "'");
-}
-
-void MagSensorSimNode::initializeMotionSystem()
-{
-    path_total_length_ = 2.0 * (rect_width_ + rect_height_);
-    start_time_ = ros::Time::now();
-    current_position_.x = x_center_ - rect_width_ / 2.0;
-    current_position_.y = y_center_ - rect_height_ / 2.0;
-    current_position_.z = rect_z_;
+    ROS_INFO_STREAM("[mag_sensor_sim] publishing magnetic field on '" << magnetic_field_topic << "'");
 }
 
 void MagSensorSimNode::onTimer(const ros::TimerEvent &)
 {
-    // Only obtain magnet pose from TF between parent_frame_ and child_frame_
+    // First publish array and sensor TFs according to configuration so that frames exist
+    // even if the magnet TF is not currently available.
+    const auto &cfg = mag_sensor_node::SensorConfig::getInstance();
+    const auto &sensors = cfg.getAllSensors();
+    const geometry_msgs::Pose &array_off = cfg.getArrayOffset();
+
     ros::Time now = ros::Time::now();
+
+    // publish array frame relative to array_parent_frame_
+    geometry_msgs::TransformStamped array_tf;
+    array_tf.header.stamp = now;
+    array_tf.header.frame_id = array_parent_frame_;
+    array_tf.child_frame_id = frame_id_;
+    array_tf.transform.translation.x = array_off.position.x;
+    array_tf.transform.translation.y = array_off.position.y;
+    array_tf.transform.translation.z = array_off.position.z;
+    array_tf.transform.rotation = array_off.orientation;
+    tf_broadcaster_.sendTransform(array_tf);
+
+    // publish each sensor as child of the array frame
+    for (size_t i = 0; i < sensors.size(); ++i)
+    {
+        geometry_msgs::TransformStamped t;
+        t.header.stamp = now;
+        t.header.frame_id = frame_id_; // the array/frame id for sensors
+        t.child_frame_id = std::string("sensor_") + std::to_string(sensors[i].id);
+        t.transform.translation.x = sensors[i].pose.position.x;
+        t.transform.translation.y = sensors[i].pose.position.y;
+        t.transform.translation.z = sensors[i].pose.position.z;
+        t.transform.rotation = sensors[i].pose.orientation;
+        tf_broadcaster_.sendTransform(t);
+    }
+
+    // Now attempt to obtain magnet pose from TF between parent_frame_ and child_frame_
     geometry_msgs::TransformStamped tfst;
     try
     {
@@ -174,140 +160,8 @@ void MagSensorSimNode::onTimer(const ros::TimerEvent &)
     magnet_pose.orientation = tfst.transform.rotation;
     magnet_pose.magnetic_strength = magnet_strength_;
 
-    // Publish MagnetPose for compatibility and compute fields
-    magnet_pose_pub_.publish(magnet_pose);
+    // Compute and publish magnetic field readings based on TF-obtained magnet pose
     publishSensorMagneticFields(magnet_pose);
-}
-
-void MagSensorSimNode::updateMagnetPose(MagnetPose &magnet_pose)
-{
-    updateMagnetPosition(magnet_pose);
-    updateMagnetOrientation(magnet_pose);
-}
-
-void MagSensorSimNode::updateMagnetPosition(MagnetPose &magnet_pose)
-{
-    switch (getMotionType())
-    {
-    case MotionType::STATIC:
-        magnet_pose.position.x = static_position_.x();
-        magnet_pose.position.y = static_position_.y();
-        magnet_pose.position.z = static_position_.z();
-        break;
-    case MotionType::TRANSLATE_WITH_PATH:
-    {
-        double elapsed_time = (ros::Time::now() - start_time_).toSec();
-        current_position_ = calculatePositionFromVelocity(elapsed_time);
-        magnet_pose.position = current_position_;
-        break;
-    }
-    case MotionType::TRANSLATE_STATIONARY:
-        magnet_pose.position.x = x_center_ - rect_width_ / 2.0;
-        magnet_pose.position.y = y_center_ - rect_height_ / 2.0;
-        magnet_pose.position.z = rect_z_;
-        break;
-    case MotionType::CENTER_FIXED:
-    default:
-        magnet_pose.position.x = x_center_;
-        magnet_pose.position.y = y_center_;
-        magnet_pose.position.z = rect_z_;
-        break;
-    }
-}
-
-MagSensorSimNode::MotionType MagSensorSimNode::getMotionType() const
-{
-    if (motion_mode_ == "static")
-        return MotionType::STATIC;
-    if (translation_enable_ && follow_path_)
-        return MotionType::TRANSLATE_WITH_PATH;
-    if (translation_enable_)
-        return MotionType::TRANSLATE_STATIONARY;
-    return MotionType::CENTER_FIXED;
-}
-
-void MagSensorSimNode::updateMagnetOrientation(MagnetPose &magnet_pose)
-{
-    double roll, pitch, yaw;
-    if (motion_mode_ == "static")
-    {
-        roll = static_orientation_.x();
-        pitch = static_orientation_.y();
-        yaw = static_orientation_.z();
-    }
-    else if (rotation_enable_)
-    {
-        calculateDynamicOrientation(roll, pitch, yaw);
-    }
-    else
-    {
-        roll = initial_roll_;
-        pitch = initial_pitch_;
-        yaw = initial_yaw_;
-    }
-    tf2::Quaternion q;
-    q.setRPY(roll, pitch, yaw);
-    magnet_pose.orientation.x = q.x();
-    magnet_pose.orientation.y = q.y();
-    magnet_pose.orientation.z = q.z();
-    magnet_pose.orientation.w = q.w();
-}
-
-void MagSensorSimNode::calculateDynamicOrientation(double &roll, double &pitch, double &yaw)
-{
-    static ros::Time rotation_start_time = ros::Time::now();
-    double elapsed_time = (ros::Time::now() - rotation_start_time).toSec();
-    double rotation_angle = elapsed_time * angular_velocity_;
-    roll = initial_roll_;
-    pitch = initial_pitch_;
-    yaw = initial_yaw_;
-    if (rotation_axis_ == "x" || rotation_axis_ == "xyz")
-        roll += rotation_angle;
-    if (rotation_axis_ == "y" || rotation_axis_ == "xyz")
-        pitch += rotation_angle;
-    if (rotation_axis_ == "z" || rotation_axis_ == "xyz")
-        yaw += rotation_angle;
-}
-
-geometry_msgs::Point MagSensorSimNode::calculatePositionFromVelocity(double elapsed_time)
-{
-    geometry_msgs::Point position;
-    double distance_traveled = translation_velocity_ * elapsed_time;
-    double distance_on_path = fmod(distance_traveled, path_total_length_);
-    double bottom_edge = rect_width_;
-    double right_edge = rect_height_;
-    double top_edge = rect_width_;
-    double left_edge = rect_height_;
-    double left = x_center_ - rect_width_ / 2.0;
-    double right = x_center_ + rect_width_ / 2.0;
-    double bottom = y_center_ - rect_height_ / 2.0;
-    double top = y_center_ + rect_height_ / 2.0;
-    position.z = rect_z_;
-    if (distance_on_path <= bottom_edge)
-    {
-        double ratio = distance_on_path / bottom_edge;
-        position.x = left + ratio * rect_width_;
-        position.y = bottom;
-    }
-    else if (distance_on_path <= bottom_edge + right_edge)
-    {
-        double ratio = (distance_on_path - bottom_edge) / right_edge;
-        position.x = right;
-        position.y = bottom + ratio * rect_height_;
-    }
-    else if (distance_on_path <= bottom_edge + right_edge + top_edge)
-    {
-        double ratio = (distance_on_path - bottom_edge - right_edge) / top_edge;
-        position.x = right - ratio * rect_width_;
-        position.y = top;
-    }
-    else
-    {
-        double ratio = (distance_on_path - bottom_edge - right_edge - top_edge) / left_edge;
-        position.x = left;
-        position.y = top - ratio * rect_height_;
-    }
-    return position;
 }
 
 void MagSensorSimNode::publishSensorMagneticFields(const MagnetPose &magnet_pose)
@@ -327,6 +181,7 @@ void MagSensorSimNode::publishSensorMagneticFields(const MagnetPose &magnet_pose
         positions(i, 1) = sensors[i].pose.position.y;
         positions(i, 2) = sensors[i].pose.position.z;
     }
+    
     Eigen::Vector3d magnet_position(magnet_pose.position.x, magnet_pose.position.y, magnet_pose.position.z);
     Eigen::Vector3d base_direction(0, 0, 1);
     Eigen::Quaterniond q(
