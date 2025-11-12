@@ -1,0 +1,42 @@
+<launch>
+    <!-- 仿真磁铁运动 + 传感器阵列 + 可视化 -->
+    <param name="/use_sim_time" value="false" />
+
+    <arg name="array_parent_frame" default="world" />
+    <arg name="magnet_parent_frame" default="world" />
+    <arg name="magnet_child_frame" default="magnet" />
+    <arg name="start_rviz" default="true" />
+
+    <!-- 磁铁轨迹仿真，发布 magnet TF -->
+    <node pkg="magnet_motion" type="magnet_motion_node" name="magnet_motion" output="screen">
+        <rosparam command="load" file="$(find magnet_motion)/config/magnet_motion_node.yaml" />
+        <param name="magnet_motion/motion/parent_frame" value="$(arg magnet_parent_frame)" />
+        <param name="magnet_motion/motion/child_frame" value="$(arg magnet_child_frame)" />
+    </node>
+
+    <!-- 传感器仿真节点，共享阵列配置并覆盖父坐标系 -->
+    <node pkg="mag_sensor_node" type="mag_sensor_sim_node" name="mag_sensor_sim" output="screen">
+        <rosparam command="load" file="$(find mag_sensor_node)/config/array.yaml" />
+        <param name="array/parent_frame" value="$(arg array_parent_frame)" />
+        <rosparam command="load" file="$(find mag_sensor_node)/config/simulation.yaml" />
+        <param name="simulation/magnet_frame/parent" value="$(arg magnet_parent_frame)" />
+        <param name="simulation/magnet_frame/child" value="$(arg magnet_child_frame)" />
+    </node>
+
+    <!-- 传感器读数可视化 -->
+    <node pkg="mag_viz" type="mag_sensor_viz_node" name="mag_sensor_viz" output="screen">
+        <rosparam command="load" file="$(find mag_sensor_node)/config/array.yaml" />
+        <param name="array/parent_frame" value="$(arg array_parent_frame)" />
+        <rosparam command="load" file="$(find mag_viz)/config/mag_sensor_viz_node.yaml" />
+    </node>
+
+    <!-- 磁铁姿态可视化（可订阅估计/真值话题） -->
+    <node pkg="mag_viz" type="magnet_viz_node" name="magnet_viz" output="screen">
+        <rosparam command="load" file="$(find mag_viz)/config/magnet_viz_node.yaml" />
+    </node>
+
+    <!-- 可选启动 RViz -->
+    <group if="$(arg start_rviz)">
+        <node pkg="rviz" type="rviz" name="rviz" args="-d $(find mag_viz)/rviz/mag_rviz.rviz" output="screen" />
+    </group>
+</launch>
