@@ -123,6 +123,14 @@ magnet_pose_estimation/
 - 控制接口：`/magnetic/control/goal`（action/service），由 `mag_tracking_control` 提供打通机械臂指令的接口。
 - 配置参数：各节点从私有命名空间读取 `config/*.yaml`；阵列几何由 `mag_core_description` 提供，保证实机/仿真一致。
 
+## 参数读取规范
+
+- **统一入口**：所有节点使用 `mag_core_utils::param::StructReader` / `ArrayReader` 访问参数服务器，保持错误信息、默认值语义一致。
+- **加载流程**：node 通过 `StructReader::fromParameter(~, key)` 获取根结构，将解析后的配置 struct 传递给业务类（例如 `SensorArrayDescription`）。
+- **错误约定**：缺失字段抛出 `std::runtime_error`，上下文采用 `~key.sub_field` 形式，便于快速定位配置问题。
+- **文档示例**：各包在 `config/` 目录提供 YAML 模板，字段说明与默认值需在 README 中同步维护，确保仿真/实机共用。
+- **职责边界**：几何/描述类包只维护结构化数据；与运行时行为相关的参数（频率、超时等）在各节点或 bringup 配置中定义。
+
 ## 实施步骤建议
 
 1. **逐包迁移**：按层级顺序重命名/拆分现有包，优先完成基础层和设备层以保证接口稳定。
