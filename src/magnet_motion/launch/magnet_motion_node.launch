@@ -1,6 +1,0 @@
-<launch>
-  <!-- Start only the magnet motion node and load params into its private namespace -->
-  <node pkg="magnet_motion" type="magnet_motion_node" name="magnet_motion_node" output="screen">
-    <rosparam file="$(find magnet_motion)/config/magnet_motion_node.yaml" command="load" />
-  </node>
-</launch>

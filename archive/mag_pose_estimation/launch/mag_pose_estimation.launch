@@ -1,0 +1,6 @@
+<launch>
+    <!-- 节点（参数在节点私有命名空间加载） -->
+    <node pkg="mag_pose_estimation" type="magnet_pose_estimator_node" name="magnet_pose_estimator" output="screen">
+        <rosparam command="load" file="$(find mag_pose_estimation)/config/magnet_pose_estimator_node.yaml" />
+    </node>
+</launch>

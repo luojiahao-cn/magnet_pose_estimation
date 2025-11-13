@@ -1,0 +1,14 @@
+# 传感器支架参数
+xyz: [0, 0, 0.0]
+rpy: [1.5708, 0, -1.5708]
+scale: [0.001, 0.001, 0.001]
+parent_link: auto
+object_name: mag_sensor_bracket
+mesh_path: package://mag_arm_scan/meshes/magnetic_sensor_bracket.STL
+auto_attach: true
+touch_links: [] # 如有手爪可加
+
+# 支架末端（tip）坐标（相对 tool_frame）
+tip_xyz: [0, 0.15, 0]   # 例如沿Z轴正方向5cm
+tip_rpy: [0, 0, 0]      # 默认无旋转
+tcp_frame_name: tool_tcp

@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>magnet_motion</name>
+  <version>0.0.0</version>
+  <description>Magnet motion TF publisher (separate package)</description>
+
+  <maintainer email="dev@todo.todo">todo</maintainer>
+  <license>BSD</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <build_depend>roscpp</build_depend>
+  <build_depend>tf2_ros</build_depend>
+  <build_depend>geometry_msgs</build_depend>
+
+  <exec_depend>roscpp</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+
+  <export>
+  </export>
+</package>

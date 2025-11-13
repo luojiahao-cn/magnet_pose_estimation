@@ -1,0 +1,62 @@
+<launch>
+
+    <!-- Node bringup -->
+    <arg name="start_sensor" default="true" />
+    <arg name="start_viz" default="true" />
+    <arg name="start_estimator" default="false" />
+    <arg name="start_scan" default="true" />
+    <arg name="start_sensor_tf" default="true" />
+    <arg name="start_world_tf" default="false" />
+    <arg name="world_frame" default="world" />
+    <arg name="base_frame" default="base_link" />
+
+    <!-- Args -->
+    <arg name="use_sim" default="true" />
+    <arg name="with_rviz" default="true" />
+
+    <!-- 不再全局加载参数；各子节点在其私有命名空间加载各自 YAML -->
+
+    <!-- Sensor bringup: gated + real or sim -->
+    <group if="$(arg start_sensor)">
+        <group if="$(arg use_sim)">
+            <include file="$(find mag_sensor_node)/launch/mag_sensor_sim_node.launch" />
+        </group>
+        <group unless="$(arg use_sim)">
+            <include file="$(find mag_sensor_node)/launch/mag_sensor_node.launch" />
+        </group>
+    </group>
+
+    <!-- Publish per-sensor static TF under TCP (or custom parent from centralized config) -->
+    <group if="$(arg start_sensor_tf)">
+        <include file="$(find mag_sensor_node)/launch/sensor_tf_publisher.launch" />
+    </group>
+
+    
+
+    <!-- Optional: publish world -> base_frame static TF (identity) -->
+    <group if="$(arg start_world_tf)">
+        <node pkg="tf2_ros" type="static_transform_publisher" name="world_to_base_static_tf"
+              args="0 0 0 0 0 0 1 $(arg world_frame) $(arg base_frame)" />
+    </group>
+
+    <!-- Visualization (YAML-driven) -->
+    <group if="$(arg start_viz)">
+        <include file="$(find mag_viz)/launch/mag_sensor_viz.launch"/>
+        <include file="$(find mag_viz)/launch/magnet_viz.launch"/>
+    </group>
+
+    <!-- Estimator -->
+    <group if="$(arg start_estimator)">
+        <include file="$(find mag_pose_estimation)/launch/mag_pose_estimation.launch" />
+    </group>
+
+    <!-- Optional: scan orchestrator -->
+    <group if="$(arg start_scan)">
+        <include file="$(find mag_arm_scan)/launch/mag_arm_scan.launch" />
+    </group>
+
+    <!-- RViz -->
+    <group if="$(arg with_rviz)">
+        <node pkg="rviz" type="rviz" name="rviz" required="true" args="-d $(find mag_viz)/config/rviz.rviz" />
+    </group>
+</launch>

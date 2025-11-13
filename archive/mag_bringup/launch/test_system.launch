@@ -1,0 +1,32 @@
+<launch>
+    <!-- 测试磁性姿态估计系统：传感器 + 姿态估计 + 可视化 -->
+
+    <!-- 1) 磁传感器模拟节点 -->
+    <param name="/use_sim_time" value="true" />
+    <node pkg="mag_sensor_node" type="mag_sensor_world_sim_node" name="mag_sensor" output="screen">
+        <rosparam file="$(find mag_sensor_node)/config/sensor_array.yaml" command="load" />
+        <rosparam file="$(find mag_sensor_node)/config/mag_sensor_world_sim_node.yaml" command="load" />
+    </node>
+
+    <!-- 2) 传感器 TF 发布器 -->
+    <node pkg="mag_sensor_node" type="sensor_tf_publisher_node" name="sensor_tf_publisher" output="screen">
+        <rosparam file="$(find mag_sensor_node)/config/sensor_array.yaml" command="load" />
+    </node>
+
+    <!-- 3) 磁铁姿态估计器 -->
+    <node pkg="mag_pose_estimation" type="magnet_pose_estimator_node" name="mag_pose_estimator" output="screen">
+        <rosparam file="$(find mag_pose_estimation)/config/magnet_pose_estimator_node.yaml" command="load" />
+    </node>
+
+    <!-- 4) 可视化 -->
+    <node pkg="mag_viz" type="magnet_viz_node" name="magnet_viz" output="screen">
+        <rosparam file="$(find mag_viz)/config/magnet_viz_node.yaml" command="load" />
+    </node>
+    <node pkg="mag_viz" type="mag_sensor_viz_node" name="mag_sensor_viz" output="screen">
+        <rosparam file="$(find mag_viz)/config/mag_sensor_viz_node.yaml" command="load" />
+    </node>
+
+    <!-- 5) RViz -->
+    <node pkg="rviz" type="rviz" name="rviz" args="-d $(find mag_viz)/rviz/mag_system.rviz" />
+
+</launch>

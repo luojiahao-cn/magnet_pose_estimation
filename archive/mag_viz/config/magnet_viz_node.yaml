@@ -1,0 +1,12 @@
+marker_topic: /magnet_viz/markers
+frame: sensor_array
+marker_lifetime: 0.0
+magnet_scale: 0.005
+
+sources:
+  - topic: /magnet_pose/estimated
+    namespace: magnet_est
+    label: EST
+  - topic: /magnet_pose/sim_true
+    namespace: magnet_sim
+    label: SIM

@@ -1,9 +1,0 @@
-<launch>
-    <node pkg="mag_viz" type="mag_sensor_viz_node" name="mag_sensor_viz" output="screen">
-        <rosparam file="$(find mag_sensor_node)/config/array.yaml" command="load" />
-        <rosparam file="$(find mag_viz)/config/mag_sensor_viz_node.yaml" command="load" />
-    </node>
-    
-    <!-- Launch RViz -->
-    <node pkg="rviz" type="rviz" name="rviz" args="-d $(find mag_viz)/rviz/mag_sensor.rviz" output="screen" />
-</launch>
