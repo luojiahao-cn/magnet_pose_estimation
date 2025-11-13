@@ -43,23 +43,23 @@ magnet_pose_estimation/
 ├── archive/
 ├── tests/
 └── src/
-  ├── core/
+  ├── 01_core/
   │   ├── mag_core_msgs/
   │   ├── mag_core_utils/
   │   └── mag_core_description/
-  ├── device/
+  ├── 02_device/
   │   ├── mag_device_sensor/
   │   ├── mag_device_motion/
   │   └── mag_device_arm/
-  ├── algorithm/
+  ├── 03_algorithm/
   │   ├── mag_tracking_estimator/
   │   ├── mag_tracking_control/
   │   └── mag_tracking_calib/
-  ├── application/
+  ├── 04_application/
   │   ├── mag_tracking_bringup/
   │   ├── mag_tracking_viz/
   │   └── mag_tracking_scan/
-  └── tools/
+  └── 05_tools/
     ├── mag_tools_analysis/
     └── mag_tools_sim/
 ```
@@ -71,7 +71,7 @@ magnet_pose_estimation/
 - `config_shared/`：跨包共享的参数模板（例如 MoveIt、仿真全局配置）。
 - `archive/`：封存旧代码或暂存模块，需在 README 中标注来源与弃用时间。
 - `tests/`：顶层集成或自动化测试脚本，各子包内仍可保留自有 `tests/` 目录。
-- `src/`：按层级划分 ROS 包子目录，即使未来包数量增加也能保持浏览清晰。
+- `src/`：按层级划分 ROS 包子目录，并使用数字前缀确保在文件浏览器中遵循“基础→上层”的顺序。
 
 ## 各层包职责
 
