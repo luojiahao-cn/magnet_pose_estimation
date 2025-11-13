@@ -68,6 +68,7 @@ Color MagSensorViz::colormap(double mag) const
         return lerp({0, 1, 0, 1}, {1, 0, 0, 1}, (t - 0.5) * 2.0);
 }
 
+// 处理单个传感器数据消息，发布对应的可视化 Marker
 void MagSensorViz::onMsg(const magnet_msgs::MagSensorData::ConstPtr &msg)
 {
     visualization_msgs::Marker m;
