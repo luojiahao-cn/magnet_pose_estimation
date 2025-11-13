@@ -1,0 +1,8 @@
+string arm
+geometry_msgs/Pose target
+float64 velocity_scaling
+float64 acceleration_scaling
+bool execute
+---
+bool success
+string message

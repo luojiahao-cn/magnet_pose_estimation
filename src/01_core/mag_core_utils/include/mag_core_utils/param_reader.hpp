@@ -33,6 +33,8 @@ public:
     double optionalNumber(const std::string &key, double default_value) const;
 
     int requireInt(const std::string &key) const;
+    bool requireBool(const std::string &key) const;
+    bool optionalBool(const std::string &key, bool default_value) const;
 
     std::vector<double> requireVector3(const std::string &key) const;
 

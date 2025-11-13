@@ -49,7 +49,7 @@ magnet_pose_estimation/
   │   └── mag_core_description/
   ├── 02_device/
   │   ├── mag_device_sensor/
-  │   ├── mag_device_motion/
+  │   ├── mag_device_magnet/
   │   └── mag_device_arm/
   ├── 03_algorithm/
   │   ├── mag_tracking_estimator/
@@ -88,7 +88,7 @@ magnet_pose_estimation/
 | 包名 | 职责 | 接口 |
 | --- | --- | --- |
 | `mag_device_sensor` | 传感器硬件驱动与仿真节点 | 订阅 `~config/*`，发布 `/magnetic/sensor/raw`、`/magnetic/sensor/field`。 |
-| `mag_device_motion` | 磁铁（目标）运动与仿真 | 发布磁铁 TF、真值姿态，加载自身轨迹/运动配置。 |
+| `mag_device_magnet` | 磁铁（目标）运动与仿真 | 发布磁铁 TF、真值姿态，加载自身轨迹/运动配置。 |
 | `mag_device_arm` | 双臂控制适配（MoveIt 接口） | 提供机械臂操作服务/动作给算法层；封装工具管理。 |
 
 ### 3. 算法与估计层（Algorithm Layer）

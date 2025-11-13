@@ -1,0 +1,16 @@
+config:
+  driver:
+    serial_port: /dev/ttyUSB0
+    baud_rate: 921600
+    timeout_ms: 1000
+    poll_sleep_ms: 1
+    freq_stat_period: 20.0
+  calibration:
+    full_scale_mT: 3.2
+    raw_max: 32767.0
+  topics:
+    raw: /magnetic/sensor/raw
+    field: /magnetic/sensor/field
+  tf:
+    enable: true
+    publish_rate: 50.0

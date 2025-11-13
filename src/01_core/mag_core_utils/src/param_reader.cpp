@@ -8,6 +8,7 @@ namespace
 {
 std::string makeContext(const std::string &prefix, const std::string &key)
 {
+    // 构造形如 a.b.c 的上下文路径，便于错误提示定位
     if (prefix.empty())
     {
         return key;
@@ -43,6 +44,7 @@ std::string typeName(XmlRpc::XmlRpcValue::Type type)
 
 [[noreturn]] void throwMissing(const std::string &context, const std::string &key)
 {
+    // 当缺少必要字段时抛出带上下文信息的异常
     throw std::runtime_error("parameter '" + makeContext(context, key) + "' is required");
 }
 
@@ -50,6 +52,7 @@ std::string typeName(XmlRpc::XmlRpcValue::Type type)
                              const std::string &expected,
                              const XmlRpc::XmlRpcValue &value)
 {
+    // 对类型不匹配的参数给出详细的期望类型说明
     std::ostringstream oss;
     oss << "parameter '" << context << "' must be a " << expected
         << " (got " << typeName(value.getType()) << ")";
@@ -62,6 +65,7 @@ StructReader StructReader::fromParameter(const ros::NodeHandle &nh,
                                          const std::string &key,
                                          const std::string &context_prefix)
 {
+    // 从 ROS 参数服务器拉取节点，并确保顶层是 struct 类型
     XmlRpc::XmlRpcValue root;
     if (!nh.getParam(key, root))
     {
@@ -84,6 +88,7 @@ StructReader::StructReader(std::shared_ptr<XmlRpc::XmlRpcValue> storage,
                            std::string context)
     : storage_(std::move(storage)), value_(value), context_(std::move(context))
 {
+    // 构造函数负责保存共享的 XMLRPC 存储以及当前节点指针
     if (!value_)
     {
         throw std::runtime_error("null XmlRpc struct at context '" + context_ + "'");
@@ -96,6 +101,7 @@ StructReader::StructReader(std::shared_ptr<XmlRpc::XmlRpcValue> storage,
 
 const XmlRpc::XmlRpcValue &StructReader::getMember(const std::string &key) const
 {
+    // 安全访问子成员，缺失时给出上下文
     if (!value_->hasMember(key))
     {
         throwMissing(context_, key);
@@ -111,6 +117,7 @@ StructReader StructReader::childStruct(const std::string &key) const
     {
         throwType(context, "struct", child);
     }
+    // 递归包装子结构体，保留共享的 XMLRPC 存储
     return StructReader(storage_, &child, context);
 }
 
@@ -127,6 +134,7 @@ ArrayReader StructReader::childArray(const std::string &key) const
 
 bool StructReader::has(const std::string &key) const
 {
+    // 对 optional 字段执行存在性测试
     return value_->hasMember(key);
 }
 
@@ -152,6 +160,7 @@ std::string StructReader::optionalString(const std::string &key, const std::stri
 
 double StructReader::requireNumber(const std::string &key) const
 {
+    // 统一处理 int/double 两种数值类型，保证调用方得到 double
     const auto &child = getMember(key);
     const auto context = makeContext(context_, key);
     if (child.getType() == XmlRpc::XmlRpcValue::TypeDouble)
@@ -191,6 +200,36 @@ int StructReader::requireInt(const std::string &key) const
     return 0; // unreachable
 }
 
+bool StructReader::requireBool(const std::string &key) const
+{
+    // 将 0/1 数值和显式布尔都映射为 bool
+    const auto &child = getMember(key);
+    const auto context = makeContext(context_, key);
+    if (child.getType() == XmlRpc::XmlRpcValue::TypeBoolean)
+    {
+        return static_cast<bool>(child);
+    }
+    if (child.getType() == XmlRpc::XmlRpcValue::TypeInt)
+    {
+        return static_cast<int>(child) != 0;
+    }
+    if (child.getType() == XmlRpc::XmlRpcValue::TypeDouble)
+    {
+        return static_cast<double>(child) != 0.0;
+    }
+    throwType(context, "bool", child);
+    return false; // unreachable
+}
+
+bool StructReader::optionalBool(const std::string &key, bool default_value) const
+{
+    if (!has(key))
+    {
+        return default_value;
+    }
+    return requireBool(key);
+}
+
 std::vector<double> StructReader::requireVector3(const std::string &key) const
 {
     const auto &child = getMember(key);
@@ -199,6 +238,7 @@ std::vector<double> StructReader::requireVector3(const std::string &key) const
     {
         throw std::runtime_error("parameter '" + context + "' must be an array of length 3");
     }
+    // 依次读取数组元素，并兼容 int/double 两种数值类型
     std::vector<double> result(3);
     for (int i = 0; i < child.size(); ++i)
     {
@@ -225,6 +265,7 @@ ArrayReader::ArrayReader(std::shared_ptr<XmlRpc::XmlRpcValue> storage,
                          std::string context)
     : storage_(std::move(storage)), value_(value), context_(std::move(context))
 {
+    // 记录数组节点并在构造阶段验证类型
     if (!value_)
     {
         throw std::runtime_error("null XmlRpc array at context '" + context_ + "'");
@@ -242,6 +283,7 @@ int ArrayReader::size() const
 
 void ArrayReader::requireIndexInRange(int index) const
 {
+    // 数组越界保护，同时给出当前上下文信息
     if (index < 0 || index >= size())
     {
         std::ostringstream oss;
@@ -270,6 +312,7 @@ StructReader ArrayReader::structAt(int index) const
     {
         throwType(context, "struct", child);
     }
+    // 重用 StructReader 帮助类读取数组元素中的对象
     return StructReader(storage_, &child, context);
 }
 
@@ -299,6 +342,7 @@ std::vector<double> ArrayReader::vector3At(int index) const
         oss << "parameter '" << context << "' must be an array of length 3";
         throw std::runtime_error(oss.str());
     }
+    // 将数组元素转换为 double，匹配 requireVector3 的逻辑
     std::vector<double> result(3);
     for (int i = 0; i < child.size(); ++i)
     {

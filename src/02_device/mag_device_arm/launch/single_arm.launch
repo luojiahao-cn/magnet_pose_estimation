@@ -1,0 +1,7 @@
+<launch>
+  <arg name="config" default="$(find mag_device_arm)/config/single_arm.yaml" />
+
+  <node pkg="mag_device_arm" type="arm_main" name="mag_device_arm" output="screen">
+    <rosparam command="load" file="$(arg config)" />
+  </node>
+</launch>

@@ -1,0 +1,78 @@
+config:
+  arms:
+    - name: magnet
+      group_name: fr5v6_magnet_arm
+      end_effector_link: magnet_arm_tool
+      reference_frame: world
+      default_velocity: 0.3
+      default_acceleration: 0.3
+      planning_time: 5.0
+      allow_replanning: false
+      goal_position_tolerance: 0.005
+      goal_orientation_tolerance: 0.01
+      default_named_target: home
+      base_tf:
+        parent: world
+        child: magnet_arm_base
+        pose:
+          xyz: [0.0, 0.0, 0.0]
+          rpy: [0.0, 0.0, 0.0]
+      named_targets:
+        - name: home
+          target: magnet_home
+        - name: ready
+          target: magnet_ready
+      tool_mount:
+        selected: none
+        options:
+          - name: magnetic_sensor_bracket
+            frame: magnet_sensor_tool
+            parent_frame: magnet_arm_tool
+            mesh: package://mag_device_arm/meshes/magnetic_sensor_bracket.STL
+            pose:
+              xyz: [0.0, 0.0, 0.1]
+              rpy: [0.0, 0.0, 0.0]
+          - name: none
+            frame: magnet_arm_tool_mount
+            parent_frame: magnet_arm_tool
+            pose:
+              xyz: [0.0, 0.0, 0.0]
+              rpy: [0.0, 0.0, 0.0]
+    - name: sensor
+      group_name: fr5v6_sensor_arm
+      end_effector_link: sensor_arm_tool
+      reference_frame: world
+      default_velocity: 0.3
+      default_acceleration: 0.3
+      planning_time: 5.0
+      allow_replanning: false
+      goal_position_tolerance: 0.005
+      goal_orientation_tolerance: 0.01
+      default_named_target: home
+      base_tf:
+        parent: world
+        child: sensor_arm_base
+        pose:
+          xyz: [0.4, -0.2, 0.0]
+          rpy: [0.0, 0.0, 0.0]
+      named_targets:
+        - name: home
+          target: sensor_home
+        - name: ready
+          target: sensor_ready
+      tool_mount:
+        selected: magnetic_sensor_bracket
+        options:
+          - name: magnetic_sensor_bracket
+            frame: sensor_payload_tool
+            parent_frame: sensor_arm_tool
+            mesh: package://mag_device_arm/meshes/magnetic_sensor_bracket.STL
+            pose:
+              xyz: [0.0, 0.0, 0.1]
+              rpy: [0.0, 0.0, 0.0]
+          - name: none
+            frame: sensor_arm_tool_mount
+            parent_frame: sensor_arm_tool
+            pose:
+              xyz: [0.0, 0.0, 0.0]
+              rpy: [0.0, 0.0, 0.0]

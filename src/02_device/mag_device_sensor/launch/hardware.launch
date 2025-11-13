@@ -1,0 +1,9 @@
+<launch>
+  <arg name="array_file" default="$(find mag_core_description)/config/sensor_array.yaml" />
+  <arg name="config_file" default="$(find mag_device_sensor)/config/hardware.yaml" />
+
+  <node pkg="mag_device_sensor" type="sensor_driver_node" name="mag_device_sensor" output="screen">
+    <rosparam command="load" file="$(arg array_file)" />
+    <rosparam command="load" file="$(arg config_file)" />
+  </node>
+</launch>
