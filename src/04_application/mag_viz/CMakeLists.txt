@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(mag_tracking_viz)
+project(mag_viz)
 
 find_package(catkin REQUIRED)
 

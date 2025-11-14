@@ -1,0 +1,22 @@
+estimator_type: ekf
+pose_topic: mag_pose
+output_frame: map
+
+# Magnetometer preprocessing
+enable_calibration: true
+soft_iron_matrix: [1.02, 0.00, 0.00,
+                   0.00, 0.99, 0.01,
+                   0.00, 0.01, 1.01]
+hard_iron_offset: [0.001, -0.002, 0.0005]
+
+enable_filter: true
+low_pass_alpha: 0.2
+
+# Estimator parameters
+position_gain: 0.02
+process_noise_position: 1.0e-4
+process_noise_orientation: 5.0e-5
+measurement_noise: 1.0e-3
+optimizer_iterations: 15
+optimizer_damping: 1.0e-3
+world_field: [2.0e-5, 1.0e-5, 4.5e-5]

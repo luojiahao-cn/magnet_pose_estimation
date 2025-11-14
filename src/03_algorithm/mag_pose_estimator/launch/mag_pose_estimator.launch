@@ -1,0 +1,6 @@
+<launch>
+  <arg name="config" default="$(find mag_pose_estimator)/config/mag_pose_estimator.yaml"/>
+  <node pkg="mag_pose_estimator" type="mag_pose_estimator_node" name="mag_pose_estimator" output="screen">
+    <rosparam command="load" file="$(arg config)"/>
+  </node>
+</launch>

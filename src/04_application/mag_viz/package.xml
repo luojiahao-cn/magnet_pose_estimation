@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>mag_tracking_scan</name>
+  <name>mag_viz</name>
   <version>0.0.0</version>
-  <description>Scanning and recording workflows for the magnetic tracking system.</description>
+  <description>Visualization nodes and RViz configurations for magnetic tracking.</description>
   <maintainer email="maintainer@example.com">TODO</maintainer>
   <license>TODO</license>
   <buildtool_depend>catkin</buildtool_depend>

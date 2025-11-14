@@ -52,12 +52,12 @@ magnet_pose_estimation/
   │   ├── mag_device_magnet/
   │   └── mag_device_arm/
   ├── 03_algorithm/
-  │   ├── mag_tracking_estimator/
+  │   ├── mag_pose_estimator/
   │   ├── mag_tracking_control/
   │   └── mag_tracking_calib/
   ├── 04_application/
   │   ├── mag_tracking_bringup/
-  │   ├── mag_tracking_viz/
+  │   ├── mag_viz/
   │   └── mag_tracking_scan/
   └── 05_tools/
     ├── mag_tools_analysis/
@@ -95,7 +95,7 @@ magnet_pose_estimation/
 
 | 包名 | 职责 | 接口 |
 | --- | --- | --- |
-| `mag_tracking_estimator` | 磁场建模、姿态估计、滤波 | 订阅传感器数据、目标 TF；发布 `/magnetic/pose_estimated`、误差诊断。 |
+| `mag_pose_estimator` | 磁场建模、姿态估计 | 订阅传感器数据、目标 TF；发布 `/magnetic/pose_estimated`、误差诊断。 |
 | `mag_tracking_control` | 闭环控制策略 | 订阅估计结果，调用 `mag_device_arm` 服务，实现磁铁臂追踪。 |
 | `mag_tracking_calib` | 阵列/噪声/磁场参数标定 | 输出配置供 `mag_core_description` 与驱动节点使用。 |
 
@@ -104,7 +104,7 @@ magnet_pose_estimation/
 | 包名 | 职责 | 内容 |
 | --- | --- | --- |
 | `mag_tracking_bringup` | 系统级 launch 与参数模板 | 提供实机、仿真、回放等模式的启动文件。 |
-| `mag_tracking_viz` | 可视化节点与 RViz 配置 | 订阅估计/真值/传感器话题，展示 TF、轨迹、场强。 |
+| `mag_viz` | 可视化节点与 RViz 配置 | 订阅估计/真值/传感器话题，展示 TF、轨迹、场强。 |
 | `mag_tracking_scan` | 扫描/记录流程编排 | 调用设备层和算法层实现扫描任务（原 `mag_arm_scan` 拆分后归属此处）。 |
 
 ### 5. 工具与测试层（Tools & Test）
