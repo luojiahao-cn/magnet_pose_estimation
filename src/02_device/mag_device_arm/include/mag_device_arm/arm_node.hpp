@@ -11,7 +11,9 @@
 #include <tf2_ros/static_transform_broadcaster.h>
 
 #include <moveit/move_group_interface/move_group_interface.h>
+#include <moveit/planning_scene_interface/planning_scene_interface.h>
 
+#include <array>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -39,6 +41,7 @@ struct ToolMountOption
     std::string child_frame;
     geometry_msgs::Pose pose;
     std::string mesh_resource;
+    std::array<double, 3> scale{ {1.0, 1.0, 1.0} };
 };
 
 // 单个机械臂的 MoveIt 参数
@@ -102,6 +105,7 @@ private:
     ros::ServiceServer execute_named_srv_;
 
     tf2_ros::StaticTransformBroadcaster static_broadcaster_;
+    moveit::planning_interface::PlanningSceneInterface planning_scene_interface_;
 };
 
 } // namespace mag_device_arm

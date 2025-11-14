@@ -5,9 +5,15 @@
 #include <ros/console.h>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+#include <geometric_shapes/shapes.h>
+#include <geometric_shapes/shape_operations.h>
+#include <moveit_msgs/AttachedCollisionObject.h>
+#include <shape_msgs/Mesh.h>
 
+#include <Eigen/Core>
 #include <algorithm>
 #include <cctype>
+#include <memory>
 #include <stdexcept>
 #include <tuple>
 #include <unordered_set>
@@ -62,7 +68,66 @@ ToolMountOption parseToolOption(const mag_core_utils::param::StructReader &tool_
         option.pose = poseFromXyzRpy(xyz, rpy);
     }
 
+    if (tool_node.has("scale"))
+    {
+        const auto scale_vec = tool_node.requireVector3("scale");
+        option.scale = {scale_vec[0], scale_vec[1], scale_vec[2]};
+    }
+
     return option;
+}
+
+shape_msgs::Mesh meshToMsg(const shapes::Mesh &mesh)
+{
+    shape_msgs::Mesh msg;
+    msg.vertices.resize(mesh.vertex_count);
+    for (size_t i = 0; i < mesh.vertex_count; ++i)
+    {
+        geometry_msgs::Point p;
+        p.x = mesh.vertices[3 * i + 0];
+        p.y = mesh.vertices[3 * i + 1];
+        p.z = mesh.vertices[3 * i + 2];
+        msg.vertices[i] = p;
+    }
+
+    msg.triangles.resize(mesh.triangle_count);
+    for (size_t i = 0; i < mesh.triangle_count; ++i)
+    {
+        shape_msgs::MeshTriangle tri;
+        tri.vertex_indices[0] = mesh.triangles[3 * i + 0];
+        tri.vertex_indices[1] = mesh.triangles[3 * i + 1];
+        tri.vertex_indices[2] = mesh.triangles[3 * i + 2];
+        msg.triangles[i] = tri;
+    }
+
+    return msg;
+}
+
+std::optional<moveit_msgs::AttachedCollisionObject> makeAttachedCollisionObject(const ArmConfig &cfg,
+                                                                                const ToolMountOption &tool)
+{
+    if (tool.mesh_resource.empty())
+    {
+        return std::nullopt;
+    }
+
+    Eigen::Vector3d scale(tool.scale[0], tool.scale[1], tool.scale[2]);
+    std::unique_ptr<shapes::Mesh> mesh(shapes::createMeshFromResource(tool.mesh_resource, scale));
+    if (!mesh)
+    {
+        ROS_WARN_STREAM("[mag_device_arm] 无法加载工具 mesh: " << tool.mesh_resource);
+        return std::nullopt;
+    }
+
+    moveit_msgs::AttachedCollisionObject attached;
+    attached.link_name = cfg.end_effector_link;
+    attached.object.header.frame_id = tool.parent_frame.empty() ? cfg.end_effector_link : tool.parent_frame;
+    attached.object.id = cfg.name + "_" + tool.name + "_tool";
+    attached.object.operation = moveit_msgs::CollisionObject::ADD;
+    attached.object.meshes.push_back(meshToMsg(*mesh));
+    attached.object.mesh_poses.push_back(tool.pose);
+    attached.touch_links.push_back(cfg.end_effector_link);
+    return attached;
 }
 
 } // namespace
@@ -222,6 +287,7 @@ void ArmNode::start()
 {
     // 初始化 MoveGroupInterface 并按需发布静态 TF
     std::vector<geometry_msgs::TransformStamped> static_transforms;
+    std::vector<moveit_msgs::AttachedCollisionObject> attached_tools;
 
     for (auto &kv : arms_)
     {
@@ -257,12 +323,22 @@ void ArmNode::start()
                                                  << handle.config.selected_tool->name << " -> "
                                                  << handle.config.selected_tool->parent_frame << " -> "
                                                  << handle.config.selected_tool->child_frame);
+
+            if (auto attached = makeAttachedCollisionObject(handle.config, handle.config.selected_tool.value()))
+            {
+                attached_tools.push_back(*attached);
+            }
         }
     }
 
     if (!static_transforms.empty())
     {
         static_broadcaster_.sendTransform(static_transforms);
+    }
+
+    for (const auto &obj : attached_tools)
+    {
+        planning_scene_interface_.applyAttachedCollisionObject(obj);
     }
 
     set_pose_srv_ = pnh_.advertiseService("set_end_effector_pose", &ArmNode::handleSetPose, this);

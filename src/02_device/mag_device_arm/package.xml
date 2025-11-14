@@ -8,19 +8,26 @@
   <buildtool_depend>catkin</buildtool_depend>
   <build_depend>roscpp</build_depend>
   <build_depend>geometry_msgs</build_depend>
+  <build_depend>shape_msgs</build_depend>
   <build_depend>tf2_ros</build_depend>
   <build_depend>tf2_geometry_msgs</build_depend>
   <build_depend>mag_core_utils</build_depend>
   <build_depend>mag_core_msgs</build_depend>
   <build_depend>moveit_ros_planning_interface</build_depend>
+  <build_depend>moveit_msgs</build_depend>
+  <build_depend>geometric_shapes</build_depend>
   <build_depend>message_generation</build_depend>
   <exec_depend>roscpp</exec_depend>
+  <exec_depend>rospy</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>shape_msgs</exec_depend>
   <exec_depend>tf2_ros</exec_depend>
   <exec_depend>tf2_geometry_msgs</exec_depend>
   <exec_depend>mag_core_utils</exec_depend>
   <exec_depend>mag_core_msgs</exec_depend>
   <exec_depend>moveit_ros_planning_interface</exec_depend>
+  <exec_depend>moveit_msgs</exec_depend>
+  <exec_depend>geometric_shapes</exec_depend>
   <exec_depend>message_runtime</exec_depend>
   <export/>
 </package>

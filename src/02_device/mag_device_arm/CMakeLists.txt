@@ -6,11 +6,14 @@ add_compile_options(-std=c++17)
 find_package(catkin REQUIRED COMPONENTS
 	roscpp
 	geometry_msgs
+	shape_msgs
 	tf2_ros
 	tf2_geometry_msgs
 	mag_core_utils
 	mag_core_msgs
 	moveit_ros_planning_interface
+	moveit_msgs
+	geometric_shapes
 	message_generation
 )
 
@@ -30,11 +33,14 @@ catkin_package(
 	CATKIN_DEPENDS
 		roscpp
 		geometry_msgs
+		shape_msgs
 		tf2_ros
 		tf2_geometry_msgs
 		mag_core_utils
 		mag_core_msgs
 		moveit_ros_planning_interface
+		moveit_msgs
+		geometric_shapes
 		message_runtime
 )
 
@@ -70,4 +76,9 @@ install(DIRECTORY config launch
 install(DIRECTORY meshes/
 	DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/meshes
 	FILES_MATCHING PATTERN "*.STL" PATTERN "*.stl" PATTERN "*.SLDPRT"
+)
+
+catkin_install_python(
+	PROGRAMS scripts/arm_ping_pong.py
+	DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )

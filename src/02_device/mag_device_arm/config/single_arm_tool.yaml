@@ -22,3 +22,20 @@ config:
           target: ready
         - name: up
           target: up
+      tool_mount:
+        selected: magnetic_sensor_bracket
+        options:
+          - name: magnetic_sensor_bracket
+            frame: magnet_sensor_tool
+            parent_frame: frrobot_tool_link
+            mesh: package://mag_device_arm/meshes/magnetic_sensor_bracket.STL
+            pose:
+              xyz: [0.0, 0.0, 0.0]
+              rpy: [1.5708, 0.0, -1.5708]
+            scale: [0.001, 0.001, 0.001]
+          - name: none
+            frame: magnet_arm_tool_mount
+            parent_frame: frrobot_tool_link
+            pose:
+              xyz: [0.0, 0.0, 0.0]
+              rpy: [0.0, 0.0, 0.0]

@@ -1,0 +1,25 @@
+<launch>
+  <arg name="config" default="$(find mag_device_arm)/config/single_arm.yaml" />
+  <arg name="arm" default="magnet" />
+  <arg name="velocity" default="0.1" />
+  <arg name="acceleration" default="0.1" />
+  <arg name="wait_time" default="2.0" />
+
+  <include file="$(find mag_device_arm)/launch/single_arm.launch">
+    <arg name="config" value="$(arg config)" />
+  </include>
+
+  <node pkg="mag_device_arm" type="arm_ping_pong.py" name="arm_ping_pong" output="screen">
+    <param name="arm" value="$(arg arm)" />
+    <param name="velocity_scaling" value="$(arg velocity)" />
+    <param name="acceleration_scaling" value="$(arg acceleration)" />
+    <param name="wait_time" value="$(arg wait_time)" />
+
+    <rosparam param="pose_a">
+      named_target: ready
+    </rosparam>
+    <rosparam param="pose_b">
+      named_target: up
+    </rosparam>
+  </node>
+</launch>
