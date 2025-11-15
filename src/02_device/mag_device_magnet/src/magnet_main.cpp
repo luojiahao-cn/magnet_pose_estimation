@@ -21,8 +21,9 @@ int main(int argc, char **argv)
         auto motion = mag_device_magnet::loadMotionConfig(root);
         auto tf = mag_device_magnet::loadTfConfig(root);
         auto trajectory = mag_device_magnet::loadTrajectoryConfig(root);
+        auto orientation = mag_device_magnet::loadOrientationConfig(root);
 
-        mag_device_magnet::MagnetNode node(nh, pnh, frame, motion, topics, tf, trajectory);
+        mag_device_magnet::MagnetNode node(nh, pnh, frame, motion, topics, tf, trajectory, orientation);
         node.start();
         ros::spin();
     }

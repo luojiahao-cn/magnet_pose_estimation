@@ -1,0 +1,14 @@
+pose_topic: "/magnetic/pose_true"
+frame_id: "world"
+marker_ns: "magnet"
+trail_size: 600
+trail_duration: 45.0
+trail_min_distance: 0.001
+trail_width: 0.003
+magnet_length: 0.04
+magnet_radius: 0.01
+marker_lifetime: 0.0
+strength_text_size: 0.03
+strength_offset_scale: 0.5
+show_strength_text: true
+strength_label: "magnet"

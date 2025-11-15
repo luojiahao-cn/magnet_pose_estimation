@@ -1,0 +1,7 @@
+<launch>
+  <arg name="config" default="$(find mag_device_magnet)/config/rectangular.yaml" />
+
+  <node pkg="mag_device_magnet" type="magnet_main" name="mag_device_magnet" output="screen">
+    <rosparam command="load" file="$(arg config)" />
+  </node>
+</launch>

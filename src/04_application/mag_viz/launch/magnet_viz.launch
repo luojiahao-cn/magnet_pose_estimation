@@ -1,0 +1,18 @@
+<launch>
+    <arg name="config" default="$(find mag_viz)/config/magnet_viz.yaml"/>
+    <arg name="use_rviz" default="true"/>
+
+    <node pkg="mag_viz"
+          type="magnet_viz_node"
+          name="magnet_viz"
+          output="screen">
+        <rosparam command="load" file="$(arg config)"/>
+    </node>
+
+    <group if="$(arg use_rviz)">
+        <node pkg="rviz"
+              type="rviz"
+              name="magnet_viz_rviz"
+              args="-d $(find mag_viz)/rviz/magnet_viz.rviz"/>
+    </group>
+</launch>

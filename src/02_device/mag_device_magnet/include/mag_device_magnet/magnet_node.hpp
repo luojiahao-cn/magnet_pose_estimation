@@ -48,7 +48,8 @@ struct TfConfig
 enum class TrajectoryType
 {
     Static,
-    Circular
+    Circular,
+    Rectangular
 };
 
 // 静止轨迹配置
@@ -60,11 +61,30 @@ struct StaticTrajectoryConfig
 // 圆轨迹配置
 struct CircularTrajectoryConfig
 {
+    CircularTrajectoryConfig()
+    {
+        orientation.w = 1.0;
+    }
     geometry_msgs::Point center;
     double radius = 0.05;
     double angular_speed = 0.5;
     double phase = 0.0;
     geometry_msgs::Quaternion orientation;
+};
+
+struct RectangularTrajectoryConfig
+{
+    RectangularTrajectoryConfig()
+    {
+        orientation.w = 1.0;
+    }
+    double width = 0.02;
+    double height = 0.02;
+    double z = 0.0;
+    geometry_msgs::Point center;
+    double velocity = 0.01;
+    geometry_msgs::Quaternion orientation; // fallback orientation when未单独指定
+    double perimeter = 0.0;
 };
 
 // 综合轨迹配置
@@ -73,6 +93,7 @@ struct TrajectoryConfig
     TrajectoryType type = TrajectoryType::Static;
     StaticTrajectoryConfig static_config;
     CircularTrajectoryConfig circular_config;
+    RectangularTrajectoryConfig rectangular_config;
 };
 
 // 轨迹采样输出
@@ -81,11 +102,36 @@ struct TrajectorySample
     geometry_msgs::Pose pose;
 };
 
+enum class OrientationMode
+{
+    FromTrajectory,
+    Fixed,
+    Spin
+};
+
+struct OrientationConfig
+{
+    OrientationConfig()
+    {
+        fixed_orientation.w = 1.0;
+    }
+    OrientationMode mode = OrientationMode::FromTrajectory;
+    geometry_msgs::Quaternion fixed_orientation;
+    double initial_roll = 0.0;
+    double initial_pitch = 0.0;
+    double initial_yaw = 0.0;
+    double angular_velocity = 0.0;
+    bool axis_x = false;
+    bool axis_y = false;
+    bool axis_z = false;
+};
+
 FrameConfig loadFrameConfig(const mag_core_utils::param::StructReader &root);
 TopicConfig loadTopicConfig(const mag_core_utils::param::StructReader &root, TopicConfig defaults = {});
 MotionConfig loadMotionConfig(const mag_core_utils::param::StructReader &root, MotionConfig defaults = {});
 TfConfig loadTfConfig(const mag_core_utils::param::StructReader &root, TfConfig defaults = {});
 TrajectoryConfig loadTrajectoryConfig(const mag_core_utils::param::StructReader &root);
+OrientationConfig loadOrientationConfig(const mag_core_utils::param::StructReader &root);
 
 class MagnetNode
 {
@@ -96,7 +142,8 @@ public:
                MotionConfig motion_config,
                TopicConfig topic_config,
                TfConfig tf_config,
-               TrajectoryConfig trajectory_config);
+               TrajectoryConfig trajectory_config,
+               OrientationConfig orientation_config);
 
     void start();
 
@@ -107,6 +154,9 @@ private:
     TrajectorySample sampleTrajectory(double elapsed_seconds) const;
     TrajectorySample sampleStatic() const;
     TrajectorySample sampleCircular(double elapsed_seconds) const;
+    TrajectorySample sampleRectangular(double elapsed_seconds) const;
+    geometry_msgs::Quaternion sampleOrientation(double elapsed_seconds,
+                                                const geometry_msgs::Quaternion &base_orientation) const;
 
     void publishPose(const ros::Time &stamp, const geometry_msgs::Pose &pose);
     void publishTransform(const ros::Time &stamp, const geometry_msgs::Pose &pose, bool static_tf);
@@ -119,6 +169,7 @@ private:
     TopicConfig topic_config_;
     TfConfig tf_config_;
     TrajectoryConfig trajectory_config_;
+    OrientationConfig orientation_config_;
 
     ros::Publisher pose_pub_;
     ros::Timer update_timer_;
