@@ -9,13 +9,14 @@ MagPoseEstimatorNode::MagPoseEstimatorNode(ros::NodeHandle nh, ros::NodeHandle p
   preprocessor_.configure(pnh_);
   initializeEstimator();
 
-  mag_sub_ = nh_.subscribe("/mag", 10, &MagPoseEstimatorNode::magCallback, this);
+  mag_sub_ = nh_.subscribe(mag_topic_, 10, &MagPoseEstimatorNode::magCallback, this);
   pose_pub_ = nh_.advertise<geometry_msgs::PoseStamped>(pose_topic_, 10);
 }
 
 void MagPoseEstimatorNode::loadParameters() {
   pnh_.param<std::string>("estimator_type", estimator_type_, "ekf");
-  pnh_.param<std::string>("pose_topic", pose_topic_, "mag_pose");
+  pnh_.param<std::string>("mag_topic", mag_topic_, "/magnetic/sensor/field");
+  pnh_.param<std::string>("pose_topic", pose_topic_, "/magnetic/pose_estimated");
   pnh_.param<std::string>("output_frame", output_frame_, "map");
 
   pnh_.param("position_gain", position_gain_, 0.01);
@@ -54,8 +55,15 @@ EstimatorConfig MagPoseEstimatorNode::buildConfigFromParameters() const {
   return cfg;
 }
 
-void MagPoseEstimatorNode::magCallback(const sensor_msgs::MagneticFieldConstPtr &msg) {
-  sensor_msgs::MagneticField processed = preprocessor_.process(*msg);
+void MagPoseEstimatorNode::magCallback(const mag_core_msgs::MagSensorDataConstPtr &msg) {
+  sensor_msgs::MagneticField mag_msg;
+  mag_msg.header = msg->header;
+  constexpr double kMilliTeslaToTesla = 1e-3;
+  mag_msg.magnetic_field.x = msg->mag_x * kMilliTeslaToTesla;
+  mag_msg.magnetic_field.y = msg->mag_y * kMilliTeslaToTesla;
+  mag_msg.magnetic_field.z = msg->mag_z * kMilliTeslaToTesla;
+
+  sensor_msgs::MagneticField processed = preprocessor_.process(mag_msg);
   estimator_->update(processed);
   geometry_msgs::Pose pose = estimator_->getPose();
   publishPose(pose, msg->header.stamp.isZero() ? ros::Time::now() : msg->header.stamp);

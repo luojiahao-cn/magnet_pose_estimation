@@ -17,8 +17,8 @@
 创建一个主节点：`mag_pose_estimator_node`，功能包含：
 
 1. **订阅磁力计数据：**
-   - topic：`/mag`
-   - 类型：`sensor_msgs/MagneticField`
+   - topic：`/magnetic/sensor/field`
+   - 类型：`mag_core_msgs/MagSensorData`（单位：mT，节点内部会转换为 `sensor_msgs/MagneticField` 的特斯拉值）
 
 2. **数据预处理：**
    - 磁力计 soft/hard iron 校正（提供默认的校准函数）
@@ -33,7 +33,7 @@
    - 可通过 ROS 参数（或动态参数）切换算法，例如 `estimator_type: ekf` 或 `optimizer`
 
 4. **输出：**
-   - 发布 `geometry_msgs/PoseStamped` 到 `/mag_pose`
+   - 发布 `geometry_msgs/PoseStamped` 到 `/magnetic/pose_estimated`
    - 自动生成 header.stamp 与 frame_id
 
 
@@ -94,7 +94,8 @@ roslaunch mag_pose_estimator mag_pose_estimator.launch
 | 参数 | 说明 | 默认 |
 | --- | --- | --- |
 | `estimator_type` | `ekf` / `optimizer` | `ekf` |
-| `pose_topic` | PoseStamped 输出话题 | `mag_pose` |
+| `mag_topic` | 输入磁力计话题 | `/magnetic/sensor/field` |
+| `pose_topic` | PoseStamped 输出话题 | `/magnetic/pose_estimated` |
 | `output_frame` | PoseStamped frame_id | `map` |
 | `world_field` | 世界系磁场向量 (Tesla) | `[2e-5, 0, 4.8e-5]` |
 | `position_gain` | 将磁残差映射为位置更新的比例 | `0.02` |

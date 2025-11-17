@@ -2,6 +2,7 @@
 
 #include <ros/ros.h>
 #include <geometry_msgs/PoseStamped.h>
+#include <mag_core_msgs/MagSensorData.h>
 #include <sensor_msgs/MagneticField.h>
 
 #include <Eigen/Dense>
@@ -23,7 +24,7 @@ private:
   void loadParameters();
   void initializeEstimator();
   EstimatorConfig buildConfigFromParameters() const;
-  void magCallback(const sensor_msgs::MagneticFieldConstPtr &msg);
+  void magCallback(const mag_core_msgs::MagSensorDataConstPtr &msg);
   void publishPose(const geometry_msgs::Pose &pose, const ros::Time &stamp);
 
   ros::NodeHandle nh_;
@@ -35,6 +36,7 @@ private:
   std::unique_ptr<EstimatorBase> estimator_;
 
   std::string estimator_type_;
+  std::string mag_topic_;
   std::string pose_topic_;
   std::string output_frame_;
 

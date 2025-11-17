@@ -1,0 +1,24 @@
+config:
+  topics:
+    raw: ""
+    field: /magnetic/sensor/field
+  calibration:
+    full_scale_mT: 3.2
+    raw_max: 32767.0
+  simulation:
+    update_rate_hz: 200.0
+    magnet_frame:
+      parent: sensor_array/base
+      child: magnet/base
+    magnet:
+      dipole_strength: 7.5
+      base_direction: [0.0, 0.0, 1.0]
+    noise:
+      enable: true
+      type: gaussian
+      mean: 0.0
+      stddev: 5.0e-4
+      amplitude: 0.0
+  tf:
+    enable: true
+    publish_rate: 60.0

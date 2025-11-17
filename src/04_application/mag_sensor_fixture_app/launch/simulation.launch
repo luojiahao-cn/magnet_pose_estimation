@@ -1,0 +1,56 @@
+<launch>
+  <arg name="array_file" default="$(find mag_sensor_fixture_app)/config/fixture_array.yaml"/>
+  <arg name="sensor_sim_config" default="$(find mag_sensor_fixture_app)/simulation/config/sensor_sim.yaml"/>
+  <arg name="magnet_config" default="$(find mag_sensor_fixture_app)/simulation/config/magnet_motion.yaml"/>
+  <arg name="estimator_config" default="$(find mag_sensor_fixture_app)/config/pose_estimator.yaml"/>
+  <arg name="viz_config" default="$(find mag_sensor_fixture_app)/config/magnet_viz.yaml"/>
+  <arg name="sensor_viz_config" default="$(find mag_viz)/config/sensor_array_viz.yaml"/>
+  <arg name="enable_viz" default="true"/>
+  <arg name="use_rviz" default="true"/>
+  <arg name="rviz_config" default="$(find mag_sensor_fixture_app)/rviz/mag_sensor_fixture.rviz"/>
+  <arg name="enable_sensor_viz" default="true"/>
+
+  <!-- 磁铁运动 (mag_device_magnet) -->
+  <node pkg="mag_device_magnet"
+        type="magnet_main"
+        name="mag_device_magnet"
+        output="screen">
+    <rosparam command="load" file="$(arg magnet_config)"/>
+  </node>
+
+  <!-- 传感器仿真 (mag_device_sensor) -->
+  <node pkg="mag_device_sensor"
+        type="sensor_sim_node"
+        name="mag_sensor_sim"
+        output="screen">
+    <rosparam command="load" file="$(arg array_file)"/>
+    <rosparam command="load" file="$(arg sensor_sim_config)"/>
+  </node>
+
+  <!-- 姿态估计 (mag_pose_estimator) -->
+  <node pkg="mag_pose_estimator"
+        type="mag_pose_estimator_node"
+        name="mag_pose_estimator"
+        output="screen">
+    <rosparam command="load" file="$(arg estimator_config)"/>
+  </node>
+
+  <!-- 可视化 (mag_viz) -->
+  <group if="$(arg enable_viz)">
+    <include file="$(find mag_viz)/launch/magnet_viz.launch">
+      <arg name="config" value="$(arg viz_config)"/>
+      <arg name="sensor_config" value="$(arg sensor_viz_config)"/>
+      <arg name="sensor_array_config" value="$(arg array_file)"/>
+      <arg name="use_rviz" value="false"/>
+      <arg name="enable_sensor_viz" value="$(arg enable_sensor_viz)"/>
+    </include>
+
+    <group if="$(arg use_rviz)">
+      <node pkg="rviz"
+            type="rviz"
+            name="mag_sensor_fixture_rviz"
+            args="-d $(arg rviz_config)"
+            output="screen"/>
+    </group>
+  </group>
+</launch>

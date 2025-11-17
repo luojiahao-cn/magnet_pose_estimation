@@ -1,10 +1,14 @@
 pose_topic: "/magnetic/pose_true"
+estimated_pose_topic: "/magnetic/pose_estimated"
+enable_estimated_pose: true
+estimated_marker_ns: "magnet_est"
 frame_id: "world"
 marker_ns: "magnet"
 trail_size: 600
 trail_duration: 45.0
 trail_min_distance: 0.001
 trail_width: 0.003
+estimated_trail_width: 0.0025
 magnet_length: 0.04
 magnet_radius: 0.01
 marker_lifetime: 0.0

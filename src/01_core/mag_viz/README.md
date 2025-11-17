@@ -5,6 +5,7 @@
 ## 功能
 
 - 订阅 `mag_core_msgs/MagnetPose` 真值姿态，生成红/蓝半圆柱与磁场强度文本标记。
+- 可选订阅 `geometry_msgs/PoseStamped` 类型的 `/magnetic/pose_estimated`，用青绿色圆柱与独立轨迹展示估计姿态。
 - 维护可配置的轨迹队列，同时发布 `nav_msgs/Path` 与折线 `Marker`。
 - 订阅 `mag_core_msgs/MagSensorData`，根据阵列描述绘制传感器磁场矢量箭头，可选数值文本。
 - 提供一键启动的 RViz 视图（包含 TF、Marker Array、Path 及传感器 Marker）。
@@ -34,11 +35,15 @@ roslaunch mag_viz magnet_viz.launch enable_sensor_viz:=false
 | 参数 | 默认值 | 说明 |
 | --- | --- | --- |
 | `pose_topic` | `/magnetic/pose_true` | 输入真值姿态话题 |
+| `estimated_pose_topic` | `/magnetic/pose_estimated` | 姿态估计话题 (`PoseStamped`) |
+| `enable_estimated_pose` | `true` | 是否渲染估计姿态 |
 | `frame_id` | `world` | 未提供 frame_id 时的回退 |
 | `trail_size` | 600 | 轨迹缓存上限（数量） |
 | `trail_duration` | 45.0 | 轨迹保留时长（秒，<=0 表示无限） |
 | `trail_min_distance` | 0.001 | 相邻样本的最小距离过滤 |
-| `trail_width` | 0.003 | 轨迹折线宽度 |
+| `trail_width` | 0.003 | 真值轨迹折线宽度 |
+| `estimated_trail_width` | 0.0025 | 估计轨迹折线宽度 |
+| `estimated_marker_ns` | `magnet_est` | 估计姿态 marker namespace |
 | `magnet_length` | 0.06 | 磁铁整体长度（米） |
 | `magnet_radius` | 0.01 | 圆柱半径（米） |
 | `marker_lifetime` | 0.0 | Marker 生命周期（秒，0 表示持续） |
@@ -51,6 +56,7 @@ roslaunch mag_viz magnet_viz.launch enable_sensor_viz:=false
 
 - `~markers` (`visualization_msgs/MarkerArray`)
 - `~trail` (`nav_msgs/Path`)
+- `~estimated_trail` (`nav_msgs/Path`，仅当启用估计姿态可视化时发布)
 
 这样可以在同一运行图中并行启动多个磁铁可视化节点。
 

@@ -1,0 +1,44 @@
+array:
+  parent_frame: world
+  frame: sensor_array/base
+  sensor_frame_prefix: sensor_
+  pose:
+    xyz: [0.0, 0.0, 0.8]
+    rpy: [0.0, 0.0, 0.0]
+  sensors:
+    - id: 0
+      pose:
+        xyz: [0.04, 0.04, 0.0]
+        rpy: [0.0, 0.0, 0.0]
+    - id: 1
+      pose:
+        xyz: [0.0, 0.04, 0.0]
+        rpy: [0.0, 0.0, 0.0]
+    - id: 2
+      pose:
+        xyz: [-0.04, 0.04, 0.0]
+        rpy: [0.0, 0.0, 0.0]
+    - id: 3
+      pose:
+        xyz: [-0.04, 0.0, 0.0]
+        rpy: [0.0, 0.0, 0.0]
+    - id: 4
+      pose:
+        xyz: [-0.04, -0.04, 0.0]
+        rpy: [0.0, 0.0, 0.0]
+    - id: 5
+      pose:
+        xyz: [0.0, -0.04, 0.0]
+        rpy: [0.0, 0.0, 0.0]
+    - id: 6
+      pose:
+        xyz: [0.04, -0.04, 0.0]
+        rpy: [0.0, 0.0, 0.0]
+    - id: 7
+      pose:
+        xyz: [0.04, 0.0, 0.0]
+        rpy: [0.0, 0.0, 0.0]
+    - id: 8
+      pose:
+        xyz: [0.0, 0.0, 0.0]
+        rpy: [0.0, 0.0, 0.0]

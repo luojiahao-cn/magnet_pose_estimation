@@ -1,6 +1,7 @@
 estimator_type: optimizer
-pose_topic: mag_pose
-output_frame: map
+mag_topic: /magnetic/sensor/field
+pose_topic: /magnetic/pose_estimated
+output_frame: sensor_array
 
 # Magnetometer preprocessing
 enable_calibration: true

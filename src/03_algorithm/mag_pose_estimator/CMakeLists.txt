@@ -10,6 +10,7 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   geometry_msgs
   std_msgs
+  mag_core_msgs
 )
 
 find_package(Eigen3 REQUIRED)
@@ -17,7 +18,7 @@ find_package(Eigen3 REQUIRED)
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES mag_pose_estimator_core
-  CATKIN_DEPENDS roscpp sensor_msgs geometry_msgs std_msgs
+  CATKIN_DEPENDS roscpp sensor_msgs geometry_msgs std_msgs mag_core_msgs
 )
 
 include_directories(

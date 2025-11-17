@@ -1,0 +1,23 @@
+estimator_type: optimizer
+mag_topic: /magnetic/sensor/field
+pose_topic: /magnetic/pose_estimated
+output_frame: sensor_array/base
+
+# 预处理
+enable_calibration: true
+soft_iron_matrix: [1.01, 0.00, 0.00,
+                   0.00, 0.99, 0.01,
+                   0.00, 0.01, 1.02]
+hard_iron_offset: [0.0005, -0.001, 0.0002]
+
+enable_filter: true
+low_pass_alpha: 0.15
+
+# 估计器参数
+position_gain: 0.015
+process_noise_position: 1.0e-4
+process_noise_orientation: 5.0e-5
+measurement_noise: 8.0e-4
+optimizer_iterations: 20
+optimizer_damping: 1.0e-3
+world_field: [2.0e-5, 1.0e-5, 4.8e-5]
