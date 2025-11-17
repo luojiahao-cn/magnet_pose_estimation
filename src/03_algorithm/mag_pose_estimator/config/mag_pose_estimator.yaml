@@ -1,4 +1,4 @@
-estimator_type: ekf
+estimator_type: optimizer
 pose_topic: mag_pose
 output_frame: map
 

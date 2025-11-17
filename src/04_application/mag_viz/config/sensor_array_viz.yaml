@@ -1,0 +1,24 @@
+measurement_topic: "/magnetic/sensor/field"
+array_param: "array"
+fixed_frame: "world"
+publish_rate: 20.0
+
+field_marker_ns: "sensor_field"
+text_marker_ns: "sensor_text"
+
+marker_lifetime: 0.0
+
+arrow_shaft_diameter: 0.002
+arrow_head_diameter: 0.006
+arrow_head_length: 0.012
+vector_scale: 0.004
+max_arrow_length: 0.10
+arrow_origin_offset: 0.0
+measurement_timeout: 0.3
+color_min_mT: 0.0
+color_max_mT: 3.0
+
+show_text: false
+text_scale: 0.02
+text_offset: 0.015
+

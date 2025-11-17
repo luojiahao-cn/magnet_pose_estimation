@@ -1,6 +1,9 @@
 <launch>
     <arg name="config" default="$(find mag_viz)/config/magnet_viz.yaml"/>
     <arg name="use_rviz" default="true"/>
+    <arg name="enable_sensor_viz" default="true"/>
+    <arg name="sensor_config" default="$(find mag_viz)/config/sensor_array_viz.yaml"/>
+    <arg name="sensor_array_config" default="$(find mag_core_description)/config/sensor_array.yaml"/>
 
     <node pkg="mag_viz"
           type="magnet_viz_node"
@@ -8,6 +11,16 @@
           output="screen">
         <rosparam command="load" file="$(arg config)"/>
     </node>
+
+    <group if="$(arg enable_sensor_viz)">
+        <node pkg="mag_viz"
+              type="sensor_array_viz_node"
+              name="sensor_array_viz"
+              output="screen">
+            <rosparam command="load" file="$(arg sensor_config)"/>
+            <rosparam command="load" file="$(arg sensor_array_config)"/>
+        </node>
+    </group>
 
     <group if="$(arg use_rviz)">
         <node pkg="rviz"

@@ -7,7 +7,10 @@ find_package(catkin REQUIRED COMPONENTS
 	visualization_msgs
 	nav_msgs
 	geometry_msgs
+	tf2
+	tf2_ros
 	tf2_geometry_msgs
+	mag_core_description
 )
 
 catkin_package(
@@ -17,7 +20,10 @@ catkin_package(
 		visualization_msgs
 		nav_msgs
 		geometry_msgs
+		tf2
+		tf2_ros
 		tf2_geometry_msgs
+		mag_core_description
 )
 
 include_directories(
@@ -29,11 +35,19 @@ add_executable(magnet_viz_node
 	src/magnet_viz_node.cpp
 )
 
+add_executable(sensor_array_viz_node
+	src/sensor_array_viz_node.cpp
+)
+
 target_link_libraries(magnet_viz_node
 	${catkin_LIBRARIES}
 )
 
-install(TARGETS magnet_viz_node
+target_link_libraries(sensor_array_viz_node
+	${catkin_LIBRARIES}
+)
+
+install(TARGETS magnet_viz_node sensor_array_viz_node
 	RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

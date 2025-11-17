@@ -77,6 +77,15 @@ Visualization Manager:
         magnet: true
       Queue Size: 100
       Value: true
+    - Class: rviz/MarkerArray
+      Enabled: true
+      Marker Topic: /sensor_array_viz/sensor_markers
+      Name: SensorMarkers
+      Namespaces:
+        sensor_field: true
+        sensor_text: true
+      Queue Size: 200
+      Value: true
     - Alpha: 1
       Buffer Length: 10
       Class: rviz/Path
