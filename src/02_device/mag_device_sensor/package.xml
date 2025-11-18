@@ -14,6 +14,7 @@
   <build_depend>mag_core_description</build_depend>
   <build_depend>mag_core_utils</build_depend>
   <build_depend>mag_core_msgs</build_depend>
+  <build_depend>rosparam_shortcuts</build_depend>
   <build_depend>serial</build_depend>
   <exec_depend>roscpp</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
@@ -23,6 +24,7 @@
   <exec_depend>mag_core_description</exec_depend>
   <exec_depend>mag_core_utils</exec_depend>
   <exec_depend>mag_core_msgs</exec_depend>
+  <exec_depend>rosparam_shortcuts</exec_depend>
   <exec_depend>serial</exec_depend>
   <export/>
 </package>

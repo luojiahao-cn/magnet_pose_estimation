@@ -7,9 +7,9 @@
 namespace mag_pose_estimator {
 
 /**
- * @brief Example EKF that tracks position, quaternion orientation, and magnetic bias.
+ * @brief 示例 EKF，用于同时估计位置、四元数姿态与磁偏置。
  *
- * State vector (size 10): [px, py, pz, qx, qy, qz, qw, bx, by, bz]^T.
+ * 状态向量（10 维）：[px, py, pz, qx, qy, qz, qw, bx, by, bz]^T。
  */
 class EKFEstimator : public EstimatorBase {
 public:
@@ -31,4 +31,4 @@ private:
   ros::Time last_update_time_;
 };
 
-}  // namespace mag_pose_estimator
+}  // 命名空间 mag_pose_estimator

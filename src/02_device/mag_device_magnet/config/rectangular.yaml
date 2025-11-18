@@ -1,26 +1,27 @@
 config:
-  frame:
+  frames:
     parent: world
     child: magnet
-  motion:
-    update_rate_hz: 100.0
-    magnetic_strength: 5.0  
-    enable: true
-    static: false
   topics:
     pose: /magnetic/pose_true
+  motion:
+    update_rate_hz: 100.0
+    magnetic_strength: 5.0
+  tf:
+    enable: true
+    static: false
   trajectory:
     type: rectangular
-    width: 0.03
-    height: 0.03
-    z: 0.03
-    center:
-      x: 0.02
-      y: 0.02
-    velocity: 0.02
-    orientation_rpy: [0.0, 0.0, 0.0]
+    rectangular:
+      width: 0.03
+      height: 0.03
+      z: 0.03
+      center_xyz: [0.02, 0.02, 0.0]
+      velocity: 0.02
+      orientation_rpy: [0.0, 0.0, 0.0]
   orientation:
     mode: spin
-    axis: xyz
-    angular_velocity: 1.0
-    initial_rpy: [0.0, 0.0, 0.0]
+    spin:
+      axis: xyz
+      angular_velocity: 1.0
+      initial_rpy: [0.0, 0.0, 0.0]

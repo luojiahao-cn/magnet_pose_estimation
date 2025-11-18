@@ -15,6 +15,7 @@ find_package(catkin REQUIRED COMPONENTS
 	moveit_msgs
 	geometric_shapes
 	message_generation
+	rosparam_shortcuts
 )
 
 add_service_files(
@@ -42,6 +43,7 @@ catkin_package(
 		moveit_msgs
 		geometric_shapes
 		message_runtime
+		rosparam_shortcuts
 )
 
 include_directories(
@@ -51,6 +53,7 @@ include_directories(
 
 add_executable(arm_main
 	src/arm_main.cpp
+	src/arm_config_loader.cpp
 	src/arm_node.cpp
 )
 

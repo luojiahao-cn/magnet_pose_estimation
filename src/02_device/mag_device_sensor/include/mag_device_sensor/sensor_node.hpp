@@ -1,7 +1,6 @@
 #pragma once
 
 #include <mag_core_description/sensor_array_description.hpp>
-#include <mag_core_utils/param_reader.hpp>
 #include <mag_core_msgs/MagSensorData.h>
 
 #include <ros/ros.h>
@@ -90,9 +89,5 @@ private:
     std::uint64_t message_counter_{0};
     std::chrono::steady_clock::time_point freq_window_start_;
 };
-
-DriverConfig loadDriverConfig(const mag_core_utils::param::StructReader &root);
-TopicConfig loadTopicConfig(const mag_core_utils::param::StructReader &root);
-TfConfig loadTfConfig(const mag_core_utils::param::StructReader &root);
 
 } // namespace mag_device_sensor

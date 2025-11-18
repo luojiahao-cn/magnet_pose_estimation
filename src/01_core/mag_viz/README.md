@@ -67,7 +67,7 @@ roslaunch mag_viz magnet_viz.launch enable_sensor_viz:=false
 | 参数 | 默认值 | 说明 |
 | --- | --- | --- |
 | `measurement_topic` | `/magnetic/sensor/field` | 传感器磁场话题 (`MagSensorData`) |
-| `array_param` | `array` | `SensorArrayDescription` 在私有命名空间下的参数键 |
+| `array_param` | `array` | `SensorArrayDescription` 在私有命名空间下的参数键（内部会访问 `~array/config`） |
 | `vector_scale` | 0.004 | 每 mT 转换成箭头长度（米） |
 | `max_arrow_length` | 0.10 | 箭头最大长度（米，<=0 表示无限制） |
 | `arrow_origin_offset` | 0.0 | 箭头起点沿传感器法线的偏移量（米） |
@@ -77,4 +77,4 @@ roslaunch mag_viz magnet_viz.launch enable_sensor_viz:=false
 | `text_scale` / `text_offset` | 0.02 / 0.015 | 文本大小与相对传感器的偏移 |
 
 该节点在私有命名空间发布 `~sensor_markers` (`visualization_msgs/MarkerArray`)，仅包含磁场箭头与可选文本。
-默认 launch 会把 `mag_core_description/config/sensor_array.yaml` 加载到节点的 `~array` 参数下，也可以改为自己的阵列描述 YAML。
+默认 launch 会把 `mag_core_description/config/sensor_array.yaml` 以 `ns="array"` 的形式加载到节点私有命名空间，因此需要保证自定义文件同样使用 `config:` 根结构，并通过 `<rosparam ns="array" ...>` 引入。

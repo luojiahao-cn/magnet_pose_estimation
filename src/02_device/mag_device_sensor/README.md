@@ -18,6 +18,8 @@ roslaunch mag_device_sensor simulation.launch \
 
 两个 launch 文件分别加载阵列几何与驱动/仿真配置。默认使用 `mag_core_description/config/sensor_array.yaml` 与本包下的 `config/` 示例。
 
+> 注意：阵列几何 YAML 以 `config:` 为根节点，并通过 `<rosparam ns="array" ...>` 加载到节点的 `~array/config` 路径下。若自行提供文件，也请保持相同结构并在 launch 中指定 `ns="array"`，以便新配置加载器解析。
+
 ### 配置结构
 
 - `driver.*`（仅限硬件驱动）：串口端口、波特率、轮询周期等设置。

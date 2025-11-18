@@ -2,9 +2,12 @@ config:
   topics:
     raw: ""
     field: /magnetic/sensor/field
-  calibration:
-    full_scale_mT: 3.2
-    raw_max: 32767.0
+
+  params:
+    calibration:
+      full_scale_mT: 3.2
+      raw_max: 32767.0
+
   simulation:
     update_rate_hz: 100.0
     magnet_frame:
@@ -19,6 +22,7 @@ config:
       mean: 0.0
       stddev: 1.0
       amplitude: 1.0
+
   tf:
     enable: true
     publish_rate: 30.0

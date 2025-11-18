@@ -1,6 +1,8 @@
 #include "mag_pose_estimator/mag_preprocessor.h"
 
 #include <Eigen/Geometry>
+#include <rosparam_shortcuts/rosparam_shortcuts.h>
+#include <string>
 
 namespace mag_pose_estimator {
 
@@ -14,24 +16,34 @@ MagPreprocessor::MagPreprocessor()
 }
 
 void MagPreprocessor::configure(const ros::NodeHandle &nh) {
+  namespace rps = rosparam_shortcuts;
+  const std::string ns = "mag_pose_estimator/preprocessor";
+  std::size_t error = 0;
   std::vector<double> soft_iron_vec;
   std::vector<double> hard_iron_vec;
 
-  nh.param("enable_filter", enable_filter_, enable_filter_);
-  nh.param("enable_calibration", enable_calibration_, enable_calibration_);
-  nh.param("low_pass_alpha", low_pass_alpha_, low_pass_alpha_);
+  // 通过这些开关即可在原始模式或标定模式之间复用同一组件。
+  error += !rps::get(ns, nh, "enable_filter", enable_filter_);
+  error += !rps::get(ns, nh, "enable_calibration", enable_calibration_);
+  error += !rps::get(ns, nh, "low_pass_alpha", low_pass_alpha_);
+  error += !rps::get(ns, nh, "soft_iron_matrix", soft_iron_vec);
+  error += !rps::get(ns, nh, "hard_iron_offset", hard_iron_vec);
 
-  if (nh.getParam("soft_iron_matrix", soft_iron_vec) && soft_iron_vec.size() == 9) {
+  if (soft_iron_vec.size() != 9) {
+    ROS_ERROR("%s: soft_iron_matrix 必须是长度为 9 的数组", ns.c_str());
+    ++error;
+  } else {
     soft_iron_matrix_ = Eigen::Map<const Eigen::Matrix<double, 3, 3, Eigen::RowMajor>>(soft_iron_vec.data());
-  } else {
-    soft_iron_matrix_.setIdentity();
   }
 
-  if (nh.getParam("hard_iron_offset", hard_iron_vec) && hard_iron_vec.size() == 3) {
-    hard_iron_offset_ = Eigen::Map<const Eigen::Vector3d>(hard_iron_vec.data());
+  if (hard_iron_vec.size() != 3) {
+    ROS_ERROR("%s: hard_iron_offset 必须是长度为 3 的数组", ns.c_str());
+    ++error;
   } else {
-    hard_iron_offset_.setZero();
+    hard_iron_offset_ = Eigen::Map<const Eigen::Vector3d>(hard_iron_vec.data());
   }
+
+  rps::shutdownIfError(ns, error);
 }
 
 sensor_msgs::MagneticField MagPreprocessor::process(const sensor_msgs::MagneticField &msg) {
@@ -42,6 +54,7 @@ sensor_msgs::MagneticField MagPreprocessor::process(const sensor_msgs::MagneticF
   }
 
   if (enable_filter_) {
+    // 在喂给估计器前用指数平滑抑制传感器噪声。
     if (!filter_initialized_) {
       filtered_field_ = field;
       filter_initialized_ = true;
@@ -58,4 +71,4 @@ sensor_msgs::MagneticField MagPreprocessor::process(const sensor_msgs::MagneticF
   return calibrated;
 }
 
-}  // namespace mag_pose_estimator
+}  // 命名空间 mag_pose_estimator

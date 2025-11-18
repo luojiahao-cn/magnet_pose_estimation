@@ -1,8 +1,7 @@
 #include <mag_device_arm/arm_node.hpp>
 
-#include <mag_core_utils/param_reader.hpp>
-
 #include <ros/console.h>
+#include <ros/ros.h>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <geometric_shapes/shapes.h>
@@ -11,71 +10,15 @@
 #include <shape_msgs/Mesh.h>
 
 #include <Eigen/Core>
-#include <algorithm>
-#include <cctype>
 #include <memory>
 #include <stdexcept>
 #include <tuple>
-#include <unordered_set>
 #include <utility>
 
 namespace mag_device_arm
 {
 namespace
 {
-geometry_msgs::Pose poseFromXyzRpy(const std::vector<double> &xyz, const std::vector<double> &rpy)
-{
-    // 将参数中的平移与欧拉角转换为 Pose 结构
-    geometry_msgs::Pose pose;
-    pose.position.x = xyz[0];
-    pose.position.y = xyz[1];
-    pose.position.z = xyz[2];
-    tf2::Quaternion q;
-    q.setRPY(rpy[0], rpy[1], rpy[2]);
-    pose.orientation = tf2::toMsg(q);
-    return pose;
-}
-
-std::string toLower(std::string value)
-{
-    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
-        return static_cast<char>(std::tolower(c));
-    });
-    return value;
-}
-
-ToolMountOption parseToolOption(const mag_core_utils::param::StructReader &tool_node,
-                                const std::string &default_parent)
-{
-    ToolMountOption option;
-    option.name = tool_node.requireString("name");
-    option.child_frame = tool_node.optionalString("frame", option.name);
-    option.parent_frame = tool_node.optionalString("parent_frame", default_parent);
-    option.mesh_resource = tool_node.optionalString("mesh", std::string());
-    option.pose.position.x = 0.0;
-    option.pose.position.y = 0.0;
-    option.pose.position.z = 0.0;
-    option.pose.orientation.x = 0.0;
-    option.pose.orientation.y = 0.0;
-    option.pose.orientation.z = 0.0;
-    option.pose.orientation.w = 1.0;
-
-    if (tool_node.has("pose"))
-    {
-        const auto pose_node = tool_node.childStruct("pose");
-        const auto xyz = pose_node.requireVector3("xyz");
-        const auto rpy = pose_node.requireVector3("rpy");
-        option.pose = poseFromXyzRpy(xyz, rpy);
-    }
-
-    if (tool_node.has("scale"))
-    {
-        const auto scale_vec = tool_node.requireVector3("scale");
-        option.scale = {scale_vec[0], scale_vec[1], scale_vec[2]};
-    }
-
-    return option;
-}
 
 shape_msgs::Mesh meshToMsg(const shapes::Mesh &mesh)
 {
@@ -131,134 +74,6 @@ std::optional<moveit_msgs::AttachedCollisionObject> makeAttachedCollisionObject(
 }
 
 } // namespace
-
-ArmConfig parseArmConfig(const mag_core_utils::param::StructReader &arm_node)
-{
-    // 解析单个机械臂的配置项，缺失关键字段时抛出异常
-    ArmConfig cfg;
-    cfg.name = arm_node.requireString("name");
-    cfg.group_name = arm_node.requireString("group_name");
-    cfg.end_effector_link = arm_node.requireString("end_effector_link");
-    cfg.reference_frame = arm_node.optionalString("reference_frame", cfg.reference_frame);
-    cfg.default_velocity = arm_node.optionalNumber("default_velocity", cfg.default_velocity);
-    cfg.default_acceleration = arm_node.optionalNumber("default_acceleration", cfg.default_acceleration);
-    cfg.planning_time = arm_node.optionalNumber("planning_time", cfg.planning_time);
-    cfg.allow_replanning = arm_node.optionalBool("allow_replanning", cfg.allow_replanning);
-    cfg.position_tolerance = arm_node.optionalNumber("goal_position_tolerance", cfg.position_tolerance);
-    cfg.orientation_tolerance = arm_node.optionalNumber("goal_orientation_tolerance", cfg.orientation_tolerance);
-    cfg.default_named_target = arm_node.optionalString("default_named_target", cfg.default_named_target);
-
-    if (arm_node.has("base_tf"))
-    {
-        const auto base_tf = arm_node.childStruct("base_tf");
-        cfg.base_tf.enabled = true;
-        cfg.base_tf.parent_frame = base_tf.requireString("parent");
-        cfg.base_tf.child_frame = base_tf.requireString("child");
-        if (base_tf.has("pose"))
-        {
-            const auto pose_node = base_tf.childStruct("pose");
-            const auto xyz = pose_node.requireVector3("xyz");
-            const auto rpy = pose_node.requireVector3("rpy");
-            cfg.base_tf.pose = poseFromXyzRpy(xyz, rpy);
-        }
-        else
-        {
-            cfg.base_tf.pose.orientation.w = 1.0;
-        }
-    }
-
-    if (arm_node.has("named_targets"))
-    {
-        const auto named_targets = arm_node.childArray("named_targets");
-        for (int i = 0; i < named_targets.size(); ++i)
-        {
-            const auto entry = named_targets.structAt(i);
-            const auto alias = entry.requireString("name");
-            const auto target = entry.requireString("target");
-            cfg.named_targets.emplace(alias, target);
-        }
-    }
-
-    if (arm_node.has("tool_mount"))
-    {
-        const auto tool_mount = arm_node.childStruct("tool_mount");
-        if (!tool_mount.has("options"))
-        {
-            throw std::runtime_error("tool_mount 需要提供 options 数组");
-        }
-
-        const auto options = tool_mount.childArray("options");
-        if (options.size() == 0)
-        {
-            throw std::runtime_error("tool_mount.options 不可为空");
-        }
-
-        cfg.tool_options.reserve(options.size());
-        std::unordered_set<std::string> option_names;
-        for (int i = 0; i < options.size(); ++i)
-        {
-            const auto entry = options.structAt(i);
-            ToolMountOption option = parseToolOption(entry, cfg.end_effector_link);
-            auto lower = toLower(option.name);
-            if (!option_names.insert(lower).second)
-            {
-                throw std::runtime_error("重复的工具选项名称: " + option.name + " (arm=" + cfg.name + ")");
-            }
-            cfg.tool_options.push_back(option);
-        }
-
-        std::string selected = tool_mount.optionalString("selected", std::string());
-        if (selected.empty())
-        {
-            selected = cfg.tool_options.front().name;
-        }
-
-        for (const auto &option : cfg.tool_options)
-        {
-            if (option.name == selected)
-            {
-                cfg.selected_tool = option;
-                break;
-            }
-        }
-
-        if (!cfg.selected_tool.has_value())
-        {
-            throw std::runtime_error("tool_mount.selected 未匹配任何选项: " + selected + " (arm=" + cfg.name + ")");
-        }
-    }
-
-    return cfg;
-}
-
-std::vector<ArmConfig> loadArmConfigs(const mag_core_utils::param::StructReader &root)
-{
-    // 从根节点读取全局配置，保证至少存在一个 arm 定义
-    std::vector<ArmConfig> result;
-    if (!root.has("arms"))
-    {
-        throw std::runtime_error("缺少 config.arms 配置");
-    }
-    const auto arms_array = root.childArray("arms");
-    result.reserve(arms_array.size());
-    std::unordered_set<std::string> names;
-    for (int i = 0; i < arms_array.size(); ++i)
-    {
-        const auto arm_node = arms_array.structAt(i);
-        ArmConfig cfg = parseArmConfig(arm_node);
-        auto lower_name = toLower(cfg.name);
-        if (!names.insert(lower_name).second)
-        {
-            throw std::runtime_error("重复的机械臂名称: " + cfg.name);
-        }
-        result.push_back(std::move(cfg));
-    }
-    if (result.empty())
-    {
-        throw std::runtime_error("config.arms 至少需要一个条目");
-    }
-    return result;
-}
 
 using moveit::planning_interface::MoveGroupInterface;
 

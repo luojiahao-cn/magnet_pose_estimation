@@ -18,7 +18,7 @@
               name="sensor_array_viz"
               output="screen">
             <rosparam command="load" file="$(arg sensor_config)"/>
-            <rosparam command="load" file="$(arg sensor_array_config)"/>
+                        <rosparam command="load" file="$(arg sensor_array_config)" ns="array"/>
         </node>
     </group>
 

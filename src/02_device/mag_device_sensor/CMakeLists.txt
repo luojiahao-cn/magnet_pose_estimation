@@ -10,6 +10,7 @@ find_package(catkin REQUIRED COMPONENTS
 	mag_core_description
 	mag_core_utils
 	mag_core_msgs
+	rosparam_shortcuts
 	serial
 )
 
@@ -18,7 +19,7 @@ find_package(Eigen3 REQUIRED)
 catkin_package(
 	INCLUDE_DIRS include
 	LIBRARIES mag_device_sensor
-	CATKIN_DEPENDS roscpp geometry_msgs tf2 tf2_ros tf2_geometry_msgs mag_core_description mag_core_utils mag_core_msgs serial
+	CATKIN_DEPENDS roscpp geometry_msgs tf2 tf2_ros tf2_geometry_msgs mag_core_description mag_core_utils mag_core_msgs rosparam_shortcuts serial
 )
 
 include_directories(
@@ -30,6 +31,7 @@ include_directories(
 add_library(mag_device_sensor
 	src/sensor_node.cpp
 	src/sensor_sim_node.cpp
+	src/sensor_config_loader.cpp
 )
 
 target_link_libraries(mag_device_sensor

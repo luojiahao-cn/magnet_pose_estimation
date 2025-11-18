@@ -22,8 +22,9 @@ std::unique_ptr<EstimatorBase> createEstimator(const std::string &type) {
     return std::make_unique<OptimizerEstimator>();
   }
 
+  // 未知的类型统一回退到 EKF，保证节点仍能以合理默认值启动。
   ROS_WARN("mag_pose_estimator: unknown estimator type '%s', defaulting to EKF", type.c_str());
   return std::make_unique<EKFEstimator>();
 }
 
-}  // namespace mag_pose_estimator
+}  // 命名空间 mag_pose_estimator

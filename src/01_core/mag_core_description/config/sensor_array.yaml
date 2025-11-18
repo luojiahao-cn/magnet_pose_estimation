@@ -1,10 +1,12 @@
-array:
-  parent_frame: world
-  frame: sensor_array
-  sensor_frame_prefix: sensor_
-  pose:
-    xyz: [0.0, 0.0, 0.5]
-    rpy: [0.0, 0.0, 0.0]
+config:
+  frames:
+    parent: world
+    array: sensor_array
+    sensor_frame_prefix: sensor_
+    pose:
+      xyz: [0.0, 0.0, 0.5]
+      rpy: [0.0, 0.0, 0.0]
+
   sensors:
     - id: 1
       pose:

@@ -19,11 +19,12 @@ Eigen::Vector3d normalizeVec(const Eigen::Vector3d &v) {
   }
   return v / norm;
 }
-}  // namespace
+}  // 匿名命名空间
 
+// EKF 状态向量依次存放位置(0-2)、四元数(x,y,z,w -> 3-6)以及残差偏置(7-9)。
 EKFEstimator::EKFEstimator() {
   state_.setZero();
-  state_(6) = 1.0;  // unit quaternion
+  state_(6) = 1.0;  // 单位四元数初值
   covariance_.setIdentity();
 }
 
@@ -60,8 +61,8 @@ void EKFEstimator::update(const sensor_msgs::MagneticField &mag) {
 }
 
 void EKFEstimator::predict() {
-  // Placeholder for potential motion model.
-  // TODO: integrate IMU linear acceleration here for better position prediction.
+  // 预留运动模型接口。
+  // TODO: 在此融合 IMU 线加速度以改进位置预测。
 }
 
 void EKFEstimator::correct(const Eigen::Vector3d &measurement) {
@@ -78,6 +79,7 @@ void EKFEstimator::correct(const Eigen::Vector3d &measurement) {
   Eigen::Matrix<double, 3, 10> H;
   H.setZero();
 
+  // 姿态雅可比将四元数扰动映射到期望磁场。
   Eigen::Matrix<double, 3, 4> dq_dq = orientationJacobian(q, config_.world_field);
   H.block<3, 4>(0, 3) = dq_dq;
 
@@ -128,4 +130,4 @@ geometry_msgs::Pose EKFEstimator::getPose() const {
   return pose;
 }
 
-}  // namespace mag_pose_estimator
+}  // 命名空间 mag_pose_estimator

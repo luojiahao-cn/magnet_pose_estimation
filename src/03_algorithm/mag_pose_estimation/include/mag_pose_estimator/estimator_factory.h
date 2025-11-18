@@ -9,4 +9,4 @@ namespace mag_pose_estimator {
 
 std::unique_ptr<EstimatorBase> createEstimator(const std::string &type);
 
-}  // namespace mag_pose_estimator
+}  // 命名空间 mag_pose_estimator

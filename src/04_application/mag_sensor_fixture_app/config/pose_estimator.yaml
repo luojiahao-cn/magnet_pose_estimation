@@ -2,6 +2,8 @@ estimator_type: optimizer
 mag_topic: /magnetic/sensor/field
 pose_topic: /magnetic/pose_estimated
 output_frame: sensor_array/base
+min_sensors: 6
+tf_timeout: 0.05
 
 # 预处理
 enable_calibration: true
@@ -21,3 +23,17 @@ measurement_noise: 8.0e-4
 optimizer_iterations: 20
 optimizer_damping: 1.0e-3
 world_field: [2.0e-5, 1.0e-5, 4.8e-5]
+
+optimizer:
+    initial_position: [0.0, 0.0, 0.8]
+    initial_direction: [0.0, 0.0, 1.0]
+    initial_strength: 1.4
+    strength_delta: 0.4
+    optimize_strength: true
+    max_iterations: 80
+    function_tolerance: 1.0e-12
+    gradient_tolerance: 1.0e-14
+    parameter_tolerance: 1.0e-14
+    num_threads: 4
+    minimizer_progress: false
+    linear_solver: DENSE_QR

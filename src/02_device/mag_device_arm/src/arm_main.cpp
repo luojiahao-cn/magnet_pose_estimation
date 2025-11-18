@@ -1,13 +1,14 @@
 #include <mag_device_arm/arm_node.hpp>
 
-#include <mag_core_utils/param_reader.hpp>
+#include <mag_core_utils/rosparam_shortcuts_extensions.hpp>
+
+#include <rosparam_shortcuts/rosparam_shortcuts.h>
+#include <XmlRpcValue.h>
 
 #include <ros/ros.h>
 #include <ros/spinner.h>
 
 #include <locale>
-
-using mag_core_utils::param::StructReader;
 
 int main(int argc, char **argv)
 {
@@ -19,10 +20,17 @@ int main(int argc, char **argv)
     ros::AsyncSpinner spinner(2);
     spinner.start();
 
+    namespace rps = rosparam_shortcuts;
+    const std::string ns = "mag_device_arm";
+
     try
     {
-        auto root = StructReader::fromParameter(pnh, "config");
-        auto arm_configs = mag_device_arm::loadArmConfigs(root);
+        XmlRpc::XmlRpcValue config;
+        std::size_t error = 0;
+        error += !rps::get(ns, pnh, "config", config);
+        rps::shutdownIfError(ns, error);
+
+        auto arm_configs = mag_device_arm::loadArmConfigs(config, ns + ".config");
 
         mag_device_arm::ArmNode node(nh, pnh, std::move(arm_configs));
         node.start();

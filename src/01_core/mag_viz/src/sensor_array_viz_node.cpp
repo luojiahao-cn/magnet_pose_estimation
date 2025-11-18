@@ -1,12 +1,16 @@
+#include <mag_core_description/sensor_array_config_loader.hpp>
 #include <mag_core_description/sensor_array_description.hpp>
 #include <mag_core_msgs/MagSensorData.h>
+#include <mag_core_utils/rosparam_shortcuts_extensions.hpp>
 
 #include <ros/ros.h>
+#include <rosparam_shortcuts/rosparam_shortcuts.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <std_msgs/ColorRGBA.h>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/LinearMath/Vector3.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+#include <XmlRpcValue.h>
 
 #include <algorithm>
 #include <cmath>
@@ -112,8 +116,24 @@ private:
 
     void loadSensorArray()
     {
+        namespace rps = rosparam_shortcuts;
+        const std::string ns = "mag_viz.sensor_array";
+
+        std::string param_key = array_param_key_;
+        if (!param_key.empty() && param_key.back() == '/')
+        {
+            param_key.pop_back();
+        }
+        const std::string config_key = param_key.empty() ? std::string("config") : param_key + "/config";
+
+        XmlRpc::XmlRpcValue array_param;
+        std::size_t error = 0;
+        error += !rps::get(ns, pnh_, config_key, array_param);
+        rps::shutdownIfError(ns, error);
+
+        auto config = mag_core_description::loadSensorArrayConfig(array_param, ns + ".config");
         mag_core_description::SensorArrayDescription description;
-        description.load(pnh_, array_param_key_);
+        description.load(config);
         if (fixed_frame_.empty())
         {
             fixed_frame_ = description.parentFrame();
@@ -157,7 +177,7 @@ private:
             sensors_.push_back(visual);
             sensor_index_.emplace(visual.id, sensors_.size() - 1);
         }
-        ROS_INFO_STREAM("[sensor_array_viz] loaded " << sensors_.size() << " sensor poses from parameter '~" << array_param_key_ << "'.");
+        ROS_INFO_STREAM("[sensor_array_viz] loaded " << sensors_.size() << " sensor poses from parameter '~" << config_key << "'.");
     }
 
     void onMeasurement(const mag_core_msgs::MagSensorDataConstPtr &msg)

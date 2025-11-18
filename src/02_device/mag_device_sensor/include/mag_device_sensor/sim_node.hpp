@@ -3,7 +3,6 @@
 #include <mag_device_sensor/sensor_node.hpp>
 
 #include <mag_core_description/sensor_array_description.hpp>
-#include <mag_core_utils/param_reader.hpp>
 
 #include <mag_core_msgs/MagSensorData.h>
 
@@ -44,13 +43,6 @@ struct SimulationConfig
     double dipole_strength{10.0};
     Eigen::Vector3d base_direction{0.0, 0.0, 1.0};
 };
-
-CalibrationConfig loadCalibrationConfig(const mag_core_utils::param::StructReader &root,
-                                        CalibrationConfig defaults = {});
-NoiseConfig loadNoiseConfig(const mag_core_utils::param::StructReader &root,
-                            NoiseConfig defaults = {});
-SimulationConfig loadSimulationConfig(const mag_core_utils::param::StructReader &root,
-                                      SimulationConfig defaults = {});
 
 class SensorSimNode
 {

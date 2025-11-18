@@ -11,20 +11,26 @@ find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   std_msgs
   mag_core_msgs
+  rosparam_shortcuts
+  tf2
+  tf2_ros
+  tf2_geometry_msgs
 )
 
 find_package(Eigen3 REQUIRED)
+find_package(Ceres REQUIRED)
 
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES mag_pose_estimator_core
-  CATKIN_DEPENDS roscpp sensor_msgs geometry_msgs std_msgs mag_core_msgs
+  CATKIN_DEPENDS roscpp sensor_msgs geometry_msgs std_msgs mag_core_msgs rosparam_shortcuts tf2 tf2_ros tf2_geometry_msgs
 )
 
 include_directories(
   include
   ${catkin_INCLUDE_DIRS}
   ${EIGEN3_INCLUDE_DIRS}
+  ${CERES_INCLUDE_DIRS}
 )
 
 add_library(mag_pose_estimator_core
@@ -41,6 +47,7 @@ add_executable(mag_pose_estimator_node
 
 target_link_libraries(mag_pose_estimator_core
   ${catkin_LIBRARIES}
+  ${CERES_LIBRARIES}
 )
 
 target_link_libraries(mag_pose_estimator_node

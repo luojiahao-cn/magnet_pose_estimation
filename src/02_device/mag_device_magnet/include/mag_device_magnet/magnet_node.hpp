@@ -1,7 +1,5 @@
 #pragma once
 
-#include <mag_core_utils/param_reader.hpp>
-
 #include <geometry_msgs/Pose.h>
 #include <geometry_msgs/Point.h>
 #include <geometry_msgs/Quaternion.h>
@@ -125,13 +123,6 @@ struct OrientationConfig
     bool axis_y = false;
     bool axis_z = false;
 };
-
-FrameConfig loadFrameConfig(const mag_core_utils::param::StructReader &root);
-TopicConfig loadTopicConfig(const mag_core_utils::param::StructReader &root, TopicConfig defaults = {});
-MotionConfig loadMotionConfig(const mag_core_utils::param::StructReader &root, MotionConfig defaults = {});
-TfConfig loadTfConfig(const mag_core_utils::param::StructReader &root, TfConfig defaults = {});
-TrajectoryConfig loadTrajectoryConfig(const mag_core_utils::param::StructReader &root);
-OrientationConfig loadOrientationConfig(const mag_core_utils::param::StructReader &root);
 
 class MagnetNode
 {

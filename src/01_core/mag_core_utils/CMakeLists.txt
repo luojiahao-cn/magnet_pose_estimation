@@ -3,12 +3,13 @@ project(mag_core_utils)
 
 find_package(catkin REQUIRED COMPONENTS
 	roscpp
+	rosparam_shortcuts
 )
 
 catkin_package(
 	INCLUDE_DIRS include
 	LIBRARIES mag_core_utils
-	CATKIN_DEPENDS roscpp
+	CATKIN_DEPENDS roscpp rosparam_shortcuts
 )
 
 include_directories(
@@ -18,6 +19,8 @@ include_directories(
 
 add_library(mag_core_utils
 	src/param_reader.cpp
+	src/rosparam_shortcuts_extensions.cpp
+	src/xmlrpc_utils.cpp
 )
 
 target_link_libraries(mag_core_utils

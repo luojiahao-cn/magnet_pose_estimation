@@ -1,17 +1,20 @@
 config:
-  frame:
+  frames:
     parent: world
     child: magnet
+  topics:
+    pose: /magnetic/pose_true
   motion:
     update_rate_hz: 60.0
     magnetic_strength: 5.0
   tf:
     enable: true
     static: true
-  topics:
-    pose: /magnetic/pose_true
   trajectory:
     type: static
-    pose:
-      xyz: [0.0, 0.0, 0.05]
-      rpy: [0.0, 0.0, 0.0]
+    static:
+      pose:
+        xyz: [0.0, 0.0, 0.05]
+        rpy: [0.0, 0.0, 0.0]
+  orientation:
+    mode: trajectory

@@ -1,9 +1,9 @@
 #pragma once
 
-#include <mag_core_utils/param_reader.hpp>
 #include <mag_device_arm/ExecuteNamedTarget.h>
 #include <mag_device_arm/SetEndEffectorPose.h>
 
+#include <XmlRpcValue.h>
 #include <geometry_msgs/Pose.h>
 #include <geometry_msgs/TransformStamped.h>
 #include <ros/node_handle.h>
@@ -71,7 +71,8 @@ struct ArmHandle
     std::mutex mutex;
 };
 
-std::vector<ArmConfig> loadArmConfigs(const mag_core_utils::param::StructReader &root);
+std::vector<ArmConfig> loadArmConfigs(const XmlRpc::XmlRpcValue &root,
+                                      const std::string &context);
 
 class ArmNode
 {

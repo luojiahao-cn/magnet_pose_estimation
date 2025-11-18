@@ -1,13 +1,15 @@
+#include <mag_device_sensor/sensor_config_loader.hpp>
 #include <mag_device_sensor/sim_node.hpp>
 
+#include <mag_core_description/sensor_array_config_loader.hpp>
 #include <mag_core_description/sensor_array_description.hpp>
-#include <mag_core_utils/param_reader.hpp>
+#include <mag_core_utils/rosparam_shortcuts_extensions.hpp>
 
+#include <rosparam_shortcuts/rosparam_shortcuts.h>
+#include <XmlRpcValue.h>
 #include <ros/ros.h>
 
 #include <locale>
-
-using mag_core_utils::param::StructReader;
 
 int main(int argc, char **argv)
 {
@@ -18,19 +20,34 @@ int main(int argc, char **argv)
 
     try
     {
-        // 读入仿真所需的配置和阵列信息
-        auto root = StructReader::fromParameter(pnh, "config");
+        namespace rps = rosparam_shortcuts;
+        const std::string sim_ns = "mag_device_sensor.sim";
+        const std::string array_ns = "mag_device_sensor.array";
+
+        XmlRpc::XmlRpcValue sim_param;
+        XmlRpc::XmlRpcValue array_param;
+
+        std::size_t sim_error = 0;
+        sim_error += !rps::get(sim_ns, pnh, "config", sim_param);
+        rps::shutdownIfError(sim_ns, sim_error);
+
+        std::size_t array_error = 0;
+        array_error += !rps::get(array_ns, pnh, "array/config", array_param);
+        rps::shutdownIfError(array_ns, array_error);
+
+        auto bundle = mag_device_sensor::loadSensorSimulationConfig(sim_param, sim_ns + ".config");
+        auto array_config = mag_core_description::loadSensorArrayConfig(array_param, array_ns + ".config");
         mag_core_description::SensorArrayDescription array;
-        array.load(pnh, "array");
+        array.load(array_config);
 
-        // 构建仿真节点并启动定时器
-        auto topics = mag_device_sensor::loadTopicConfig(root);
-        auto tf = mag_device_sensor::loadTfConfig(root);
-        auto calibration = mag_device_sensor::loadCalibrationConfig(root);
-        auto noise = mag_device_sensor::loadNoiseConfig(root);
-        auto simulation = mag_device_sensor::loadSimulationConfig(root);
-
-        mag_device_sensor::SensorSimNode node(nh, pnh, array, topics, tf, calibration, noise, simulation);
+        mag_device_sensor::SensorSimNode node(nh,
+                              pnh,
+                              array,
+                              bundle.topics,
+                              bundle.tf,
+                              bundle.calibration,
+                              bundle.noise,
+                              bundle.simulation);
         node.start();
         ros::spin();
     }

@@ -1,4 +1,7 @@
 #include <mag_core_utils/param_reader.hpp>
+#include <mag_core_utils/rosparam_shortcuts_extensions.hpp>
+
+#include <rosparam_shortcuts/rosparam_shortcuts.h>
 
 #include <sstream>
 
@@ -65,15 +68,16 @@ StructReader StructReader::fromParameter(const ros::NodeHandle &nh,
                                          const std::string &key,
                                          const std::string &context_prefix)
 {
+    namespace rps = rosparam_shortcuts;
+    const auto context = makeContext(context_prefix, key);
+    std::size_t error = 0;
+
     // 从 ROS 参数服务器拉取节点，并确保顶层是 struct 类型
     XmlRpc::XmlRpcValue root;
-    if (!nh.getParam(key, root))
-    {
-        throw std::runtime_error("missing parameter '" + makeContext(context_prefix, key) + "'");
-    }
+    error += !rps::get(context, nh, key, root);
+    rps::shutdownIfError(context, error);
 
     auto storage = std::make_shared<XmlRpc::XmlRpcValue>(root);
-    const auto context = makeContext(context_prefix, key);
 
     if (storage->getType() != XmlRpc::XmlRpcValue::TypeStruct)
     {

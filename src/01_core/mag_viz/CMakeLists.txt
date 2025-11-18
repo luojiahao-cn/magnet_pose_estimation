@@ -11,6 +11,7 @@ find_package(catkin REQUIRED COMPONENTS
 	tf2_ros
 	tf2_geometry_msgs
 	mag_core_description
+	rosparam_shortcuts
 )
 
 catkin_package(
@@ -24,6 +25,7 @@ catkin_package(
 		tf2_ros
 		tf2_geometry_msgs
 		mag_core_description
+		rosparam_shortcuts
 )
 
 include_directories(

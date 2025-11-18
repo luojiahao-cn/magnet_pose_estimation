@@ -9,7 +9,7 @@
 namespace mag_pose_estimator {
 
 /**
- * @brief Handles soft/hard-iron calibration and simple low-pass filtering for magnetometer data.
+ * @brief 负责磁力计的软/硬铁校准与简单低通滤波。
  */
 class MagPreprocessor {
 public:
@@ -30,4 +30,4 @@ private:
   Eigen::Vector3d filtered_field_;
 };
 
-}  // namespace mag_pose_estimator
+}  // 命名空间 mag_pose_estimator

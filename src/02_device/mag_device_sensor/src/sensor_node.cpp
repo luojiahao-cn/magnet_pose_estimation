@@ -13,60 +13,6 @@ namespace
 constexpr double kDefaultRawMax = 32767.0;
 }
 
-DriverConfig loadDriverConfig(const mag_core_utils::param::StructReader &root)
-{
-    // 加载串口驱动相关参数
-    DriverConfig cfg;
-    const auto driver = root.childStruct("driver");
-    cfg.serial_port = driver.requireString("serial_port");
-    cfg.baud_rate = static_cast<int>(driver.requireNumber("baud_rate"));
-    cfg.timeout_ms = static_cast<int>(driver.requireNumber("timeout_ms"));
-    cfg.poll_sleep_ms = static_cast<int>(driver.optionalNumber("poll_sleep_ms", cfg.poll_sleep_ms));
-    cfg.freq_stat_period = driver.optionalNumber("freq_stat_period", cfg.freq_stat_period);
-
-    const auto calib = root.childStruct("calibration");
-    cfg.full_scale_mT = calib.optionalNumber("full_scale_mT", cfg.full_scale_mT);
-    cfg.raw_max = calib.optionalNumber("raw_max", cfg.raw_max);
-    if (cfg.full_scale_mT <= 0.0 || cfg.raw_max <= 0.0)
-    {
-        throw std::runtime_error("calibration/full_scale_mT 与 calibration/raw_max 需为正数");
-    }
-    return cfg;
-}
-
-TopicConfig loadTopicConfig(const mag_core_utils::param::StructReader &root)
-{
-    // 配置原始量程与换算后磁场的发布话题
-    TopicConfig cfg;
-    if (root.has("topics"))
-    {
-        const auto topics = root.childStruct("topics");
-        cfg.raw_topic = topics.optionalString("raw", cfg.raw_topic);
-        cfg.field_topic = topics.optionalString("field", cfg.field_topic);
-    }
-    if (cfg.raw_topic.empty() && cfg.field_topic.empty())
-    {
-        throw std::runtime_error("至少需要提供 topics/raw 或 topics/field 中的一个话题名");
-    }
-    return cfg;
-}
-
-TfConfig loadTfConfig(const mag_core_utils::param::StructReader &root)
-{
-    // 读取 TF 发布相关的开关与频率
-    TfConfig cfg;
-    if (root.has("tf"))
-    {
-        const auto tf = root.childStruct("tf");
-        cfg.enable = tf.optionalBool("enable", cfg.enable);
-        if (tf.has("publish_rate"))
-        {
-            cfg.publish_rate = tf.requireNumber("publish_rate");
-        }
-    }
-    return cfg;
-}
-
 SensorNode::SensorNode(ros::NodeHandle nh,
                        ros::NodeHandle pnh,
                        const mag_core_description::SensorArrayDescription &array,

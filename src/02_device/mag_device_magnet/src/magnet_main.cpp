@@ -1,10 +1,14 @@
+#include <mag_device_magnet/magnet_config_loader.hpp>
 #include <mag_device_magnet/magnet_node.hpp>
+
+#include <mag_core_utils/rosparam_shortcuts_extensions.hpp>
+
+#include <rosparam_shortcuts/rosparam_shortcuts.h>
+#include <XmlRpcValue.h>
 
 #include <ros/ros.h>
 
 #include <locale>
-
-using mag_core_utils::param::StructReader;
 
 int main(int argc, char **argv)
 {
@@ -15,15 +19,24 @@ int main(int argc, char **argv)
 
     try
     {
-        auto root = StructReader::fromParameter(pnh, "config");
-        auto frame = mag_device_magnet::loadFrameConfig(root);
-        auto topics = mag_device_magnet::loadTopicConfig(root);
-        auto motion = mag_device_magnet::loadMotionConfig(root);
-        auto tf = mag_device_magnet::loadTfConfig(root);
-        auto trajectory = mag_device_magnet::loadTrajectoryConfig(root);
-        auto orientation = mag_device_magnet::loadOrientationConfig(root);
+        namespace rps = rosparam_shortcuts;
+        const std::string ns = "mag_device_magnet";
 
-        mag_device_magnet::MagnetNode node(nh, pnh, frame, motion, topics, tf, trajectory, orientation);
+        XmlRpc::XmlRpcValue config;
+        std::size_t error = 0;
+        error += !rps::get(ns, pnh, "config", config);
+        rps::shutdownIfError(ns, error);
+
+        auto magnet_config = mag_device_magnet::loadMagnetConfig(config, ns + ".config");
+
+        mag_device_magnet::MagnetNode node(nh,
+                                           pnh,
+                                           magnet_config.frame,
+                                           magnet_config.motion,
+                                           magnet_config.topics,
+                                           magnet_config.tf,
+                                           magnet_config.trajectory,
+                                           magnet_config.orientation);
         node.start();
         ros::spin();
     }

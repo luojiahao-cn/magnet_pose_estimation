@@ -11,6 +11,7 @@ find_package(catkin REQUIRED COMPONENTS
 	tf2_geometry_msgs
 	mag_core_utils
 	mag_core_msgs
+	rosparam_shortcuts
 )
 
 catkin_package(
@@ -22,6 +23,7 @@ catkin_package(
 		tf2_geometry_msgs
 		mag_core_utils
 		mag_core_msgs
+		rosparam_shortcuts
 )
 
 include_directories(
@@ -31,6 +33,7 @@ include_directories(
 
 add_executable(magnet_main
 	src/magnet_main.cpp
+	src/magnet_config_loader.cpp
 	src/magnet_node.cpp
 )
 

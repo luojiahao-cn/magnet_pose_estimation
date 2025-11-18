@@ -1,5 +1,7 @@
 #pragma once
 
+#include <mag_core_description/sensor_array_config_loader.hpp>
+
 #include <geometry_msgs/Pose.h>
 #include <geometry_msgs/TransformStamped.h>
 #include <ros/ros.h>
@@ -23,7 +25,7 @@ struct SensorEntry
 class SensorArrayDescription
 {
 public:
-    void load(const ros::NodeHandle &nh, const std::string &key = "array");
+    void load(const SensorArrayConfig &config);
 
     const std::string &parentFrame() const { return parent_frame_; }
     const std::string &arrayFrame() const { return array_frame_; }
