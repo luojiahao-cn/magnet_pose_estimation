@@ -18,7 +18,6 @@ include_directories(
 )
 
 add_library(mag_core_utils
-	src/param_reader.cpp
 	src/rosparam_shortcuts_extensions.cpp
 	src/xmlrpc_utils.cpp
 )

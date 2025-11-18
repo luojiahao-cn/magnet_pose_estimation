@@ -1,46 +1,42 @@
+<?xml version="1.0"?>
 <launch>
-  <arg name="array_file" default="$(find mag_sensor_fixture_app)/config/fixture_array.yaml"/>
-  <arg name="sensor_driver_config" default="$(find mag_sensor_fixture_app)/hardware/config/sensor_driver.yaml"/>
-  <arg name="estimator_config" default="$(find mag_sensor_fixture_app)/config/pose_estimator.yaml"/>
-  <arg name="viz_config" default="$(find mag_sensor_fixture_app)/config/magnet_viz_hw.yaml"/>
-  <arg name="sensor_viz_config" default="$(find mag_viz)/config/sensor_array_viz.yaml"/>
-  <arg name="enable_viz" default="true"/>
+  <!-- 参数配置 -->
+  <!-- 硬件专用配置 -->
+  <arg name="sensor_hardware_config" 
+       default="$(find mag_sensor_fixture_app)/hardware/config/sensor_driver.yaml"/>
+  <!-- 共用配置 -->
+  <arg name="sensor_array_config" default="$(find mag_core_description)/config/sensor_array.yaml"/>
+  <arg name="estimator_config" default="$(find mag_sensor_fixture_app)/config/estimator_config.yaml"/>
+  <arg name="viz_config" default="$(find mag_sensor_fixture_app)/config/magnet_viz_config.yaml"/>
+  <arg name="sensor_viz_config" default="$(find mag_sensor_fixture_app)/config/sensor_array_viz_config.yaml"/>
   <arg name="use_rviz" default="true"/>
-  <arg name="rviz_config" default="$(find mag_sensor_fixture_app)/rviz/mag_sensor_fixture.rviz"/>
-  <arg name="enable_sensor_viz" default="true"/>
 
-  <!-- 传感器驱动 -->
-  <node pkg="mag_device_sensor"
-        type="sensor_driver_node"
-        name="mag_sensor_driver"
-        output="screen">
-    <rosparam command="load" file="$(arg array_file)"/>
-    <rosparam command="load" file="$(arg sensor_driver_config)"/>
+  <!-- 传感器硬件驱动节点：读取阵列信号并广播 TF -->
+  <node pkg="mag_device_sensor" type="sensor_driver_node" name="mag_device_sensor" output="screen">
+    <rosparam command="load" file="$(arg sensor_array_config)" ns="array"/>
+    <rosparam command="load" file="$(arg sensor_hardware_config)"/>
   </node>
 
-  <!-- 姿态估计 -->
-  <node pkg="mag_pose_estimator"
-        type="mag_pose_estimator_node"
-        name="mag_pose_estimator"
-        output="screen">
+  <!-- 姿态估计节点：估计磁体姿态 -->
+  <node pkg="mag_pose_estimator" type="mag_pose_estimator_node" name="mag_pose_estimator" output="screen">
     <rosparam command="load" file="$(arg estimator_config)"/>
   </node>
 
-  <group if="$(arg enable_viz)">
-    <include file="$(find mag_viz)/launch/magnet_viz.launch">
-      <arg name="config" value="$(arg viz_config)"/>
-      <arg name="sensor_config" value="$(arg sensor_viz_config)"/>
-      <arg name="sensor_array_config" value="$(arg array_file)"/>
-      <arg name="use_rviz" value="false"/>
-      <arg name="enable_sensor_viz" value="$(arg enable_sensor_viz)"/>
-    </include>
+  <!-- 可视化节点：展示估计结果（可叠加外部真值源） -->
+  <node pkg="mag_viz" type="magnet_viz_node" name="magnet_viz" output="screen">
+    <rosparam command="load" file="$(arg viz_config)"/>
+  </node>
 
-    <group if="$(arg use_rviz)">
-      <node pkg="rviz"
-            type="rviz"
-            name="mag_sensor_fixture_rviz"
-            args="-d $(arg rviz_config)"
-            output="screen"/>
-    </group>
+  <!-- 传感器阵列可视化节点 -->
+  <node pkg="mag_viz" type="sensor_array_viz_node" name="sensor_array_viz" output="screen">
+    <rosparam command="load" file="$(arg sensor_viz_config)"/>
+    <rosparam command="load" file="$(arg sensor_array_config)" ns="array"/>
+  </node>
+
+  <!-- RViz 可视化 -->
+  <group if="$(arg use_rviz)">
+    <node pkg="rviz" type="rviz" name="magnet_viz_rviz" 
+          args="-d $(find mag_sensor_fixture_app)/rviz/magnet_viz.rviz" output="screen"/>
   </group>
 </launch>
+

@@ -40,7 +40,7 @@ config:
       initial_position: [0.0, 0.0, 0.8]  # 初始位置估计 [x, y, z] (米)
       initial_direction: [0.0, 0.0, 1.0]  # 初始磁矩方向向量 [x, y, z]
       initial_strength: 1.5  # 初始磁矩强度 (Ampere*meter^2)
-      strength_delta: 0.5  # 磁矩强度搜索范围 (±delta)
+      strength_delta: 20  # 磁矩强度搜索范围 (±delta)
       optimize_strength: true  # 是否优化磁矩强度
       max_iterations: 60  # 最大迭代次数
       function_tolerance: 1.0e-12  # 函数值收敛容差
@@ -49,3 +49,4 @@ config:
       num_threads: 2  # 并行计算线程数
       minimizer_progress: false  # 是否显示优化器进度信息
       linear_solver: DENSE_QR  # 线性求解器类型
+

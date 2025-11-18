@@ -1,3 +1,10 @@
+/**
+ * @file magnet_config_loader.cpp
+ * @brief 磁体设备配置加载器实现
+ * 
+ * 实现从 XML-RPC 配置中解析和加载磁体设备配置的功能
+ */
+
 #include <mag_device_magnet/magnet_config_loader.hpp>
 
 #include <mag_core_utils/xmlrpc_utils.hpp>
@@ -17,6 +24,12 @@ namespace
 {
 namespace xml = mag_core_utils::xmlrpc;
 
+/**
+ * @brief 将字符串转换为小写
+ * 
+ * @param value 输入字符串
+ * @return std::string 小写字符串
+ */
 std::string toLower(std::string value)
 {
     std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
@@ -25,6 +38,13 @@ std::string toLower(std::string value)
     return value;
 }
 
+/**
+ * @brief 从 XYZ 位置和 RPY 欧拉角创建姿态
+ * 
+ * @param xyz 位置向量 [x, y, z]
+ * @param rpy 欧拉角向量 [roll, pitch, yaw]（弧度）
+ * @return geometry_msgs::Pose 姿态消息
+ */
 geometry_msgs::Pose poseFromXyzRpy(const std::vector<double> &xyz,
                                    const std::vector<double> &rpy)
 {
@@ -38,6 +58,12 @@ geometry_msgs::Pose poseFromXyzRpy(const std::vector<double> &xyz,
     return pose;
 }
 
+/**
+ * @brief 从 RPY 欧拉角创建四元数
+ * 
+ * @param rpy 欧拉角向量 [roll, pitch, yaw]（弧度）
+ * @return geometry_msgs::Quaternion 四元数消息
+ */
 geometry_msgs::Quaternion quaternionFromRpy(const std::vector<double> &rpy)
 {
     tf2::Quaternion q;
@@ -45,6 +71,17 @@ geometry_msgs::Quaternion quaternionFromRpy(const std::vector<double> &rpy)
     return tf2::toMsg(q);
 }
 
+/**
+ * @brief 解析旋转轴标志字符串
+ * 
+ * 从字符串中解析出 x、y、z 轴标志，例如 "xyz"、"x"、"yz" 等
+ * 
+ * @param axes 轴字符串（例如 "xyz"、"x"、"yz"）
+ * @param axis_x 输出：是否包含 X 轴
+ * @param axis_y 输出：是否包含 Y 轴
+ * @param axis_z 输出：是否包含 Z 轴
+ * @throws std::runtime_error 如果字符串中不包含任何有效轴
+ */
 void parseAxisFlags(const std::string &axes, bool &axis_x, bool &axis_y, bool &axis_z)
 {
     axis_x = axis_y = axis_z = false;
@@ -70,6 +107,13 @@ void parseAxisFlags(const std::string &axes, bool &axis_x, bool &axis_y, bool &a
     }
 }
 
+/**
+ * @brief 解析 TF 坐标系配置
+ * 
+ * @param root XML-RPC 配置根节点
+ * @param context 配置上下文路径
+ * @return FrameConfig 坐标系配置
+ */
 FrameConfig parseFrames(const XmlRpc::XmlRpcValue &root, const std::string &context)
 {
     const auto frames_ctx = xml::makeContext(context, "frames");
@@ -80,6 +124,13 @@ FrameConfig parseFrames(const XmlRpc::XmlRpcValue &root, const std::string &cont
     return cfg;
 }
 
+/**
+ * @brief 解析 ROS 话题配置
+ * 
+ * @param root XML-RPC 配置根节点
+ * @param context 配置上下文路径
+ * @return TopicConfig 话题配置
+ */
 TopicConfig parseTopics(const XmlRpc::XmlRpcValue &root, const std::string &context)
 {
     TopicConfig cfg;
@@ -93,6 +144,14 @@ TopicConfig parseTopics(const XmlRpc::XmlRpcValue &root, const std::string &cont
     return cfg;
 }
 
+/**
+ * @brief 解析运动参数配置
+ * 
+ * @param root XML-RPC 配置根节点
+ * @param context 配置上下文路径
+ * @return MotionConfig 运动参数配置
+ * @throws std::runtime_error 如果更新频率不是正数
+ */
 MotionConfig parseMotion(const XmlRpc::XmlRpcValue &root, const std::string &context)
 {
     MotionConfig cfg;
@@ -110,6 +169,13 @@ MotionConfig parseMotion(const XmlRpc::XmlRpcValue &root, const std::string &con
     return cfg;
 }
 
+/**
+ * @brief 解析 TF 发布配置
+ * 
+ * @param root XML-RPC 配置根节点
+ * @param context 配置上下文路径
+ * @return TfConfig TF 发布配置
+ */
 TfConfig parseTf(const XmlRpc::XmlRpcValue &root, const std::string &context)
 {
     TfConfig cfg;
@@ -124,6 +190,14 @@ TfConfig parseTf(const XmlRpc::XmlRpcValue &root, const std::string &context)
     return cfg;
 }
 
+/**
+ * @brief 解析圆形轨迹配置
+ * 
+ * @param trajectory XML-RPC 轨迹配置节点
+ * @param context 配置上下文路径
+ * @return CircularTrajectoryConfig 圆形轨迹配置
+ * @throws std::runtime_error 如果半径不是正数
+ */
 CircularTrajectoryConfig parseCircularConfig(const XmlRpc::XmlRpcValue &trajectory,
                                              const std::string &context)
 {
@@ -150,6 +224,14 @@ CircularTrajectoryConfig parseCircularConfig(const XmlRpc::XmlRpcValue &trajecto
     return cfg;
 }
 
+/**
+ * @brief 解析矩形轨迹配置
+ * 
+ * @param trajectory XML-RPC 轨迹配置节点
+ * @param context 配置上下文路径
+ * @return RectangularTrajectoryConfig 矩形轨迹配置
+ * @throws std::runtime_error 如果宽度、高度或速度不是正数
+ */
 RectangularTrajectoryConfig parseRectangularConfig(const XmlRpc::XmlRpcValue &trajectory,
                                                    const std::string &context)
 {
@@ -188,6 +270,16 @@ RectangularTrajectoryConfig parseRectangularConfig(const XmlRpc::XmlRpcValue &tr
     return cfg;
 }
 
+/**
+ * @brief 解析轨迹配置
+ * 
+ * 根据轨迹类型解析相应的配置（静态、圆形或矩形）
+ * 
+ * @param root XML-RPC 配置根节点
+ * @param context 配置上下文路径
+ * @return TrajectoryConfig 轨迹配置
+ * @throws std::runtime_error 如果轨迹类型不支持
+ */
 TrajectoryConfig parseTrajectory(const XmlRpc::XmlRpcValue &root, const std::string &context)
 {
     const auto traj_ctx = xml::makeContext(context, "trajectory");
@@ -225,6 +317,16 @@ TrajectoryConfig parseTrajectory(const XmlRpc::XmlRpcValue &root, const std::str
     return cfg;
 }
 
+/**
+ * @brief 解析姿态配置
+ * 
+ * 解析姿态模式（轨迹、固定或旋转）及相应参数
+ * 
+ * @param root XML-RPC 配置根节点
+ * @param context 配置上下文路径
+ * @return OrientationConfig 姿态配置
+ * @throws std::runtime_error 如果姿态模式未知
+ */
 OrientationConfig parseOrientation(const XmlRpc::XmlRpcValue &root, const std::string &context)
 {
     OrientationConfig cfg;

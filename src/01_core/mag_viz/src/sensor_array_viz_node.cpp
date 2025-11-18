@@ -2,6 +2,7 @@
 #include <mag_core_description/sensor_array_description.hpp>
 #include <mag_core_msgs/MagSensorData.h>
 #include <mag_core_utils/rosparam_shortcuts_extensions.hpp>
+#include <mag_core_utils/xmlrpc_utils.hpp>
 
 #include <ros/ros.h>
 #include <rosparam_shortcuts/rosparam_shortcuts.h>
@@ -55,6 +56,12 @@ std_msgs::ColorRGBA makeColor(double r, double g, double b, double a)
 class SensorArrayVisualizer
 {
 public:
+    /**
+     * @brief 构造函数：初始化传感器阵列可视化器
+     * 从ROS参数服务器加载配置，设置订阅者和发布者，初始化可视化参数
+     * @param nh 全局节点句柄
+     * @param pnh 私有节点句柄
+     */
     SensorArrayVisualizer(ros::NodeHandle nh, ros::NodeHandle pnh)
         : nh_(std::move(nh)), pnh_(std::move(pnh))
     {
@@ -88,28 +95,46 @@ private:
 
     void loadParameters()
     {
-        measurement_topic_ = pnh_.param<std::string>("measurement_topic", "/magnetic/sensor/field");
-        array_param_key_ = pnh_.param<std::string>("array_param", "array");
-        fixed_frame_ = pnh_.param<std::string>("fixed_frame", "world");
-        publish_rate_ = pnh_.param<double>("publish_rate", 20.0);
+        // Load configuration
+        XmlRpc::XmlRpcValue config;
+        if (!pnh_.getParam("config", config)) {
+            ROS_ERROR("Failed to get config parameter");
+            ros::shutdown();
+            return;
+        }
 
-        field_ns_ = pnh_.param<std::string>("field_marker_ns", "sensor_field");
-        text_ns_ = pnh_.param<std::string>("text_marker_ns", "sensor_text");
+        namespace xml = mag_core_utils::xmlrpc;
 
-        marker_lifetime_ = ros::Duration(pnh_.param<double>("marker_lifetime", 0.0));
+        // Load frames
+        const auto& frames = xml::requireStructField(config, "frames", "config");
+        fixed_frame_ = xml::requireStringField(frames, "fixed_frame", "config.frames");
 
-        arrow_shaft_diameter_ = pnh_.param<double>("arrow_shaft_diameter", 0.002);
-        arrow_head_diameter_ = pnh_.param<double>("arrow_head_diameter", 0.006);
-        arrow_head_length_ = pnh_.param<double>("arrow_head_length", 0.012);
-        vector_scale_ = pnh_.param<double>("vector_scale", 0.004);
-        max_arrow_length_ = pnh_.param<double>("max_arrow_length", 0.1);
-        arrow_origin_offset_ = pnh_.param<double>("arrow_origin_offset", 0.0);
-        measurement_timeout_ = pnh_.param<double>("measurement_timeout", 0.3);
-        color_min_mT_ = pnh_.param<double>("color_min_mT", 0.0);
-        color_max_mT_ = pnh_.param<double>("color_max_mT", 3.0);
-        show_text_ = pnh_.param<bool>("show_text", false);
-        text_scale_ = pnh_.param<double>("text_scale", 0.018);
-        text_offset_ = pnh_.param<double>("text_offset", 0.01);
+        // Load topics
+        const auto& topics = xml::requireStructField(config, "topics", "config");
+        measurement_topic_ = xml::requireStringField(topics, "measurement", "config.topics");
+
+        // Load params
+        const auto& params = xml::requireStructField(config, "params", "config");
+        array_param_key_ = xml::requireStringField(params, "array_param", "config.params");
+        publish_rate_ = xml::readNumber(xml::requireMember(params, "publish_rate", "config.params"), "config.params/publish_rate");
+        marker_lifetime_ = ros::Duration(xml::readNumber(xml::requireMember(params, "marker_lifetime", "config.params"), "config.params/marker_lifetime"));
+        measurement_timeout_ = xml::readNumber(xml::requireMember(params, "measurement_timeout", "config.params"), "config.params/measurement_timeout");
+        color_min_mT_ = xml::readNumber(xml::requireMember(params, "color_min_mT", "config.params"), "config.params/color_min_mT");
+        color_max_mT_ = xml::readNumber(xml::requireMember(params, "color_max_mT", "config.params"), "config.params/color_max_mT");
+        show_text_ = xml::requireBoolField(params, "show_text", "config.params");
+        text_scale_ = xml::readNumber(xml::requireMember(params, "text_scale", "config.params"), "config.params/text_scale");
+        text_offset_ = xml::readNumber(xml::requireMember(params, "text_offset", "config.params"), "config.params/text_offset");
+
+        // Load visualization settings
+        const auto& visualization = xml::requireStructField(config, "visualization", "config");
+        field_ns_ = xml::requireStringField(visualization, "field_marker_ns", "config.visualization");
+        text_ns_ = xml::requireStringField(visualization, "text_marker_ns", "config.visualization");
+        arrow_shaft_diameter_ = xml::readNumber(xml::requireMember(visualization, "arrow_shaft_diameter", "config.visualization"), "config.visualization/arrow_shaft_diameter");
+        arrow_head_diameter_ = xml::readNumber(xml::requireMember(visualization, "arrow_head_diameter", "config.visualization"), "config.visualization/arrow_head_diameter");
+        arrow_head_length_ = xml::readNumber(xml::requireMember(visualization, "arrow_head_length", "config.visualization"), "config.visualization/arrow_head_length");
+        vector_scale_ = xml::readNumber(xml::requireMember(visualization, "vector_scale", "config.visualization"), "config.visualization/vector_scale");
+        max_arrow_length_ = xml::readNumber(xml::requireMember(visualization, "max_arrow_length", "config.visualization"), "config.visualization/max_arrow_length");
+        arrow_origin_offset_ = xml::readNumber(xml::requireMember(visualization, "arrow_origin_offset", "config.visualization"), "config.visualization/arrow_origin_offset");
 
         stale_color_ = makeColor(0.55, 0.55, 0.55, 0.5);
     }
@@ -180,6 +205,11 @@ private:
         ROS_INFO_STREAM("[sensor_array_viz] loaded " << sensors_.size() << " sensor poses from parameter '~" << config_key << "'.");
     }
 
+    /**
+     * @brief 磁传感器测量数据回调函数
+     * 处理接收到的磁传感器测量数据，更新内部状态
+     * @param msg 接收到的磁传感器测量消息
+     */
     void onMeasurement(const mag_core_msgs::MagSensorDataConstPtr &msg)
     {
         const auto it = sensor_index_.find(static_cast<int>(msg->sensor_id));
@@ -197,11 +227,23 @@ private:
         measurements_[sensor.id] = state;
     }
 
+    /**
+     * @brief 定时器回调函数
+     * 定期发布可视化标记
+     * @param event 定时器事件
+     */
     void onTimer(const ros::TimerEvent &event)
     {
         publishMarkers(event.current_real);
     }
 
+    /**
+     * @brief 查找指定传感器的测量数据
+     * 根据传感器ID和时间戳查找有效的测量数据
+     * @param sensor_id 传感器ID
+     * @param stamp 时间戳
+     * @return 测量状态指针，如果没有找到或已过期则返回nullptr
+     */
     const MeasurementState *findMeasurement(int sensor_id, const ros::Time &stamp) const
     {
         const auto it = measurements_.find(sensor_id);
@@ -216,6 +258,12 @@ private:
         return &it->second;
     }
 
+    /**
+     * @brief 根据磁场强度计算颜色
+     * 使用蓝->红渐变色映射磁场强度值
+     * @param magnitude_mT 磁场强度（毫特斯拉）
+     * @return 颜色RGBA值
+     */
     std_msgs::ColorRGBA colorForMagnitude(double magnitude_mT) const
     {
         if (color_max_mT_ <= color_min_mT_)
@@ -230,6 +278,13 @@ private:
         return makeColor(r, g, b, 1.0);
     }
 
+    /**
+     * @brief 格式化测量数据显示文本
+     * 创建包含传感器ID和测量值的格式化字符串
+     * @param sensor_id 传感器ID
+     * @param state 测量状态数据
+     * @return 格式化的文本字符串
+     */
     std::string formatMeasurementText(int sensor_id, const MeasurementState *state) const
     {
         std::ostringstream ss;
@@ -247,6 +302,14 @@ private:
         return ss.str();
     }
 
+    /**
+     * @brief 创建磁场测量箭头标记
+     * 根据传感器测量数据创建表示磁场向量的箭头标记
+     * @param sensor 传感器可视化信息
+     * @param state 测量状态数据
+     * @param stamp 时间戳
+     * @return 可视化标记
+     */
     visualization_msgs::Marker makeMeasurementArrow(const SensorVisual &sensor,
                                                     const MeasurementState *state,
                                                     const ros::Time &stamp) const
@@ -305,6 +368,14 @@ private:
         return marker;
     }
 
+    /**
+     * @brief 创建磁场测量文本标记
+     * 创建显示传感器ID和测量值的文本标记
+     * @param sensor 传感器可视化信息
+     * @param state 测量状态数据
+     * @param stamp 时间戳
+     * @return 可视化标记
+     */
     visualization_msgs::Marker makeMeasurementText(const SensorVisual &sensor,
                                                    const MeasurementState *state,
                                                    const ros::Time &stamp) const
@@ -329,6 +400,11 @@ private:
         return marker;
     }
 
+    /**
+     * @brief 发布传感器阵列可视化标记
+     * 创建并发布所有传感器的3D可视化标记，包括磁场向量箭头和文本标签
+     * @param stamp 时间戳
+     */
     void publishMarkers(const ros::Time &stamp)
     {
         if (sensors_.empty())

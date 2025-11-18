@@ -30,10 +30,10 @@ config:
   visualization:
     field_marker_ns: "sensor_field"  # 磁场箭头标记命名空间
     text_marker_ns: "sensor_text"  # 文本标记命名空间
-    arrow_shaft_diameter: 0.002  # 箭头杆直径
-    arrow_head_diameter: 0.006  # 箭头头部直径
-    arrow_head_length: 0.012  # 箭头头部长度
-    vector_scale: 0.004  # 向量缩放因子（箭头长度 = 磁场强度 * 缩放因子）
-    max_arrow_length: 0.10  # 箭头最大长度限制（米）
+    arrow_shaft_diameter: 0.001  # 箭头杆直径
+    arrow_head_diameter: 0.003  # 箭头头部直径
+    arrow_head_length: 0.004  # 箭头头部长度
+    vector_scale: 0.002  # 向量缩放因子（箭头长度 = 磁场强度 * 缩放因子）
+    max_arrow_length: 0.01  # 箭头最大长度限制（米）
     arrow_origin_offset: 0.0  # 箭头起点偏移（沿传感器上轴方向）
 

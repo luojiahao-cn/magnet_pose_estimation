@@ -1,0 +1,30 @@
+# 磁体设备配置
+# 用于仿真场景的磁体运动配置
+config:
+  frames:
+    parent: world
+    child: magnet
+  topics:
+    pose: /magnetic/pose_true
+  motion:
+    update_rate_hz: 60.0
+    magnetic_strength: 10.0 
+  tf:
+    enable: true
+    static: true
+  trajectory:
+    type: rectangular
+    rectangular:
+      width: 0.03
+      height: 0.03
+      z: 0.03
+      center_xyz: [0.02, 0.02, 0.0]
+      velocity: 0.02
+      orientation_rpy: [0.0, 0.0, 0.0]
+  orientation:
+    mode: spin
+    spin:
+      axis: xyz
+      angular_velocity: 1.0
+      initial_rpy: [0.0, 0.0, 0.0]
+

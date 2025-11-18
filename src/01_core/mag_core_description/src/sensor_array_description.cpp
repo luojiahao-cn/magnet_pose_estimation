@@ -7,6 +7,7 @@ namespace mag_core_description
 {
 namespace
 {
+// 将姿态转换为变换消息
 geometry_msgs::TransformStamped poseToTransform(const geometry_msgs::Pose &pose,
                                                 const std::string &parent,
                                                 const std::string &child,
@@ -23,8 +24,9 @@ geometry_msgs::TransformStamped poseToTransform(const geometry_msgs::Pose &pose,
     return tf;
 }
 
-} // namespace
+}
 
+// SensorArrayDescription 类：描述传感器阵列的配置和信息
 void SensorArrayDescription::load(const SensorArrayConfig &config)
 {
     parent_frame_ = config.parent_frame;
@@ -63,6 +65,7 @@ void SensorArrayDescription::load(const SensorArrayConfig &config)
     }
 }
 
+// 根据ID查找传感器
 const SensorEntry *SensorArrayDescription::findSensor(int id) const
 {
     const auto it = index_by_id_.find(id);
@@ -73,6 +76,7 @@ const SensorEntry *SensorArrayDescription::findSensor(int id) const
     return &sensors_.at(it->second);
 }
 
+// 获取传感器的帧名称
 std::string SensorArrayDescription::sensorFrameName(int id) const
 {
     const auto *entry = findSensor(id);
@@ -83,11 +87,13 @@ std::string SensorArrayDescription::sensorFrameName(int id) const
     return entry->frame_id;
 }
 
+// SensorArrayTfPublisher 类：发布传感器阵列的TF变换
 SensorArrayTfPublisher::SensorArrayTfPublisher(const SensorArrayDescription &description)
     : description_(description)
 {
 }
 
+// 构建所有变换消息
 std::vector<geometry_msgs::TransformStamped> SensorArrayTfPublisher::buildTransforms(const ros::Time &stamp) const
 {
     std::vector<geometry_msgs::TransformStamped> result;
@@ -108,11 +114,13 @@ std::vector<geometry_msgs::TransformStamped> SensorArrayTfPublisher::buildTransf
     return result;
 }
 
+// 发布动态变换
 void SensorArrayTfPublisher::publishDynamic(const ros::Time &stamp)
 {
     dynamic_broadcaster_.sendTransform(buildTransforms(stamp));
 }
 
+// 发布静态变换（仅一次）
 void SensorArrayTfPublisher::publishStatic()
 {
     if (static_sent_)
