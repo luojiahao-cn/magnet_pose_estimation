@@ -8,6 +8,8 @@
 
 namespace mag_pose_estimator {
 
+struct MagPoseEstimatorConfig;
+
 /**
  * @brief 负责磁力计的软/硬铁校准与简单低通滤波。
  */
@@ -15,7 +17,7 @@ class MagPreprocessor {
 public:
   MagPreprocessor();
 
-  void configure(const ros::NodeHandle &nh);
+  void configure(const MagPoseEstimatorConfig &config);
   sensor_msgs::MagneticField process(const sensor_msgs::MagneticField &msg);
 
 private:

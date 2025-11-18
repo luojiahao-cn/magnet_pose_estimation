@@ -1,4 +1,5 @@
 #include "mag_pose_estimator/mag_pose_estimator_node.h"
+#include "mag_pose_estimator/mag_pose_estimator_config_loader.hpp"
 
 #include <algorithm>
 #include <vector>
@@ -15,7 +16,6 @@ MagPoseEstimatorNode::MagPoseEstimatorNode(ros::NodeHandle nh, ros::NodeHandle p
   // 构造流程：读取参数、配置预处理、创建估计器并建立 ROS 通信。
   loadParameters();
 
-  preprocessor_.configure(pnh_);
   initializeEstimator();
 
   mag_sub_ = nh_.subscribe(mag_topic_, 10, &MagPoseEstimatorNode::magCallback, this);
@@ -23,76 +23,46 @@ MagPoseEstimatorNode::MagPoseEstimatorNode(ros::NodeHandle nh, ros::NodeHandle p
 }
 
 void MagPoseEstimatorNode::loadParameters() {
-  namespace rps = rosparam_shortcuts;
   const std::string ns = "mag_pose_estimator";
-  std::size_t error = 0;
-  int min_sensors_param = 0;
-  std::vector<double> initial_pos;
-  std::vector<double> initial_dir;
-  std::vector<double> world_field_vec;
 
-  error += !rps::get(ns, pnh_, "estimator_type", estimator_type_);
-  error += !rps::get(ns, pnh_, "mag_topic", mag_topic_);
-  error += !rps::get(ns, pnh_, "pose_topic", pose_topic_);
-  error += !rps::get(ns, pnh_, "output_frame", output_frame_);
-  error += !rps::get(ns, pnh_, "min_sensors", min_sensors_param);
-  error += !rps::get(ns, pnh_, "tf_timeout", tf_timeout_);
-  error += !rps::get(ns, pnh_, "position_gain", position_gain_);
-  error += !rps::get(ns, pnh_, "process_noise_position", process_noise_position_);
-  error += !rps::get(ns, pnh_, "process_noise_orientation", process_noise_orientation_);
-  error += !rps::get(ns, pnh_, "measurement_noise", measurement_noise_);
-  error += !rps::get(ns, pnh_, "optimizer_iterations", optimizer_iterations_);
-  error += !rps::get(ns, pnh_, "optimizer_damping", optimizer_damping_);
-  error += !rps::get(ns, pnh_, "world_field", world_field_vec);
-
-  error += !rps::get(ns, pnh_, "optimizer/initial_position", initial_pos);
-  error += !rps::get(ns, pnh_, "optimizer/initial_direction", initial_dir);
-  error += !rps::get(ns, pnh_, "optimizer/initial_strength", optimizer_params_.initial_strength);
-  error += !rps::get(ns, pnh_, "optimizer/strength_delta", optimizer_params_.strength_delta);
-  error += !rps::get(ns, pnh_, "optimizer/optimize_strength", optimizer_params_.optimize_strength);
-  error += !rps::get(ns, pnh_, "optimizer/max_iterations", optimizer_params_.max_iterations);
-  error += !rps::get(ns, pnh_, "optimizer/function_tolerance", optimizer_params_.function_tolerance);
-  error += !rps::get(ns, pnh_, "optimizer/gradient_tolerance", optimizer_params_.gradient_tolerance);
-  error += !rps::get(ns, pnh_, "optimizer/parameter_tolerance", optimizer_params_.parameter_tolerance);
-  error += !rps::get(ns, pnh_, "optimizer/num_threads", optimizer_params_.num_threads);
-  error += !rps::get(ns, pnh_, "optimizer/minimizer_progress", optimizer_params_.minimizer_progress);
-  error += !rps::get(ns, pnh_, "optimizer/linear_solver", optimizer_params_.linear_solver);
-
-  if (min_sensors_param < 1) {
-    ROS_ERROR("mag_pose_estimator: min_sensors 必须大于 0");
-    ++error;
-  } else {
-    min_sensors_ = static_cast<size_t>(min_sensors_param);
+  XmlRpc::XmlRpcValue config;
+  if (!pnh_.getParam("config", config)) {
+    ROS_ERROR_STREAM(ns << ": Failed to get config parameter");
+    return;
   }
 
-  if (world_field_vec.size() != 3) {
-    ROS_ERROR("mag_pose_estimator: world_field 必须是长度为 3 的数组");
-    ++error;
-  } else {
-    world_field_vector_ = Eigen::Vector3d(world_field_vec[0], world_field_vec[1], world_field_vec[2]);
-  }
+  auto cfg = loadMagPoseEstimatorConfig(config, ns + "/config");
 
-  if (initial_pos.size() != 3) {
-    ROS_ERROR("mag_pose_estimator: optimizer/initial_position 必须是长度为 3 的数组");
-    ++error;
-  } else {
-    optimizer_params_.initial_position = Eigen::Vector3d(initial_pos[0], initial_pos[1], initial_pos[2]);
-  }
+  // Set member variables
+  estimator_type_ = cfg.estimator_type;
+  mag_topic_ = cfg.mag_topic;
+  pose_topic_ = cfg.pose_topic;
+  output_frame_ = cfg.output_frame;
+  min_sensors_ = static_cast<size_t>(cfg.min_sensors);
+  tf_timeout_ = cfg.tf_timeout;
+  position_gain_ = cfg.position_gain;
+  process_noise_position_ = cfg.process_noise_position;
+  process_noise_orientation_ = cfg.process_noise_orientation;
+  measurement_noise_ = cfg.measurement_noise;
+  optimizer_iterations_ = cfg.optimizer_iterations;
+  optimizer_damping_ = cfg.optimizer_damping;
+  world_field_vector_ = cfg.world_field;
 
-  if (initial_dir.size() != 3) {
-    ROS_ERROR("mag_pose_estimator: optimizer/initial_direction 必须是长度为 3 的数组");
-    ++error;
-  } else {
-    Eigen::Vector3d dir(initial_dir[0], initial_dir[1], initial_dir[2]);
-    if (dir.norm() < 1e-9) {
-      ROS_ERROR("mag_pose_estimator: optimizer/initial_direction 不能为零向量");
-      ++error;
-    } else {
-      optimizer_params_.initial_direction = dir.normalized();
-    }
-  }
+  optimizer_params_.initial_position = cfg.optimizer.initial_position;
+  optimizer_params_.initial_direction = cfg.optimizer.initial_direction;
+  optimizer_params_.initial_strength = cfg.optimizer.initial_strength;
+  optimizer_params_.strength_delta = cfg.optimizer.strength_delta;
+  optimizer_params_.optimize_strength = cfg.optimizer.optimize_strength;
+  optimizer_params_.max_iterations = cfg.optimizer.max_iterations;
+  optimizer_params_.function_tolerance = cfg.optimizer.function_tolerance;
+  optimizer_params_.gradient_tolerance = cfg.optimizer.gradient_tolerance;
+  optimizer_params_.parameter_tolerance = cfg.optimizer.parameter_tolerance;
+  optimizer_params_.num_threads = cfg.optimizer.num_threads;
+  optimizer_params_.minimizer_progress = cfg.optimizer.minimizer_progress;
+  optimizer_params_.linear_solver = cfg.optimizer.linear_solver;
 
-  rps::shutdownIfError(ns, error);
+  // Configure preprocessor
+  preprocessor_.configure(cfg);
 }
 
 void MagPoseEstimatorNode::initializeEstimator() {

@@ -42,11 +42,22 @@ bool optionalBoolField(const XmlRpc::XmlRpcValue &node,
                        const std::string &context,
                        bool default_value);
 
+bool requireBoolField(const XmlRpc::XmlRpcValue &node,
+                      const std::string &member,
+                      const std::string &context);
+
 std::vector<double> requireVector3Field(const XmlRpc::XmlRpcValue &node,
                                         const std::string &member,
                                         const std::string &context);
 
+std::vector<double> requireVector9Field(const XmlRpc::XmlRpcValue &node,
+                                        const std::string &member,
+                                        const std::string &context);
+
 std::vector<double> readVector3(const XmlRpc::XmlRpcValue &value,
+                                const std::string &context);
+
+std::vector<double> readVector9(const XmlRpc::XmlRpcValue &value,
                                 const std::string &context);
 
 double readNumber(const XmlRpc::XmlRpcValue &value,

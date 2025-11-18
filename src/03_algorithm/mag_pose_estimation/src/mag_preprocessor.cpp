@@ -1,7 +1,8 @@
 #include "mag_pose_estimator/mag_preprocessor.h"
+#include "mag_pose_estimator/mag_pose_estimator_config_loader.hpp"
+#include "mag_pose_estimator/mag_pose_estimator_config_loader.hpp"
 
 #include <Eigen/Geometry>
-#include <rosparam_shortcuts/rosparam_shortcuts.h>
 #include <string>
 
 namespace mag_pose_estimator {
@@ -15,35 +16,12 @@ MagPreprocessor::MagPreprocessor()
   hard_iron_offset_.setZero();
 }
 
-void MagPreprocessor::configure(const ros::NodeHandle &nh) {
-  namespace rps = rosparam_shortcuts;
-  const std::string ns = "mag_pose_estimator/preprocessor";
-  std::size_t error = 0;
-  std::vector<double> soft_iron_vec;
-  std::vector<double> hard_iron_vec;
-
-  // 通过这些开关即可在原始模式或标定模式之间复用同一组件。
-  error += !rps::get(ns, nh, "enable_filter", enable_filter_);
-  error += !rps::get(ns, nh, "enable_calibration", enable_calibration_);
-  error += !rps::get(ns, nh, "low_pass_alpha", low_pass_alpha_);
-  error += !rps::get(ns, nh, "soft_iron_matrix", soft_iron_vec);
-  error += !rps::get(ns, nh, "hard_iron_offset", hard_iron_vec);
-
-  if (soft_iron_vec.size() != 9) {
-    ROS_ERROR("%s: soft_iron_matrix 必须是长度为 9 的数组", ns.c_str());
-    ++error;
-  } else {
-    soft_iron_matrix_ = Eigen::Map<const Eigen::Matrix<double, 3, 3, Eigen::RowMajor>>(soft_iron_vec.data());
-  }
-
-  if (hard_iron_vec.size() != 3) {
-    ROS_ERROR("%s: hard_iron_offset 必须是长度为 3 的数组", ns.c_str());
-    ++error;
-  } else {
-    hard_iron_offset_ = Eigen::Map<const Eigen::Vector3d>(hard_iron_vec.data());
-  }
-
-  rps::shutdownIfError(ns, error);
+void MagPreprocessor::configure(const MagPoseEstimatorConfig &config) {
+  enable_filter_ = config.enable_filter;
+  enable_calibration_ = config.enable_calibration;
+  low_pass_alpha_ = config.low_pass_alpha;
+  soft_iron_matrix_ = config.soft_iron_matrix;
+  hard_iron_offset_ = config.hard_iron_offset;
 }
 
 sensor_msgs::MagneticField MagPreprocessor::process(const sensor_msgs::MagneticField &msg) {

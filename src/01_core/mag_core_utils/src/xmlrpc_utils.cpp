@@ -149,6 +149,23 @@ bool optionalBoolField(const XmlRpc::XmlRpcValue &node,
   return default_value;
 }
 
+bool requireBoolField(const XmlRpc::XmlRpcValue &node,
+                      const std::string &member,
+                      const std::string &context) {
+  const auto &child = requireMember(node, member, context);
+  if (child.getType() == XmlRpc::XmlRpcValue::TypeBoolean) {
+    return static_cast<bool>(child);
+  }
+  if (child.getType() == XmlRpc::XmlRpcValue::TypeInt) {
+    return static_cast<int>(child) != 0;
+  }
+  if (child.getType() == XmlRpc::XmlRpcValue::TypeDouble) {
+    return static_cast<double>(child) != 0.0;
+  }
+  throwType(makeContext(context, member), "bool", child.getType());
+  return false;  // unreachable
+}
+
 std::vector<double> readVector3(const XmlRpc::XmlRpcValue &value,
                                 const std::string &context) {
   if (value.getType() != XmlRpc::XmlRpcValue::TypeArray || value.size() != 3) {
@@ -161,11 +178,30 @@ std::vector<double> readVector3(const XmlRpc::XmlRpcValue &value,
   return result;
 }
 
+std::vector<double> readVector9(const XmlRpc::XmlRpcValue &value,
+                                const std::string &context) {
+  if (value.getType() != XmlRpc::XmlRpcValue::TypeArray || value.size() != 9) {
+    throw std::runtime_error(context + " 必须是长度为 9 的数组");
+  }
+  std::vector<double> result(9);
+  for (int i = 0; i < 9; ++i) {
+    result[i] = readNumber(value[i], makeContext(context, "[" + std::to_string(i) + "]"));
+  }
+  return result;
+}
+
 std::vector<double> requireVector3Field(const XmlRpc::XmlRpcValue &node,
                                         const std::string &member,
                                         const std::string &context) {
   const auto &child = requireMember(node, member, context);
   return readVector3(child, makeContext(context, member));
+}
+
+std::vector<double> requireVector9Field(const XmlRpc::XmlRpcValue &node,
+                                        const std::string &member,
+                                        const std::string &context) {
+  const auto &child = requireMember(node, member, context);
+  return readVector9(child, makeContext(context, member));
 }
 
 const XmlRpc::XmlRpcValue &asStruct(const XmlRpc::XmlRpcValue &value,

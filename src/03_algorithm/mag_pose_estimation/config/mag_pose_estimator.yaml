@@ -1,39 +1,43 @@
-estimator_type: optimizer
-mag_topic: /magnetic/sensor/field
-pose_topic: /magnetic/pose_estimated
-output_frame: sensor_array
-min_sensors: 6
-tf_timeout: 0.05
+config:
+  frames:
+    output_frame: sensor_array
 
-# Magnetometer preprocessing
-enable_calibration: true
-soft_iron_matrix: [1.02, 0.00, 0.00,
-                   0.00, 0.99, 0.01,
-                   0.00, 0.01, 1.01]
-hard_iron_offset: [0.001, -0.002, 0.0005]
+  topics:
+    mag_field: /magnetic/sensor/field
+    pose_estimate: /magnetic/pose_estimated
 
-enable_filter: true
-low_pass_alpha: 0.2
+  params:
+    estimator:
+      type: optimizer
+      min_sensors: 6
+      tf_timeout: 0.05
+      position_gain: 0.02
+      process_noise_position: 1.0e-4
+      process_noise_orientation: 5.0e-5
+      measurement_noise: 1.0e-3
+      optimizer_iterations: 15
+      optimizer_damping: 1.0e-3
+      world_field: [2.0e-5, 1.0e-5, 4.5e-5]
 
-# Estimator parameters
-position_gain: 0.02
-process_noise_position: 1.0e-4
-process_noise_orientation: 5.0e-5
-measurement_noise: 1.0e-3
-optimizer_iterations: 15
-optimizer_damping: 1.0e-3
-world_field: [2.0e-5, 1.0e-5, 4.5e-5]
+    preprocessor:
+      enable_calibration: true
+      soft_iron_matrix: [1.02, 0.00, 0.00,
+                         0.00, 0.99, 0.01,
+                         0.00, 0.01, 1.01]
+      hard_iron_offset: [0.001, -0.002, 0.0005]
+      enable_filter: true
+      low_pass_alpha: 0.2
 
-optimizer:
-    initial_position: [0.0, 0.0, 0.8]
-    initial_direction: [0.0, 0.0, 1.0]
-    initial_strength: 1.5
-    strength_delta: 0.5
-    optimize_strength: true
-    max_iterations: 60
-    function_tolerance: 1.0e-12
-    gradient_tolerance: 1.0e-14
-    parameter_tolerance: 1.0e-14
-    num_threads: 2
-    minimizer_progress: false
-    linear_solver: DENSE_QR
+    optimizer:
+      initial_position: [0.0, 0.0, 0.8]
+      initial_direction: [0.0, 0.0, 1.0]
+      initial_strength: 1.5
+      strength_delta: 0.5
+      optimize_strength: true
+      max_iterations: 60
+      function_tolerance: 1.0e-12
+      gradient_tolerance: 1.0e-14
+      parameter_tolerance: 1.0e-14
+      num_threads: 2
+      minimizer_progress: false
+      linear_solver: DENSE_QR
