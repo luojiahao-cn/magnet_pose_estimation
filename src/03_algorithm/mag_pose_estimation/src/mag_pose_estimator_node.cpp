@@ -47,7 +47,14 @@ MagPoseEstimatorNode::MagPoseEstimatorNode(ros::NodeHandle nh, ros::NodeHandle p
   loadParameters();
   initializeEstimator();
 
-  mag_sub_ = nh_.subscribe(mag_topic_, 10, &MagPoseEstimatorNode::magCallback, this);
+  // 优先订阅批量数据，如果没有配置则订阅单个数据
+  if (!batch_topic_.empty()) {
+    batch_sub_ = nh_.subscribe(batch_topic_, 10, &MagPoseEstimatorNode::batchCallback, this);
+    ROS_INFO("[mag_pose_estimator] 订阅批量数据: %s", batch_topic_.c_str());
+  } else {
+    mag_sub_ = nh_.subscribe(mag_topic_, 25, &MagPoseEstimatorNode::magCallback, this);
+    ROS_INFO("[mag_pose_estimator] 订阅单个数据: %s", mag_topic_.c_str());
+  }
   pose_pub_ = nh_.advertise<mag_core_msgs::MagnetPose>(pose_topic_, 10);
 }
 
@@ -74,6 +81,7 @@ void MagPoseEstimatorNode::loadParameters() {
   // 设置成员变量
   estimator_type_ = cfg.estimator_type;
   mag_topic_ = cfg.mag_topic;
+  batch_topic_ = cfg.batch_topic;
   pose_topic_ = cfg.pose_topic;
   output_frame_ = cfg.output_frame;
   min_sensors_ = static_cast<size_t>(cfg.min_sensors);
@@ -180,6 +188,10 @@ MagPoseEstimatorConfig MagPoseEstimatorNode::loadMagPoseEstimatorConfig(
   const auto &topics = xml::requireStructField(node, "topics", context);
   cfg.mag_topic = xml::requireStringField(topics, "mag_field", topics_ctx);
   cfg.pose_topic = xml::requireStringField(topics, "pose_estimate", topics_ctx);
+  // 批量数据话题（可选，如果配置了则优先使用）
+  if (topics.hasMember("mag_batch")) {
+    cfg.batch_topic = xml::requireStringField(topics, "mag_batch", topics_ctx);
+  }
 
   // 解析估计器参数
   const auto estimator_ctx = xml::makeContext(context, "params/estimator");
@@ -278,7 +290,81 @@ MagPoseEstimatorConfig MagPoseEstimatorNode::loadMagPoseEstimatorConfig(
 // ============================================================================
 
 /**
- * @brief 磁传感器数据回调函数
+ * @brief 批量传感器数据回调函数（主要接口）
+ * @param msg 批量传感器测量消息（单位：mT，毫特斯拉）
+ * 
+ * 处理流程：
+ * 1. 从批量数据中提取所有传感器数据
+ * 2. 通过预处理器处理数据
+ * 3. 如果是批量优化器模式：直接构建批量数据并运行批量求解器
+ * 4. 否则：逐个更新估计器并发布结果
+ */
+void MagPoseEstimatorNode::batchCallback(
+    const mag_core_msgs::MagSensorBatchConstPtr &msg) {
+  if (msg->measurements.empty()) {
+    return;
+  }
+
+  if (use_batch_optimizer_) {
+    // 批量优化器模式：直接构建批量数据
+    std::vector<OptimizerMeasurement> batch;
+    batch.reserve(msg->measurements.size());
+
+    // 遍历所有传感器数据
+    for (const auto &sensor_data : msg->measurements) {
+      // 预处理数据
+      sensor_msgs::MagneticField mag_msg;
+      mag_msg.header = sensor_data.header;
+      mag_msg.magnetic_field.x = sensor_data.mag_x;
+      mag_msg.magnetic_field.y = sensor_data.mag_y;
+      mag_msg.magnetic_field.z = sensor_data.mag_z;
+
+      sensor_msgs::MagneticField processed = preprocessor_.process(mag_msg);
+      Eigen::Vector3d field(processed.magnetic_field.x,
+                            processed.magnetic_field.y,
+                            processed.magnetic_field.z);
+
+      // 查询传感器位置（通过 sensor_id 和 TF）
+      OptimizerMeasurement meas;
+      ros::Time stamp = sensor_data.header.stamp.isZero() ? msg->header.stamp : sensor_data.header.stamp;
+      std::string frame_id = sensor_data.header.frame_id.empty() ? msg->header.frame_id : sensor_data.header.frame_id;
+      
+      if (fillOptimizerMeasurement(stamp, frame_id, field, meas)) {
+        meas.sensor_id = sensor_data.sensor_id;
+        batch.push_back(meas);
+      }
+    }
+
+    // 如果传感器数量满足要求，运行批量求解器
+    if (batch.size() >= min_sensors_) {
+      geometry_msgs::Pose pose;
+      double error;
+      if (optimizer_backend_->estimateFromBatch(batch, pose, &error)) {
+        publishPose(pose, msg->header.stamp);
+      }
+    }
+    return;
+  }
+
+  // EKF 模式：逐个更新估计器
+  for (const auto &sensor_data : msg->measurements) {
+    sensor_msgs::MagneticField mag_msg;
+    mag_msg.header = sensor_data.header;
+    mag_msg.magnetic_field.x = sensor_data.mag_x;
+    mag_msg.magnetic_field.y = sensor_data.mag_y;
+    mag_msg.magnetic_field.z = sensor_data.mag_z;
+
+    sensor_msgs::MagneticField processed = preprocessor_.process(mag_msg);
+    estimator_->update(processed);
+  }
+
+  // 发布估计结果
+  geometry_msgs::Pose pose = estimator_->getPose();
+  publishPose(pose, msg->header.stamp);
+}
+
+/**
+ * @brief 磁传感器数据回调函数（向后兼容）
  * @param msg 磁传感器测量消息（单位：mT，毫特斯拉）
  * 
  * 处理流程：
@@ -361,12 +447,15 @@ void MagPoseEstimatorNode::cacheMeasurement(
 /**
  * @brief 构建批量测量数据
  * @param out_batch 输出的批量测量数据
+ * @param out_latest_stamp 输出的最新时间戳（用于发布结果）
  * @return 是否成功构建（需要满足最小传感器数量要求）
  * 
  * 从缓存中提取所有有效测量数据，并通过 TF 转换到统一坐标系。
  * 如果某个传感器的 TF 查询失败，会将其从缓存中移除。
+ * 返回批量数据中的最新时间戳，用于确保发布结果的时间戳准确。
  */
-bool MagPoseEstimatorNode::buildBatch(std::vector<OptimizerMeasurement> &out_batch) {
+bool MagPoseEstimatorNode::buildBatch(std::vector<OptimizerMeasurement> &out_batch,
+                                      ros::Time &out_latest_stamp) {
   if (measurement_cache_.size() < min_sensors_) {
     return false;
   }
@@ -374,6 +463,7 @@ bool MagPoseEstimatorNode::buildBatch(std::vector<OptimizerMeasurement> &out_bat
   std::vector<int> stale_keys;  // 失效的传感器 ID
   out_batch.clear();
   out_batch.reserve(measurement_cache_.size());
+  out_latest_stamp = ros::Time(0);  // 初始化为 0，用于查找最新时间戳
 
   // 遍历所有缓存的测量数据
   for (const auto &kv : measurement_cache_) {
@@ -382,6 +472,10 @@ bool MagPoseEstimatorNode::buildBatch(std::vector<OptimizerMeasurement> &out_bat
     if (fillOptimizerMeasurement(kv.second.stamp, kv.second.frame_id, kv.second.field, meas)) {
       meas.sensor_id = kv.first;
       out_batch.push_back(meas);
+      // 更新最新时间戳
+      if (kv.second.stamp > out_latest_stamp) {
+        out_latest_stamp = kv.second.stamp;
+      }
     } else {
       // TF 查询失败，标记为失效
       stale_keys.push_back(kv.first);
@@ -418,8 +512,22 @@ bool MagPoseEstimatorNode::fillOptimizerMeasurement(
 
   try {
     // 查询传感器相对于 output_frame_ 的位姿
+    // 如果时间戳太旧，使用最新可用时间（ros::Time(0) 表示最新时间）
+    ros::Time query_time = stamp;
+    if (!stamp.isZero()) {
+      // 检查时间戳是否太旧（超过 0.5 秒）
+      ros::Time now = ros::Time::now();
+      if ((now - stamp).toSec() > 0.5) {
+        query_time = ros::Time(0);  // 使用最新可用时间
+        ROS_DEBUG_THROTTLE(2.0, "mag_pose_estimator: using latest TF for %s (stamp too old: %.3f s)",
+                          frame_id.c_str(), (now - stamp).toSec());
+      }
+    } else {
+      query_time = ros::Time(0);  // 使用最新可用时间
+    }
+    
     geometry_msgs::TransformStamped tf_sensor = tf_buffer_.lookupTransform(
-        output_frame_, frame_id, stamp, ros::Duration(tf_timeout_));
+        output_frame_, frame_id, query_time, ros::Duration(tf_timeout_));
 
     // 将磁场向量从传感器坐标系转换到输出坐标系
     geometry_msgs::Vector3Stamped v_sensor;
@@ -453,6 +561,8 @@ bool MagPoseEstimatorNode::fillOptimizerMeasurement(
  * 当传感器数量满足要求时，调用批量优化器估计姿态并发布结果。
  * 成功后会清空缓存，准备下一批数据。
  * 失败时保留缓存数据，以便下次重试。
+ * 
+ * 注意：使用批量数据的最新时间戳作为发布结果的时间戳，以减少滞后。
  */
 void MagPoseEstimatorNode::runBatchSolver() {
   if (!use_batch_optimizer_ || !optimizer_backend_) {
@@ -460,7 +570,8 @@ void MagPoseEstimatorNode::runBatchSolver() {
   }
 
   std::vector<OptimizerMeasurement> batch;
-  if (!buildBatch(batch)) {
+  ros::Time latest_stamp;
+  if (!buildBatch(batch, latest_stamp)) {
     ROS_DEBUG_THROTTLE(2.0,
                       "mag_pose_estimator: insufficient sensors for batch optimization "
                       "(have %zu, need %zu)",
@@ -472,7 +583,9 @@ void MagPoseEstimatorNode::runBatchSolver() {
   geometry_msgs::Pose pose;
   double error = 0.0;
   if (optimizer_backend_->estimateFromBatch(batch, pose, &error)) {
-    publishPose(pose, ros::Time::now());
+    // 使用批量数据的最新时间戳，而不是 ros::Time::now()，以减少滞后
+    ros::Time publish_stamp = latest_stamp.isZero() ? ros::Time::now() : latest_stamp;
+    publishPose(pose, publish_stamp);
     // 清空缓存，准备下一批数据
     measurement_cache_.clear();
     ROS_DEBUG_THROTTLE(1.0,

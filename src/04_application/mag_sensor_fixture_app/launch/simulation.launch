@@ -1,5 +1,8 @@
 <?xml version="1.0"?>
 <launch>
+  <!-- 设置日志级别为 DEBUG（可选，取消注释以启用） -->
+  <!-- <env name="ROSCONSOLE_MIN_SEVERITY" value="DEBUG"/> -->
+  
   <!-- 参数配置 -->
   <!-- 仿真专用配置 -->
   <arg name="magnet_config" default="$(find mag_sensor_fixture_app)/simulation/magnet_config.yaml"/>
@@ -20,6 +23,11 @@
   <node pkg="mag_device_sensor" type="sensor_sim_node" name="mag_device_sensor_sim" output="screen">
     <rosparam command="load" file="$(arg sensor_array_config)" ns="array"/>
     <rosparam command="load" file="$(arg sensor_sim_config)"/>
+  </node>
+
+  <!-- 传感器批量打包节点：将单个传感器消息打包成批量数据 -->
+  <node pkg="mag_device_sensor" type="sensor_array_batcher_node" name="sensor_array_batcher" output="screen">
+    <rosparam command="load" file="$(find mag_sensor_fixture_app)/config/sensor_batcher_config.yaml"/>
   </node>
 
   <!-- 姿态估计节点：估计磁体姿态 -->

@@ -12,7 +12,7 @@ add_message_files(
 	FILES
 		MagSensorData.msg
 		MagnetPose.msg
-		MagSensorArray.msg
+		MagSensorBatch.msg
 )
 
 add_action_files(

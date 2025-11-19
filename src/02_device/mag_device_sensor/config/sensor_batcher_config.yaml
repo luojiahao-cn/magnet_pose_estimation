@@ -1,0 +1,16 @@
+# 传感器批量打包节点配置
+# 用于将单个传感器消息打包成批量数据
+# 收集齐一组数据后立即发布，不按固定频率发布
+config:
+  topics:
+    input: /magnetic/sensor/field  # 输入话题（单个传感器数据）
+    output: /magnetic/sensor/batch  # 输出话题（批量数据）
+
+  frames:
+    output: sensor_array  # 参考坐标系（用于批量消息 header.frame_id，订阅者用于查询传感器位置）
+
+  params:
+    timeout_seconds: 0.5  # 传感器数据超时时间（秒）
+    total_sensors: 25  # 期望的传感器总数（收集齐此数量后立即发布，0 表示使用 min_sensors）
+    min_sensors: 0  # 最小传感器数量（如果 total_sensors=0，则使用此值作为目标数量）
+

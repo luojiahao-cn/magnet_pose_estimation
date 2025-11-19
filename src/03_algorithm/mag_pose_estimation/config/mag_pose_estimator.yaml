@@ -7,7 +7,8 @@ config:
 
   # 话题配置
   topics:
-    mag_field: /magnetic/sensor/field  # 磁传感器测量数据输入话题
+    mag_field: /magnetic/sensor/field  # 单个磁传感器测量数据输入话题（向后兼容）
+    mag_batch: /magnetic/sensor/batch  # 批量传感器数据输入话题（优先使用）
     pose_estimate: /magnetic/pose_estimated  # 姿态估计结果输出话题
 
   # 参数配置

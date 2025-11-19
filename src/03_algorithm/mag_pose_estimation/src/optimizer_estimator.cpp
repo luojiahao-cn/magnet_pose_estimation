@@ -342,14 +342,14 @@ bool OptimizerEstimator::estimateFromBatch(const std::vector<OptimizerMeasuremen
   double direction[3] = {magnet_direction_.x(), magnet_direction_.y(), magnet_direction_.z()};
   double strength = magnet_strength_;
   
-  // 确保方向向量已归一化
+  // 验证和归一化方向向量
   double dir_norm = std::sqrt(direction[0] * direction[0] + direction[1] * direction[1] + direction[2] * direction[2]);
   if (dir_norm > 1e-9) {
     direction[0] /= dir_norm;
     direction[1] /= dir_norm;
     direction[2] /= dir_norm;
   } else {
-    // 如果方向未初始化，使用配置中的初始方向
+    // 如果方向未初始化或为零向量，使用配置中的初始方向
     direction[0] = config_.optimizer.initial_direction.x();
     direction[1] = config_.optimizer.initial_direction.y();
     direction[2] = config_.optimizer.initial_direction.z();
@@ -363,6 +363,58 @@ bool OptimizerEstimator::estimateFromBatch(const std::vector<OptimizerMeasuremen
       direction[0] = 0.0;
       direction[1] = 0.0;
       direction[2] = 1.0;
+    }
+  }
+  
+  // 验证初始值有效性（检查 NaN 和 Inf）
+  bool has_invalid_value = false;
+  for (int i = 0; i < 3; ++i) {
+    if (!std::isfinite(position[i]) || !std::isfinite(direction[i])) {
+      has_invalid_value = true;
+      break;
+    }
+  }
+  if (!std::isfinite(strength) || strength <= 0.0) {
+    has_invalid_value = true;
+  }
+  
+  if (has_invalid_value) {
+    ROS_ERROR_THROTTLE(1.0, "optimizer_estimator: invalid initial values - position=[%.3f, %.3f, %.3f], "
+                     "direction=[%.3f, %.3f, %.3f], strength=%.3f. Resetting to config defaults.",
+                     position[0], position[1], position[2],
+                     direction[0], direction[1], direction[2], strength);
+    // 重置为配置中的初始值
+    position[0] = config_.optimizer.initial_position.x();
+    position[1] = config_.optimizer.initial_position.y();
+    position[2] = config_.optimizer.initial_position.z();
+    direction[0] = config_.optimizer.initial_direction.x();
+    direction[1] = config_.optimizer.initial_direction.y();
+    direction[2] = config_.optimizer.initial_direction.z();
+    strength = config_.optimizer.initial_strength;
+    // 重新归一化方向
+    double norm = std::sqrt(direction[0] * direction[0] + direction[1] * direction[1] + direction[2] * direction[2]);
+    if (norm > 1e-9) {
+      direction[0] /= norm;
+      direction[1] /= norm;
+      direction[2] /= norm;
+    } else {
+      direction[0] = 0.0;
+      direction[1] = 0.0;
+      direction[2] = 1.0;
+    }
+  }
+  
+  // 验证批量数据有效性
+  if (batch.empty()) {
+    ROS_WARN_THROTTLE(1.0, "optimizer_estimator: empty batch after validation");
+    return false;
+  }
+  
+  // 检查批量数据中是否有无效值
+  for (const auto &meas : batch) {
+    if (!meas.sensor_position.allFinite() || !meas.magnetic_field.allFinite()) {
+      ROS_WARN_THROTTLE(1.0, "optimizer_estimator: invalid measurement data detected");
+      return false;
     }
   }
 

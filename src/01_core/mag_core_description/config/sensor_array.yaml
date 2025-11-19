@@ -4,8 +4,8 @@ config:
     array: sensor_array
     sensor_frame_prefix: sensor_
     pose:
-      xyz: [0.0, 0.0, 0.0]
-      rpy: [0.0, 0.0, 0.0]
+      xyz: [0.0, 0.0, 0.05]
+      rpy: [0.0, 0.5, 0.0]
 
   sensors:
     - id: 1

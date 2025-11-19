@@ -11,7 +11,7 @@ config:
       raw_max: 32767.0
 
   simulation:
-    update_rate_hz: 100.0
+    update_rate_hz: 30.0
     magnet_frame:
       parent: world
       child: magnet

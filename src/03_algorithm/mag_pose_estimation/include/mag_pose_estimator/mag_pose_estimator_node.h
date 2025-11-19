@@ -1,6 +1,7 @@
 #pragma once
 
 #include <mag_core_msgs/MagSensorData.h>
+#include <mag_core_msgs/MagSensorBatch.h>
 #include <mag_core_msgs/MagnetPose.h>
 #include <ros/ros.h>
 #include <sensor_msgs/MagneticField.h>
@@ -31,7 +32,8 @@ struct MagPoseEstimatorConfig
     std::string output_frame;  // 输出姿态的参考坐标系
 
     // 话题配置
-    std::string mag_topic;  // 磁传感器测量数据输入话题
+    std::string mag_topic;  // 单个磁传感器测量数据输入话题（向后兼容）
+    std::string batch_topic;  // 批量传感器数据输入话题（优先使用）
     std::string pose_topic;  // 姿态估计结果输出话题
 
     // 估计器参数
@@ -170,7 +172,19 @@ private:
   EstimatorConfig buildConfigFromParameters() const;
 
   /**
-   * @brief 磁传感器数据回调函数
+   * @brief 批量传感器数据回调函数（主要接口）
+   * @param msg 批量传感器测量消息（单位：mT）
+   * 
+   * 处理流程：
+   * 1. 从批量数据中提取所有传感器数据
+   * 2. 通过预处理器处理数据
+   * 3. 如果是批量优化器模式：直接构建批量数据并运行批量求解器
+   * 4. 否则：逐个更新估计器并发布结果
+   */
+  void batchCallback(const mag_core_msgs::MagSensorBatchConstPtr &msg);
+
+  /**
+   * @brief 单个磁传感器数据回调函数（向后兼容）
    * @param msg 磁传感器测量消息（单位：mT）
    * 
    * 处理流程：
@@ -200,11 +214,14 @@ private:
   /**
    * @brief 构建批量测量数据
    * @param out_batch 输出的批量测量数据
+   * @param out_latest_stamp 输出的最新时间戳（用于发布结果）
    * @return 是否成功构建（需要满足最小传感器数量要求）
    * 
    * 从缓存中提取所有有效测量数据，并通过 TF 转换到统一坐标系。
+   * 返回批量数据中的最新时间戳，用于确保发布结果的时间戳准确。
    */
-  bool buildBatch(std::vector<OptimizerMeasurement> &out_batch);
+  bool buildBatch(std::vector<OptimizerMeasurement> &out_batch,
+                  ros::Time &out_latest_stamp);
 
   /**
    * @brief 填充优化器测量数据
@@ -230,7 +247,8 @@ private:
 
   ros::NodeHandle nh_;  // 全局节点句柄
   ros::NodeHandle pnh_;  // 私有节点句柄
-  ros::Subscriber mag_sub_;  // 磁传感器数据订阅者
+  ros::Subscriber batch_sub_;  // 批量传感器数据订阅者（主要接口）
+  ros::Subscriber mag_sub_;  // 单个磁传感器数据订阅者（向后兼容）
   ros::Publisher pose_pub_;  // 姿态估计结果发布者
 
   MagPreprocessor preprocessor_;  // 数据预处理器
@@ -238,7 +256,8 @@ private:
   OptimizerEstimator *optimizer_backend_ = nullptr;  // 优化器后端指针（用于批量优化）
 
   std::string estimator_type_;  // 估计器类型
-  std::string mag_topic_;  // 磁传感器数据话题
+  std::string mag_topic_;  // 单个磁传感器数据话题（向后兼容）
+  std::string batch_topic_;  // 批量传感器数据话题（优先使用）
   std::string pose_topic_;  // 姿态估计结果话题
   std::string output_frame_;  // 输出坐标系
 

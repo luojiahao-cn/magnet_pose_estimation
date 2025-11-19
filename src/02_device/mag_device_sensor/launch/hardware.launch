@@ -1,9 +1,22 @@
+<?xml version="1.0"?>
 <launch>
+  <!-- 传感器硬件驱动节点启动文件 -->
+  <!-- 读取硬件传感器数据并发布 -->
+  
   <arg name="array_file" default="$(find mag_core_description)/config/sensor_array.yaml" />
   <arg name="config_file" default="$(find mag_device_sensor)/config/hardware.yaml" />
+  <arg name="use_batcher" default="true" />  <!-- 是否启用批量打包节点 -->
+  <arg name="batcher_config" default="$(find mag_device_sensor)/config/sensor_batcher_config.yaml" />
 
   <node pkg="mag_device_sensor" type="sensor_driver_node" name="mag_device_sensor" output="screen">
     <rosparam command="load" file="$(arg array_file)" ns="array" />
     <rosparam command="load" file="$(arg config_file)" />
   </node>
+
+  <!-- 可选：批量打包节点 -->
+  <group if="$(arg use_batcher)">
+    <node pkg="mag_device_sensor" type="sensor_array_batcher_node" name="sensor_array_batcher" output="screen">
+      <rosparam command="load" file="$(arg batcher_config)" />
+    </node>
+  </group>
 </launch>

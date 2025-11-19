@@ -7,7 +7,8 @@ config:
 
   # 话题配置
   topics:
-    mag_field: /magnetic/sensor/field  # 磁传感器测量数据输入话题
+    mag_field: /magnetic/sensor/field  # 单个磁传感器测量数据输入话题（向后兼容）
+    mag_batch: /magnetic/sensor/batch  # 批量传感器数据输入话题（优先使用）
     pose_estimate: /magnetic/pose_estimated  # 姿态估计结果输出话题
 
   # 参数配置
@@ -15,8 +16,8 @@ config:
     # 估计器核心参数
     estimator:
       type: optimizer  # 估计器类型（optimizer: 优化器）
-      min_sensors: 6  # 最小有效传感器数量
-      tf_timeout: 0.05  # TF变换查询超时时间（秒）
+      min_sensors: 9  # 最小有效传感器数量
+      tf_timeout: 0.1  # TF变换查询超时时间（秒）
       position_gain: 0.02  # 位置增益系数
       process_noise_position: 1.0e-4  # 位置过程噪声方差
       process_noise_orientation: 5.0e-5  # 姿态过程噪声方差
@@ -39,13 +40,13 @@ config:
     optimizer:
       initial_position: [0.0, 0.0, 0.8]  # 初始位置估计 [x, y, z] (米)
       initial_direction: [0.0, 0.0, 1.0]  # 初始磁矩方向向量 [x, y, z]
-      initial_strength: 1.5  # 初始磁矩强度 (Ampere*meter^2)
-      strength_delta: 20  # 磁矩强度搜索范围 (±delta)
+      initial_strength: 10  # 初始磁矩强度 (Ampere*meter^2)
+      strength_delta: 0.001  # 磁矩强度搜索范围 (±delta)
       optimize_strength: true  # 是否优化磁矩强度
       max_iterations: 60  # 最大迭代次数
-      function_tolerance: 1.0e-12  # 函数值收敛容差
-      gradient_tolerance: 1.0e-14  # 梯度收敛容差
-      parameter_tolerance: 1.0e-14  # 参数收敛容差
+      function_tolerance: 1.0e-6  # 函数值收敛容差
+      gradient_tolerance: 1.0e-8  # 梯度收敛容差
+      parameter_tolerance: 1.0e-8  # 参数收敛容差
       num_threads: 2  # 并行计算线程数
       minimizer_progress: false  # 是否显示优化器进度信息
       linear_solver: DENSE_QR  # 线性求解器类型

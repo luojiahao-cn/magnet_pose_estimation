@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- 传感器批量打包节点启动文件 -->
+  <!-- 用于将单个传感器消息打包成批量数据，减少消息数量并确保时间同步 -->
+  
+  <arg name="config_file" default="$(find mag_device_sensor)/config/sensor_batcher_config.yaml" />
+  
+  <node pkg="mag_device_sensor" type="sensor_array_batcher_node" name="sensor_array_batcher" output="screen">
+    <rosparam command="load" file="$(arg config_file)" />
+  </node>
+</launch>
+
