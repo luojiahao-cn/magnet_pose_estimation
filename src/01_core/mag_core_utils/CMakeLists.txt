@@ -6,6 +6,8 @@ find_package(catkin REQUIRED COMPONENTS
 	rosparam_shortcuts
 )
 
+find_package(Eigen3 REQUIRED)
+
 catkin_package(
 	INCLUDE_DIRS include
 	LIBRARIES mag_core_utils
@@ -15,6 +17,7 @@ catkin_package(
 include_directories(
 	include
 	${catkin_INCLUDE_DIRS}
+	${EIGEN3_INCLUDE_DIRS}
 )
 
 add_library(mag_core_utils

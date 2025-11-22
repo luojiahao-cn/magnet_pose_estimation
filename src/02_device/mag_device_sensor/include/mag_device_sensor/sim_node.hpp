@@ -98,6 +98,7 @@ private:
     ros::Timer tf_timer_;
 
     std::mt19937 rng_{std::random_device{}()};
+    ros::Time start_time_;  // 记录节点启动时间，用于延迟TF查询失败的警告
 };
 
 } // namespace mag_device_sensor

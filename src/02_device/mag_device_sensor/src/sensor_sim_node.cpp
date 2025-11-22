@@ -45,6 +45,8 @@ SensorSimNode::SensorSimNode(ros::NodeHandle nh,
 
 void SensorSimNode::start()
 {
+    // 记录启动时间，用于延迟TF查询失败的警告
+    start_time_ = ros::Time::now();
     // 启动仿真更新计时器以及可选的 TF 计时器
     setupTimers();
 }
@@ -113,11 +115,16 @@ void SensorSimNode::onSimulationTimer(const ros::TimerEvent &)
     }
     catch (const tf2::TransformException &ex)
     {
-        ROS_WARN_THROTTLE(2.0,
-                          "[mag_device_sensor_sim] 无法查询磁铁 TF (%s->%s): %s",
-                          simulation_.magnet_parent_frame.c_str(),
-                          simulation_.magnet_child_frame.c_str(),
-                          ex.what());
+        // 启动后3秒内不报warn，给TF树建立时间
+        const ros::Duration time_since_start = ros::Time::now() - start_time_;
+        if (time_since_start.toSec() > 3.0)
+        {
+            ROS_WARN_THROTTLE(2.0,
+                              "[mag_device_sensor_sim] ✗ 无法查询磁铁 TF (%s -> %s): %s",
+                              simulation_.magnet_parent_frame.c_str(),
+                              simulation_.magnet_child_frame.c_str(),
+                              ex.what());
+        }
         return;
     }
 
@@ -156,7 +163,7 @@ Eigen::Vector3d SensorSimNode::sampleNoise()
     }
     else
     {
-        ROS_WARN_ONCE("[mag_device_sensor_sim] 未识别的噪声类型 %s，将忽略噪声", noise_.type.c_str());
+        ROS_WARN_ONCE("[mag_device_sensor_sim] ✗ 未识别的噪声类型 '%s'，将忽略噪声", noise_.type.c_str());
     }
     return noise;
 }
@@ -167,7 +174,7 @@ void SensorSimNode::publishReadings(const geometry_msgs::TransformStamped &magne
     const auto &sensors = array_.sensors();
     if (sensors.empty())
     {
-        ROS_WARN_THROTTLE(5.0, "[mag_device_sensor_sim] 无可用传感器描述，跳过发布");
+        ROS_WARN_THROTTLE(5.0, "[mag_device_sensor_sim] ✗ 无可用传感器描述，跳过发布");
         return;
     }
 

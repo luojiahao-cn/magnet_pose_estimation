@@ -190,6 +190,22 @@ std::vector<double> readVector9(const XmlRpc::XmlRpcValue &value,
   return result;
 }
 
+Eigen::Vector3d readEigenVector3(const XmlRpc::XmlRpcValue &value,
+                                  const std::string &context) {
+  const auto vec = readVector3(value, context);
+  return Eigen::Vector3d(vec[0], vec[1], vec[2]);
+}
+
+Eigen::Matrix3d readEigenMatrix3x3(const XmlRpc::XmlRpcValue &value,
+                                    const std::string &context) {
+  const auto mat = readVector9(value, context);
+  Eigen::Matrix3d m;
+  m << mat[0], mat[1], mat[2],
+       mat[3], mat[4], mat[5],
+       mat[6], mat[7], mat[8];
+  return m;
+}
+
 std::vector<double> requireVector3Field(const XmlRpc::XmlRpcValue &node,
                                         const std::string &member,
                                         const std::string &context) {

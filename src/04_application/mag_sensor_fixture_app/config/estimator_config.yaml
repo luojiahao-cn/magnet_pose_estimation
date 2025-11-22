@@ -1,53 +1,48 @@
 # 磁铁姿态估计器节点配置文件
-# 该文件定义了磁铁姿态估计算法的所有配置参数
 config:
-  # 坐标系配置
   frames:
-    output_frame: sensor_array  # 输出姿态的参考坐标系
+    output_frame: sensor_array
 
-  # 话题配置
   topics:
-    mag_field: /magnetic/sensor/field  # 单个磁传感器测量数据输入话题（向后兼容）
-    mag_batch: /magnetic/sensor/batch  # 批量传感器数据输入话题（优先使用）
-    pose_estimate: /magnetic/pose_estimated  # 姿态估计结果输出话题
+    mag_field: /magnetic/sensor/field
+    mag_batch: /magnetic/sensor/batch
+    pose_estimate: /magnetic/pose_estimated
 
-  # 参数配置
   params:
-    # 估计器核心参数
     estimator:
-      type: optimizer  # 估计器类型（optimizer: 优化器）
-      min_sensors: 9  # 最小有效传感器数量
-      tf_timeout: 0.1  # TF变换查询超时时间（秒）
-      position_gain: 0.02  # 位置增益系数
-      process_noise_position: 1.0e-4  # 位置过程噪声方差
-      process_noise_orientation: 5.0e-5  # 姿态过程噪声方差
-      measurement_noise: 1.0e-3  # 测量噪声方差
-      optimizer_iterations: 15  # 优化器迭代次数
-      optimizer_damping: 1.0e-3  # 优化器阻尼系数
-      world_field: [0.02, 0.01, 0.045]  # 地球磁场向量 [x, y, z] (mT，毫特斯拉)
+      type: optimizer
+      tf_timeout: 0.1
 
-    # 预处理器参数
+    ekf:
+      position_gain: 0.02
+      process_noise_position: 1.0e-4
+      process_noise_orientation: 5.0e-5
+      measurement_noise: 1.0e-3
+      world_field: [0.02, 0.01, 0.045]
+
     preprocessor:
-      enable_calibration: false  # 是否启用磁传感器校准
-      soft_iron_matrix: [1.02, 0.00, 0.00,  # 软铁校准矩阵 (3x3)
+      enable_calibration: false
+      soft_iron_matrix: [1.02, 0.00, 0.00,
                          0.00, 0.99, 0.01,
                          0.00, 0.01, 1.01]
-      hard_iron_offset: [1.0, -2.0, 0.5]  # 硬铁偏移向量 [x, y, z] (mT，毫特斯拉)
-      enable_filter: false  # 是否启用低通滤波器
-      low_pass_alpha: 0.2  # 低通滤波器alpha系数 (0-1, 越大越平滑)
+      hard_iron_offset: [1.0, -2.0, 0.5]
+      enable_filter: false
+      low_pass_alpha: 0.2
 
-    # 优化器参数
     optimizer:
-      initial_position: [0.0, 0.0, 0.8]  # 初始位置估计 [x, y, z] (米)
-      initial_direction: [0.0, 0.0, 1.0]  # 初始磁矩方向向量 [x, y, z]
-      initial_strength: 10  # 初始磁矩强度 (Ampere*meter^2)
-      strength_delta: 0.001  # 磁矩强度搜索范围 (±delta)
-      optimize_strength: true  # 是否优化磁矩强度
-      max_iterations: 60  # 最大迭代次数
-      function_tolerance: 1.0e-6  # 函数值收敛容差
-      gradient_tolerance: 1.0e-8  # 梯度收敛容差
-      parameter_tolerance: 1.0e-8  # 参数收敛容差
-      num_threads: 2  # 并行计算线程数
-      minimizer_progress: false  # 是否显示优化器进度信息
-      linear_solver: DENSE_QR  # 线性求解器类型
+      min_sensors: 25
+      # 初始值（从仿真配置同步）
+      # 仿真轨迹中心: [0.02, 0.02, 0.0]，z高度: 0.08，姿态: [0.0, 0.0, 0.0] (RPY)
+      initial_position: [0.02, 0.02, 0.08]
+      initial_direction: [0.0, 0.0, 1.0]  # 固定姿态 [0, 0, 0] 对应 Z 轴方向
+      initial_strength: 10.0  # 仿真磁矩强度
+      strength_delta: 5.0
+      optimize_strength: false
+      max_iterations: 100
+      function_tolerance: 1.0e-6  # 放宽函数值容差，避免过度优化
+      gradient_tolerance: 1.0e-8  # 放宽梯度容差
+      parameter_tolerance: 1.0e-8  # 放宽参数容差
+      num_threads: 8
+      minimizer_progress: false
+      linear_solver: DENSE_QR
 

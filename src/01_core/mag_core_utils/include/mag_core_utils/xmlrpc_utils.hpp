@@ -2,6 +2,7 @@
 
 #include <XmlRpcValue.h>
 
+#include <Eigen/Dense>
 #include <string>
 #include <vector>
 
@@ -59,6 +60,12 @@ std::vector<double> readVector3(const XmlRpc::XmlRpcValue &value,
 
 std::vector<double> readVector9(const XmlRpc::XmlRpcValue &value,
                                 const std::string &context);
+
+Eigen::Vector3d readEigenVector3(const XmlRpc::XmlRpcValue &value,
+                                  const std::string &context);
+
+Eigen::Matrix3d readEigenMatrix3x3(const XmlRpc::XmlRpcValue &value,
+                                    const std::string &context);
 
 double readNumber(const XmlRpc::XmlRpcValue &value,
                   const std::string &context);

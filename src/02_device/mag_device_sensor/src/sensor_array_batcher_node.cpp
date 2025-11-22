@@ -62,18 +62,19 @@ void SensorArrayBatcherNode::loadParameters()
     // 确定目标传感器数量
     size_t target_sensors = (total_sensors_ > 0) ? total_sensors_ : min_sensors_;
 
-    ROS_INFO("[sensor_array_batcher] 配置加载完成:");
-    ROS_INFO("  输入话题: %s", input_topic_.c_str());
-    ROS_INFO("  输出话题: %s", output_topic_.c_str());
-    ROS_INFO("  参考坐标系: %s (用于批量消息 header.frame_id)", output_frame_.c_str());
-    ROS_INFO("  超时时间: %.3f 秒", timeout_seconds_);
+    ROS_INFO("[sensor_array_batcher] ========== 配置加载完成 ==========");
+    ROS_INFO("[sensor_array_batcher] 输入话题: %s", input_topic_.c_str());
+    ROS_INFO("[sensor_array_batcher] 输出话题: %s", output_topic_.c_str());
+    ROS_INFO("[sensor_array_batcher] 参考坐标系: %s", output_frame_.c_str());
+    ROS_INFO("[sensor_array_batcher] 超时时间: %.3f 秒", timeout_seconds_);
     if (total_sensors_ > 0) {
-        ROS_INFO("  期望传感器总数: %zu (收集齐后立即发布)", total_sensors_);
+        ROS_INFO("[sensor_array_batcher] 期望传感器总数: %zu (收集齐后立即发布)", total_sensors_);
     } else if (min_sensors_ > 0) {
-        ROS_INFO("  目标传感器数量: %zu (收集齐后立即发布)", min_sensors_);
+        ROS_INFO("[sensor_array_batcher] 目标传感器数量: %zu (收集齐后立即发布)", min_sensors_);
     } else {
-        ROS_WARN("  未设置 total_sensors 或 min_sensors，将收集到任何数据就发布（不推荐）");
+        ROS_WARN("[sensor_array_batcher] 未设置 total_sensors 或 min_sensors，将收集到任何数据就发布（不推荐）");
     }
+    ROS_INFO("[sensor_array_batcher] =====================================");
 }
 
 void SensorArrayBatcherNode::setupSubscribers()
@@ -83,13 +84,13 @@ void SensorArrayBatcherNode::setupSubscribers()
         100,  // 队列大小：足够大以处理多个传感器的高频数据
         &SensorArrayBatcherNode::sensorCallback,
         this);
-    ROS_INFO("[sensor_array_batcher] 已订阅: %s", input_topic_.c_str());
+    ROS_INFO("[sensor_array_batcher] 已订阅话题: %s", input_topic_.c_str());
 }
 
 void SensorArrayBatcherNode::setupPublishers()
 {
     batch_pub_ = nh_.advertise<mag_core_msgs::MagSensorBatch>(output_topic_, 10);
-    ROS_INFO("[sensor_array_batcher] 已发布: %s", output_topic_.c_str());
+    ROS_INFO("[sensor_array_batcher] 已发布话题: %s", output_topic_.c_str());
 }
 
 void SensorArrayBatcherNode::sensorCallback(const mag_core_msgs::MagSensorDataConstPtr &msg)
@@ -133,7 +134,7 @@ void SensorArrayBatcherNode::sensorCallback(const mag_core_msgs::MagSensorDataCo
     // 在锁外发布（避免在锁内进行网络操作）
     if (should_publish) {
         batch_pub_.publish(batch_msg);
-        ROS_DEBUG("[sensor_array_batcher] 发布批量数据: %zu 个传感器", batch_msg.measurements.size());
+        ROS_DEBUG("[sensor_array_batcher] ✓ 发布批量数据: %zu 个传感器", batch_msg.measurements.size());
     }
 }
 
@@ -149,7 +150,7 @@ bool SensorArrayBatcherNode::publishBatch()
     // 检查数据是否超时
     ros::Time now = ros::Time::now();
     if ((now - last_update_time_).toSec() > timeout_seconds_) {
-        ROS_WARN_THROTTLE(2.0, "[sensor_array_batcher] 传感器数据超时，清空缓存");
+        ROS_WARN_THROTTLE(2.0, "[sensor_array_batcher] ✗ 传感器数据超时，清空缓存");
         sensor_cache_.clear();
         return false;
     }
@@ -179,7 +180,7 @@ bool SensorArrayBatcherNode::publishBatch()
     
     // 检查传感器数量
     if (target_sensors > 0 && batch_msg.measurements.size() < target_sensors) {
-        ROS_DEBUG_THROTTLE(1.0, "[sensor_array_batcher] 传感器数量不足: %zu < %zu，跳过发布",
+        ROS_DEBUG_THROTTLE(1.0, "[sensor_array_batcher] 传感器数量不足 (当前: %zu, 需要: %zu)，跳过发布",
                           batch_msg.measurements.size(), target_sensors);
         return false;
     }
@@ -187,7 +188,7 @@ bool SensorArrayBatcherNode::publishBatch()
     // 发布批量数据
     if (!batch_msg.measurements.empty()) {
         batch_pub_.publish(batch_msg);
-        ROS_DEBUG("[sensor_array_batcher] 发布批量数据: %zu 个传感器", batch_msg.measurements.size());
+        ROS_DEBUG("[sensor_array_batcher] ✓ 发布批量数据: %zu 个传感器", batch_msg.measurements.size());
         return true;
     }
     
@@ -196,7 +197,7 @@ bool SensorArrayBatcherNode::publishBatch()
 
 void SensorArrayBatcherNode::start()
 {
-    ROS_INFO("[sensor_array_batcher] 节点已启动，等待传感器数据...");
+    ROS_INFO("[sensor_array_batcher] >>> 节点已启动，等待传感器数据...");
     ros::spin();
 }
 

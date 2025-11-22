@@ -1,193 +1,164 @@
 # mag_pose_estimator
 
-你现在是一名 ROS1（C++）机器人软件工程专家与状态估计算法专家，需要为我生成一个完整可运行的 ROS 包 **mag_pose_estimator**。
+磁铁姿态估计 ROS 包，提供基于磁偶极子模型的磁铁位置和姿态估计功能。
 
-# 🎯 项目目标
-创建一个 ROS1 C++ 包，从其他节点发布的磁力计数据中估计系统的 3D 姿态（orientation）和位置（position），并发布 PoseStamped。包应具有良好的结构化设计，便于扩展不同的状态估计算法（如 EKF、UKF、非线性优化等）。
+## 功能特性
 
+- **多种估计算法**：
+  - **EKF（扩展卡尔曼滤波器）**：适合实时单次测量更新，使用归一化磁场方向
+  - **优化器（Ceres Solver）**：批量优化，同时估计位置、方向和磁矩强度，使用解析雅可比矩阵
 
-# 📦 一、ROS 包结构要求
-请生成一个 **完整可编译、可运行的 ROS 包**，包含：
+- **数据预处理**：
+  - 软/硬铁校准（补偿传感器周围铁磁材料干扰）
+  - 低通滤波（抑制传感器噪声）
 
+- **灵活的输入接口**：
+  - 支持单个传感器数据（`MagSensorData`，EKF 模式）
+  - 支持批量传感器数据（`MagSensorBatch`，优化器模式，推荐）
 
-要求使用 **catkin** 构建体系。语言：**C++14 或 C++17**。
-
-
-# 🧩 二、节点功能说明（核心）
-创建一个主节点：`mag_pose_estimator_node`，功能包含：
-
-1. **订阅磁力计数据：**
-   - topic：`/magnetic/sensor/field`
-   - 类型：`mag_core_msgs/MagSensorData`（单位：mT，节点内部会转换为 `sensor_msgs/MagneticField` 的特斯拉值）
-
-2. **数据预处理：**
-   - 磁力计 soft/hard iron 校正（提供默认的校准函数）
-   - 噪声滤波（简单一阶或可切换）
-
-3. **支持多种姿态与位置估计算法（可自由切换）：**
-   提供统一接口类 `EstimatorBase`，并实现至少两种算法：
-   - `EKFEstimator`
-   - `OptimizerEstimator`（基于非线性最小二乘，例如 Gauss-Newton / Levenberg-Marquardt）
-
-   要求：
-   - 可通过 ROS 参数（或动态参数）切换算法，例如 `estimator_type: ekf` 或 `optimizer`
-
-4. **输出：**
-   - 发布 `geometry_msgs/PoseStamped` 到 `/magnetic/pose_estimated`
-   - 自动生成 header.stamp 与 frame_id
-
-
-# 🧠 三、算法设计要求
-
-## 1. 统一接口（必须）
-为所有算法编写一个虚基类：
-
-```cpp
-class EstimatorBase {
-public:
-    virtual void initialize() = 0;
-    virtual void update(const sensor_msgs::MagneticField& mag) = 0;
-    virtual geometry_msgs::Pose getPose() const = 0;
-    virtual ~EstimatorBase() {}
-};
-```
-
-```
-
----
-
-## ✅ 实现概览
+## 文件结构
 
 ```
 include/mag_pose_estimator/
-├── estimator_base.h
-├── estimator_factory.h
-├── ekf_estimator.h
-├── optimizer_estimator.h
-├── mag_preprocessor.h
-└── mag_pose_estimator_node.h
+├── estimator_base.h              # 估计器基类和配置结构体
+├── mag_pose_estimator_ekf.h      # EKF 估计器
+├── mag_pose_estimator_optimization.h  # 优化器估计器
+├── mag_preprocessor.h            # 磁场数据预处理器
+├── mag_pose_estimator_node.h     # ROS 节点主类
+└── magnetic_field_model.h        # 磁偶极子模型和解析雅可比
+
 src/
-├── estimator_factory.cpp
-├── ekf_estimator.cpp
-├── optimizer_estimator.cpp
+├── mag_pose_estimator_ekf.cpp
+├── mag_pose_estimator_optimization.cpp
 ├── mag_preprocessor.cpp
-├── mag_pose_estimator_node.cpp
-└── mag_pose_estimator_node_main.cpp
-config/mag_pose_estimator.yaml
-launch/mag_pose_estimator.launch
+└── mag_pose_estimator_node.cpp
+
+config/
+└── mag_pose_estimator.yaml       # 配置文件示例
+
+launch/
+└── mag_pose_estimator.launch     # 启动文件示例
 ```
 
-## 🚀 构建与运行
+## 配置说明
+
+### 基本配置
+
+```yaml
+config:
+  frames:
+    output_frame: sensor_array  # 输出姿态的参考坐标系
+
+  topics:
+    mag_field: /magnetic/sensor/field      # 单个传感器数据（EKF 模式）
+    mag_batch: /magnetic/sensor/batch      # 批量传感器数据（优化器模式，推荐）
+    pose_estimate: /magnetic/pose_estimated  # 输出话题
+
+  params:
+    estimator:
+      type: optimizer  # "ekf" 或 "optimizer"
+      min_sensors: 6   # 优化器所需的最小传感器数量
+      tf_timeout: 0.05  # TF 查询超时时间（秒）
+```
+
+### EKF 参数（仅当 `type: "ekf"` 时使用）
+
+```yaml
+    ekf:
+      position_gain: 0.02  # 位置增益系数
+      process_noise_position: 1.0e-4  # 位置过程噪声方差
+      process_noise_orientation: 5.0e-5  # 姿态过程噪声方差
+      measurement_noise: 1.0e-3  # 测量噪声方差
+      world_field: [0.02, 0.01, 0.045]  # 地球磁场向量 [x, y, z] (mT)
+```
+
+### 优化器参数（仅当 `type: "optimizer"` 时使用）
+
+```yaml
+    optimizer:
+      initial_position: [0.0, 0.0, 0.8]  # 初始位置估计 [x, y, z] (米)
+      initial_direction: [0.0, 0.0, 1.0]  # 初始磁矩方向向量（归一化）
+      initial_strength: 10  # 初始磁矩强度 (Am²)
+      strength_delta: 5.0  # 磁矩强度优化范围 (±delta)
+      optimize_strength: true  # 是否优化磁矩强度
+      max_iterations: 60  # 最大迭代次数
+      function_tolerance: 1.0e-6  # 函数值收敛容差
+      gradient_tolerance: 1.0e-8  # 梯度收敛容差
+      parameter_tolerance: 1.0e-8  # 参数收敛容差
+      num_threads: 2  # 并行计算线程数
+      minimizer_progress: false  # 是否显示优化进度
+      linear_solver: DENSE_QR  # 线性求解器类型
+```
+
+### 预处理器参数
+
+```yaml
+    preprocessor:
+      enable_calibration: false  # 是否启用软/硬铁校准
+      soft_iron_matrix: [1.02, 0.00, 0.00,  # 软铁校准矩阵 (3x3)
+                         0.00, 0.99, 0.01,
+                         0.00, 0.01, 1.01]
+      hard_iron_offset: [1.0, -2.0, 0.5]  # 硬铁偏移向量 [x, y, z] (mT)
+      enable_filter: false  # 是否启用低通滤波器
+      low_pass_alpha: 0.2  # 低通滤波器系数 (0-1)
+```
+
+## 算法说明
+
+### EKF 估计器
+
+- **状态向量**：`[位置(3), 四元数(4), 偏置(3)]`，共 10 维
+- **观测模型**：基于归一化磁场方向，通过旋转世界坐标系磁场向量得到预测值
+- **特点**：实时性好，适合单次测量更新，但精度相对较低
+
+### 优化器估计器
+
+- **优化变量**：位置 [x, y, z]、方向向量（归一化）、磁矩强度（可选）
+- **残差函数**：基于磁偶极子模型，计算预测磁场与测量磁场的差值
+- **雅可比计算**：使用解析公式计算，不依赖数值微分或自动微分
+- **特点**：精度高，需要多个传感器数据，计算量较大
+
+## 构建与运行
+
+### 构建
 
 ```bash
-cd /home/lawkaho/workshop/magnet_pose_estimation
+cd ~/workshop/magnet_pose_estimation
 catkin_make
 source devel/setup.bash
+```
+
+### 运行
+
+```bash
+# 使用默认配置
 roslaunch mag_pose_estimator mag_pose_estimator.launch
+
+# 使用自定义配置
+roslaunch mag_pose_estimator mag_pose_estimator.launch config_file:=$(rospack find mag_pose_estimator)/config/mag_pose_estimator.yaml
 ```
 
-- 在启动前可通过 `rosparam set /mag_pose_estimator/estimator_type optimizer` 切换优化器版本。
-- 修改 `config/mag_pose_estimator.yaml` 可统一管理滤波、标定与噪声参数，或在 `launch` 中传入 `config:=/path/to/custom.yaml` 以覆盖默认配置。
+## 输出消息
 
-## ⚙️ 参数速查
+节点发布 `mag_core_msgs::MagnetPose` 消息，包含：
+- `header`：时间戳和坐标系
+- `position`：磁铁位置 [x, y, z] (米)
+- `orientation`：磁铁姿态（四元数）
+- `magnetic_strength`：磁矩强度 (Am²)
 
-| 参数 | 说明 | 默认 |
-| --- | --- | --- |
-| `estimator_type` | `ekf` / `optimizer` | `ekf` |
-| `mag_topic` | 输入磁力计话题 | `/magnetic/sensor/field` |
-| `pose_topic` | PoseStamped 输出话题 | `/magnetic/pose_estimated` |
-| `output_frame` | PoseStamped frame_id | `map` |
-| `world_field` | 世界系磁场向量 (Tesla) | `[2e-5, 0, 4.8e-5]` |
-| `position_gain` | 将磁残差映射为位置更新的比例 | `0.02` |
-| `process_noise_position` / `process_noise_orientation` | EKF 过程噪声 | `1e-4` / `5e-5` |
-| `measurement_noise` | EKF 观测噪声方差 | `1e-3` |
-| `optimizer_iterations` / `optimizer_damping` | GN/LM 迭代次数与阻尼 | `15` / `1e-3` |
-| `enable_calibration`, `soft_iron_matrix`, `hard_iron_offset` | 软/硬铁补偿开关与参数 | 见 YAML |
-| `enable_filter`, `low_pass_alpha` | 一阶低通滤波 | `true`, `0.2` |
+## 依赖
 
-## 🧠 算法说明
+- ROS Melodic/Noetic
+- `mag_core_msgs`：消息定义
+- `mag_core_utils`：工具库
+- `Ceres Solver`：优化库
+- `Eigen3`：线性代数库
+- `tf2_ros`：TF 变换库
 
-### 统一接口
+## 注意事项
 
-```cpp
-class EstimatorBase {
-public:
-   virtual void initialize() = 0;
-   virtual void update(const sensor_msgs::MagneticField &mag) = 0;
-   virtual geometry_msgs::Pose getPose() const = 0;
-   virtual std::string name() const = 0;
-   virtual ~EstimatorBase() = default;
-};
-```
+1. **单位**：所有磁场数据单位均为 mT（毫特斯拉）
+2. **坐标系**：确保传感器位置可通过 TF 查询获取
+3. **批量数据**：优化器模式推荐使用批量数据接口，提高效率和精度
+4. **初始值**：优化器的初始值设置对收敛性有重要影响
 
-所有算法共用 `EstimatorConfig`，包含世界系磁向量、噪声与优化参数，便于未来扩展 UKF / 粒子滤波等实现。
-
-### EKFEstimator
-
-- 状态：\(x = [p_x, p_y, p_z, q_x, q_y, q_z, q_w, b_x, b_y, b_z]^T\)。
-- 预测：当前实现视作随机游走；借助 `process_noise_*` 参数将时间相关噪声累积到协方差（TODO：可扩展 IMU/里程计动力学）。
-- 观测：\(\hat{m}_b = R(q)m_w\)，残差 \(r = \text{normalize}(m_b) - \text{normalize}(\hat{m}_b)\)。
-- Jacobian 示例：
-   \[
-   H_q = \frac{\partial R(q)m_w}{\partial q} = \begin{bmatrix}-R[m_w]_\times & Rm_w\end{bmatrix}
-   \]
-- 更新：利用标准 EKF 增益修正状态，随后重新归一化四元数，并将残差注入偏置以允许建模磁偏漂移。
-
-### OptimizerEstimator
-
-- 目标函数：\(J(q) = \|m_b - R(q)m_w\|^2\)。
-- 方法：采用 Gauss-Newton + LM 阻尼，解 \((J^T J + \lambda I)\delta = J^T r\) 获得小旋量增量，再通过指数映射更新四元数。
-- 收敛：`optimizer_iterations` 与 `optimizer_damping` 分别控制迭代轮次与阻尼强度；若 `\|\delta\| < 1e-4` 则提前终止。
-- 位置：以 `position_gain` 将残差映射成位置改变量，示例化展示接口扩展能力（TODO：可替换为磁梯度地图匹配或外部定位融合）。
-
-## 📚 参考
-
-- S. O. Madgwick, "An efficient orientation filter for inertial and magnetic sensor arrays", 2010.
-- M. Kok, J. D. Hol, T. B. Schön, "Using inertial sensors for position and orientation estimation", 2017.
-- B. Kuipers, *Quaternions and Rotation Sequences*, Princeton University Press.
-
-> NOTE：当前实现重点在结构化接口，落地部署前务必重新标定磁力计并根据场景调参。
-
-要求包含：
-
-* 状态量：位置 xyz + 四元数 q + 偏置（可选）
-* 预测模型（可简化）
-* 观测模型：磁力计方向与世界坐标的对齐
-* 线性化 Jacobian 的示例
-
-## 3. 优化法示例（Optimizer）
-
-要求包含：
-
-* 构建残差函数：测量磁场方向 vs. 理论方向
-* 使用迭代最优化求解姿态（姿态用四元数）
-* 可参考 Gauss-Newton / LM
-
-
-# 📚 四、代码质量要求
-
-* 所有类文件清晰分层，module 化
-* 允许用户后续添加新算法（如 UKFEstimator）
-* 包含详细注释，备注数学公式与参考文献
-* 提供足够的 TODO 标记便于论文扩展
-* 所有函数分离声明与定义（.h/.cpp）
-* 确保整个包可直接 `catkin_make` 构建
-
-
-# 🚀 五、期望输出结构（重要）
-
-请输出以下完整内容：
-
-1. **mag_pose_estimator/package.xml**
-2. **mag_pose_estimator/CMakeLists.txt**
-3. **include/mag_pose_estimator/** 下全部头文件
-4. **src/** 下全部 .cpp 文件
-5. **节点主程序** `mag_pose_estimator_node.cpp`
-6. **示例 launch 文件** `mag_pose_estimator.launch`
-7. **示例 config 参数文件**
-8. **使用说明**（如何运行、如何切换算法）
-9. **附数学解释（EKF & 优化器）**，用于论文撰写参考
-
-务必确保包结构正确且代码可直接运行。
-
-```

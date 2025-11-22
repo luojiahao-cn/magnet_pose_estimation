@@ -2,8 +2,13 @@
 
 #include <ros/ros.h>
 
+#include <locale>
+
 int main(int argc, char **argv)
 {
+    // 设置本地化，支持中文输出
+    setlocale(LC_ALL, "zh_CN.UTF-8");
+    
     ros::init(argc, argv, "sensor_array_batcher_node");
     ros::NodeHandle nh;
     ros::NodeHandle pnh("~");

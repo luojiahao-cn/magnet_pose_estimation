@@ -3,6 +3,7 @@
 #include <cmath>
 #include <utility>
 #include <sstream>
+#include <locale>
 
 #include <ros/ros.h>
 #include <mag_core_msgs/MagnetPose.h>
@@ -35,7 +36,7 @@ public:
         // 加载配置参数
         XmlRpc::XmlRpcValue config;
         if (!pnh_.getParam("config", config)) {
-            ROS_ERROR("Failed to get config parameter");
+            ROS_ERROR("[magnet_viz] ✗ 无法获取配置参数");
             ros::shutdown();
             return;
         }
@@ -511,6 +512,9 @@ private:
 
 int main(int argc, char **argv)
 {
+    // 设置本地化，支持中文输出
+    setlocale(LC_ALL, "zh_CN.UTF-8");
+    
     ros::init(argc, argv, "magnet_viz_node");
     ros::NodeHandle nh;
     ros::NodeHandle pnh("~");

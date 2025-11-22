@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <locale>
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -98,7 +99,7 @@ private:
         // Load configuration
         XmlRpc::XmlRpcValue config;
         if (!pnh_.getParam("config", config)) {
-            ROS_ERROR("Failed to get config parameter");
+            ROS_ERROR("[sensor_array_viz] ✗ 无法获取配置参数");
             ros::shutdown();
             return;
         }
@@ -165,11 +166,9 @@ private:
         }
         if (fixed_frame_ != description.parentFrame())
         {
-            ROS_WARN_STREAM_THROTTLE(10.0,
-                                     "[sensor_array_viz] fixed_frame '" << fixed_frame_
-                                                                  << "' 与描述中的 parent_frame '"
-                                                                  << description.parentFrame()
-                                                                  << "' 不一致，将仍以 parent_frame 发布 marker");
+            ROS_WARN_THROTTLE(10.0,
+                              "[sensor_array_viz] ⚠ fixed_frame '%s' 与描述中的 parent_frame '%s' 不一致，将仍以 parent_frame 发布 marker",
+                              fixed_frame_.c_str(), description.parentFrame().c_str());
             fixed_frame_ = description.parentFrame();
         }
 
@@ -202,7 +201,7 @@ private:
             sensors_.push_back(visual);
             sensor_index_.emplace(visual.id, sensors_.size() - 1);
         }
-        ROS_INFO_STREAM("[sensor_array_viz] loaded " << sensors_.size() << " sensor poses from parameter '~" << config_key << "'.");
+        ROS_INFO("[sensor_array_viz] ✓ 已加载 %zu 个传感器位姿 (参数: ~%s)", sensors_.size(), config_key.c_str());
     }
 
     /**
@@ -215,7 +214,7 @@ private:
         const auto it = sensor_index_.find(static_cast<int>(msg->sensor_id));
         if (it == sensor_index_.end())
         {
-            ROS_WARN_THROTTLE(5.0, "[sensor_array_viz] unknown sensor id %u", msg->sensor_id);
+            ROS_WARN_THROTTLE(5.0, "[sensor_array_viz] ✗ 未知传感器 ID: %u", msg->sensor_id);
             return;
         }
         const SensorVisual &sensor = sensors_.at(it->second);
@@ -409,7 +408,7 @@ private:
     {
         if (sensors_.empty())
         {
-            ROS_WARN_THROTTLE(5.0, "[sensor_array_viz] no sensor description available, skip visualization");
+            ROS_WARN_THROTTLE(5.0, "[sensor_array_viz] ✗ 无传感器描述，跳过可视化");
             return;
         }
 
@@ -471,6 +470,9 @@ private:
 
 int main(int argc, char **argv)
 {
+    // 设置本地化，支持中文输出
+    setlocale(LC_ALL, "zh_CN.UTF-8");
+    
     ros::init(argc, argv, "sensor_array_viz_node");
     ros::NodeHandle nh;
     ros::NodeHandle pnh("~");
