@@ -287,10 +287,13 @@ bool OptimizerEstimator::estimateFromBatch(const std::vector<OptimizerMeasuremen
   Eigen::Vector3d backup_direction = magnet_direction_;
   double backup_strength = magnet_strength_;
 
-  // 使用当前状态作为初始值
+  // 使用当前状态作为初始值（warm start：使用上一次的优化结果）
   double position[3] = {position_.x(), position_.y(), position_.z()};
   double direction[3] = {magnet_direction_.x(), magnet_direction_.y(), magnet_direction_.z()};
   double strength = magnet_strength_;
+  
+  ROS_DEBUG_THROTTLE(2.0, "[mag_pose_estimator] 使用上一次优化结果作为初始值: 位置=[%.3f, %.3f, %.3f], 方向=[%.3f, %.3f, %.3f], 强度=%.2f",
+                     position[0], position[1], position[2], direction[0], direction[1], direction[2], strength);
   
   // 归一化方向向量
   double dir_norm = std::sqrt(direction[0] * direction[0] + direction[1] * direction[1] + direction[2] * direction[2]);
@@ -432,24 +435,32 @@ bool OptimizerEstimator::estimateFromBatch(const std::vector<OptimizerMeasuremen
                      summary.BriefReport().c_str(), initial_error);
   }
   
-  // 如果优化失败，检查是否应该使用备份状态
+  // 如果优化失败，检查是否应该使用备份状态或更新状态
   if (!optimization_success) {
-    // 如果初始误差过大，可能是初始值问题，尝试重置
     double avg_initial_residual = std::sqrt(initial_error / (batch.size() * 3));
-    if (avg_initial_residual > 10.0) {  // 平均残差超过 10 mT，可能初始值很差
-      ROS_WARN_THROTTLE(1.0, "[mag_pose_estimator] 初始误差过大 (%.2f mT)，重置为配置默认值", avg_initial_residual);
-      position_ = config_.optimizer.initial_position;
-      magnet_direction_ = config_.optimizer.initial_direction.normalized();
-      magnet_strength_ = config_.optimizer.initial_strength;
+    double avg_final_residual = std::sqrt(final_error / (batch.size() * 3));
+    
+    // 即使优化未收敛，如果最终误差比初始误差小，也更新状态（用于下一次优化）
+    if (final_error < initial_error && avg_final_residual < avg_initial_residual) {
+      // 误差有改善，更新状态供下一次使用
+      position_ = Eigen::Vector3d(position[0], position[1], position[2]);
+      magnet_direction_ = Eigen::Vector3d(direction[0], direction[1], direction[2]).normalized();
+      if (optimize_strength_) {
+        magnet_strength_ = strength;
+      }
       pose_out = buildPoseFromDirection(magnet_direction_, position_);
       last_pose_ = pose_out;
       if (error_out) {
-        *error_out = initial_error;
+        *error_out = final_error;
       }
-      return true;
+      ROS_WARN_THROTTLE(1.0, "[mag_pose_estimator] 优化未收敛但误差已改善，更新状态供下次使用，平均残差: %.3f -> %.3f mT，初始误差: %.2f，最终误差: %.2f",
+                        avg_initial_residual, avg_final_residual, initial_error, final_error);
+      return false;  // 虽然误差改善了，但未收敛，仍返回 false
     }
     
-    // 否则使用备份状态
+    // 否则使用备份状态（优化前的状态）
+    ROS_WARN_THROTTLE(1.0, "[mag_pose_estimator] 优化未收敛且误差未改善，使用备份状态，平均残差: %.3f mT，初始误差: %.2f，最终误差: %.2f",
+                      avg_final_residual, initial_error, final_error);
     position_ = backup_position;
     magnet_direction_ = backup_direction;
     magnet_strength_ = backup_strength;
@@ -458,20 +469,45 @@ bool OptimizerEstimator::estimateFromBatch(const std::vector<OptimizerMeasuremen
     if (error_out) {
       *error_out = initial_error;
     }
-    return true;
+    return false;  // 优化失败，返回 false
   }
   
-  // 优化成功，更新内部状态
+  // 优化成功，检查最终误差是否在合理范围内
+  double avg_final_residual = std::sqrt(final_error / (batch.size() * 3));
+  const double max_acceptable_residual = config_.optimizer.max_acceptable_residual;  // 从配置读取可接受的最大平均残差（mT）
+  
+  if (avg_final_residual > max_acceptable_residual) {
+    // 误差过大，即使优化收敛也认为失败
+    // 使用备份状态（上一次的优化结果），不重置为配置初始值
+    // 因为实际应用中不知道磁铁的真实位置
+    ROS_WARN_THROTTLE(1.0, "[mag_pose_estimator] 优化收敛但误差过大，平均残差: %.3f mT (阈值: %.3f mT)，使用备份状态，初始误差: %.2f，最终误差: %.2f",
+                      avg_final_residual, max_acceptable_residual, initial_error, final_error);
+    position_ = backup_position;
+    magnet_direction_ = backup_direction;
+    magnet_strength_ = backup_strength;
+    pose_out = buildPoseFromDirection(magnet_direction_, position_);
+    last_pose_ = pose_out;
+    if (error_out) {
+      *error_out = initial_error;
+    }
+    return false;  // 返回失败
+  }
+
+  // 误差在合理范围内，更新内部状态（用于下一次优化的初始值）
   if (error_out) {
     *error_out = final_error;
   }
 
-  // 更新内部状态
+  // 更新内部状态（保存优化结果，供下一次使用）
   position_ = Eigen::Vector3d(position[0], position[1], position[2]);
   magnet_direction_ = Eigen::Vector3d(direction[0], direction[1], direction[2]).normalized();
   if (optimize_strength_) {
     magnet_strength_ = strength;
   }
+  
+  ROS_DEBUG_THROTTLE(2.0, "[mag_pose_estimator] 优化成功，更新状态供下次使用: 位置=[%.3f, %.3f, %.3f], 方向=[%.3f, %.3f, %.3f], 强度=%.2f",
+                     position_.x(), position_.y(), position_.z(), 
+                     magnet_direction_.x(), magnet_direction_.y(), magnet_direction_.z(), magnet_strength_);
 
   // 构造输出姿态
   pose_out = buildPoseFromDirection(magnet_direction_, position_);
@@ -479,8 +515,8 @@ bool OptimizerEstimator::estimateFromBatch(const std::vector<OptimizerMeasuremen
 
   // 记录优化信息
   if (summary.termination_type == ceres::CONVERGENCE || summary.termination_type == ceres::USER_SUCCESS) {
-    ROS_DEBUG_THROTTLE(1.0, "[mag_pose_estimator] 优化成功收敛，迭代次数: %d，初始误差: %.2f，最终误差: %.2f，改善: %.1f%%",
-                      summary.num_successful_steps, initial_error, final_error, 
+    ROS_DEBUG_THROTTLE(1.0, "[mag_pose_estimator] 优化成功收敛，迭代次数: %d，初始误差: %.2f，最终误差: %.2f，平均残差: %.3f mT，改善: %.1f%%",
+                      summary.num_successful_steps, initial_error, final_error, avg_final_residual,
                       (initial_error - final_error) / initial_error * 100.0);
   }
 

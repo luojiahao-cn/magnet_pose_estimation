@@ -51,3 +51,4 @@ config:
       num_threads: 2  # 并行计算线程数
       minimizer_progress: false  # 是否显示优化器进度信息
       linear_solver: DENSE_QR  # 线性求解器类型
+      max_acceptable_residual: 1.0  # 可接受的最大平均残差 (mT)，超过此值即使优化收敛也认为失败

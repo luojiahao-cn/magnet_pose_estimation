@@ -31,11 +31,9 @@ config:
 
     optimizer:
       min_sensors: 25
-      # 初始值（从仿真配置同步）
-      # 仿真轨迹中心: [0.02, 0.02, 0.0]，z高度: 0.08，姿态: [0.0, 0.0, 0.0] (RPY)
-      initial_position: [0.02, 0.02, 0.08]
-      initial_direction: [0.0, 0.0, 1.0]  # 固定姿态 [0, 0, 0] 对应 Z 轴方向
-      initial_strength: 10.0  # 仿真磁矩强度
+      initial_position: [0.02, 0.02, 0.03]  # 真实位置
+      initial_direction: [1.0, 0.0, 0.0]  # 真实方向（RPY [0, π/2, 0] 对应 X 轴方向）
+      initial_strength: 10.0  # 仿真磁矩强度（真实值）
       strength_delta: 5.0
       optimize_strength: false
       max_iterations: 100
@@ -43,6 +41,7 @@ config:
       gradient_tolerance: 1.0e-8  # 放宽梯度容差
       parameter_tolerance: 1.0e-8  # 放宽参数容差
       num_threads: 8
-      minimizer_progress: false
+      minimizer_progress: false # 是否显示优化器进度信息
       linear_solver: DENSE_QR
+      max_acceptable_residual: 1.0  # 可接受的最大平均残差 (mT)，超过此值即使优化收敛也认为失败
 

@@ -13,6 +13,7 @@
 #include <vector>
 
 // ROS 相关
+#include <ros/console.h>
 #include <rosparam_shortcuts/rosparam_shortcuts.h>
 #include <tf2/exceptions.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
@@ -100,6 +101,7 @@ void MagPoseEstimatorNode::loadParameters() {
   optimizer_params_.num_threads = cfg.num_threads;
   optimizer_params_.minimizer_progress = cfg.minimizer_progress;
   optimizer_params_.linear_solver = cfg.linear_solver;
+  optimizer_params_.max_acceptable_residual = cfg.max_acceptable_residual;
 
   // 配置预处理器
   preprocessor_.configure(cfg);
@@ -224,6 +226,8 @@ MagPoseEstimatorConfig MagPoseEstimatorNode::loadMagPoseEstimatorConfig(
         optimizer, "minimizer_progress", optimizer_ctx);
     cfg.linear_solver = xml::requireStringField(
         optimizer, "linear_solver", optimizer_ctx);
+    cfg.max_acceptable_residual = xml::optionalNumberField(
+        optimizer, "max_acceptable_residual", optimizer_ctx, 1.0);  // 默认值 1.0 mT
   } else {
     throw std::runtime_error("未知的估计器类型: " + cfg.estimator_type + "，支持的类型: ekf, optimizer");
   }
@@ -423,6 +427,12 @@ int main(int argc, char **argv) {
   setlocale(LC_ALL, "zh_CN.UTF-8");
   
   ros::init(argc, argv, "mag_pose_estimator_node");
+  
+  // 设置日志级别为 DEBUG（如果环境变量未设置）
+  if (getenv("ROSCONSOLE_MIN_SEVERITY") == nullptr) {
+    ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Debug);
+  }
+  
   ros::NodeHandle nh;
   ros::NodeHandle pnh("~");
 

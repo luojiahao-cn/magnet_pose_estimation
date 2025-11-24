@@ -40,6 +40,7 @@ struct OptimizerParameters {
   int num_threads;  ///< 并行计算线程数
   bool minimizer_progress;  ///< 是否输出优化进度信息
   std::string linear_solver;  ///< 线性求解器类型
+  double max_acceptable_residual;  ///< 可接受的最大平均残差 (mT)，超过此值即使优化收敛也认为失败
 };
 
 /**

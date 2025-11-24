@@ -32,6 +32,7 @@
 
   <!-- 姿态估计节点：估计磁体姿态 -->
   <node pkg="mag_pose_estimator" type="mag_pose_estimator_node" name="mag_pose_estimator" output="screen">
+    <env name="ROSCONSOLE_MIN_SEVERITY" value="DEBUG"/>
     <rosparam command="load" file="$(arg estimator_config)"/>
   </node>
 

@@ -179,6 +179,7 @@ void SensorSimNode::publishReadings(const geometry_msgs::TransformStamped &magne
     }
 
     Eigen::Matrix<double, Eigen::Dynamic, 3> sensor_positions(sensors.size(), 3);
+    std::vector<tf2::Transform> parent_sensor_transforms(sensors.size());
 
     tf2::Transform parent_array;
     tf2::fromMsg(array_.arrayPose(), parent_array);
@@ -188,6 +189,7 @@ void SensorSimNode::publishReadings(const geometry_msgs::TransformStamped &magne
         tf2::Transform array_sensor;
         tf2::fromMsg(sensors[i].pose, array_sensor);
         tf2::Transform parent_sensor = parent_array * array_sensor;
+        parent_sensor_transforms[i] = parent_sensor;
         const tf2::Vector3 &origin = parent_sensor.getOrigin();
         sensor_positions(static_cast<int>(i), 0) = origin.x();
         sensor_positions(static_cast<int>(i), 1) = origin.y();
@@ -213,10 +215,21 @@ void SensorSimNode::publishReadings(const geometry_msgs::TransformStamped &magne
 
     for (size_t i = 0; i < sensors.size(); ++i)
     {
-        // 先叠加噪声，再分别发布 raw 与 mT 数据
-        Eigen::Vector3d value_mT(fields_mT(static_cast<int>(i), 0),
-                                 fields_mT(static_cast<int>(i), 1),
-                                 fields_mT(static_cast<int>(i), 2));
+        // 获取世界坐标系下的磁场
+        Eigen::Vector3d field_world_mT(fields_mT(static_cast<int>(i), 0),
+                                       fields_mT(static_cast<int>(i), 1),
+                                       fields_mT(static_cast<int>(i), 2));
+        
+        // 将磁场从世界坐标系转换到传感器坐标系
+        // getBasis() 返回从传感器坐标系到世界坐标系的旋转矩阵
+        // 需要取逆来得到从世界坐标系到传感器坐标系的旋转
+        tf2::Matrix3x3 R_world_to_sensor = parent_sensor_transforms[i].getBasis().transpose();
+        tf2::Vector3 field_sensor_tf2 = R_world_to_sensor * tf2::Vector3(field_world_mT.x(),
+                                                                          field_world_mT.y(),
+                                                                          field_world_mT.z());
+        Eigen::Vector3d value_mT(field_sensor_tf2.x(), field_sensor_tf2.y(), field_sensor_tf2.z());
+        
+        // 叠加噪声
         value_mT += sampleNoise();
 
         if (raw_pub_)
