@@ -1,0 +1,72 @@
+# 传感器阵列运动配置
+# 用于定义可移动传感器阵列的运动轨迹（仿真场景）
+# 注意：在实际硬件场景中，传感器阵列位姿通常由外部系统（机器人、运动平台）提供
+config:
+  frames:
+    parent: world
+    child: sensor_array
+
+  motion:
+    type: circular  # 运动类型：static, circular, rectangular, linear, spin
+    update_rate_hz: 60.0  # TF 更新频率
+
+  # 静态模式：传感器阵列固定在初始位置
+  static:
+    initial_pose:
+      xyz: [0.0, 0.0, 0.05]
+      rpy: [0.0, 0.0, 0.0]
+
+  # 圆形轨迹模式
+  circular:
+    center_xyz: [0.0, 0.0, 0.05]
+    radius: 0.02
+    angular_velocity: 0.5  # 角速度（弧度/秒）
+    initial_angle: 0.0  # 初始角度（弧度）
+    orientation_mode: fixed  # 姿态模式：fixed, normal_to_path
+    fixed_orientation_rpy: [0.0, 0.0, 0.0]
+
+  # 矩形轨迹模式
+  rectangular:
+    center_xyz: [0.0, 0.0, 0.05]
+    width: 0.04
+    height: 0.04
+    velocity: 0.02  # 线速度（米/秒）
+    orientation_mode: fixed
+    fixed_orientation_rpy: [0.0, 0.0, 0.0]
+
+  # 直线运动模式
+  linear:
+    start_xyz: [0.0, 0.0, 0.05]
+    end_xyz: [0.1, 0.0, 0.05]
+    velocity: 0.02  # 线速度（米/秒）
+    orientation_mode: fixed
+    fixed_orientation_rpy: [0.0, 0.0, 0.0]
+    repeat: true  # 是否往返运动
+
+  # 自旋模式：位置固定，姿态旋转
+  spin:
+    position_xyz: [0.0, 0.0, 0.05]  # 固定位置
+    initial_rpy: [0.0, 0.0, 0.0]     # 初始姿态 [roll, pitch, yaw] (弧度)
+    angular_velocity: 1.0            # 角速度（弧度/秒）
+    axis: z                          # 旋转轴：x, y, z, xy, xz, yz, xyz
+
+  # 姿态配置：可以在任何运动轨迹上叠加自旋
+  # 注意：如果 motion.type 是 "spin"，则此配置会被忽略（使用 spin 轨迹配置）
+  orientation:
+    # mode: trajectory  # 姿态模式：trajectory（使用轨迹中的姿态）,
+    
+    # --- 示例 1：固定姿态（不旋转）---
+    # mode: fixed
+    # fixed:
+    #   rpy: [0.0, 0.0, 0.0]  # 固定姿态 [roll, pitch, yaw] (弧度)
+    
+    # --- 示例 2：在运动的同时自旋（例如：圆形轨迹 + 绕 Z 轴自旋）---
+    # 使用此配置可以让传感器阵列在沿着轨迹运动的同时，自身也在旋转
+    mode: spin
+    spin:
+      initial_rpy: [0.0, 0.6, 0.0]  # 初始姿态偏移 [roll, pitch, yaw] (弧度)
+                                     # 如果为 [0, 0, 0]，则使用轨迹中的基础姿态作为初始姿态
+                                     # 如果不为 [0, 0, 0]，则以此作为初始姿态（忽略轨迹中的姿态）
+      angular_velocity: 1.0          # 角速度（弧度/秒）
+      axis: xz                        # 旋转轴：x, y, z, xy, xz, yz, xyz
+

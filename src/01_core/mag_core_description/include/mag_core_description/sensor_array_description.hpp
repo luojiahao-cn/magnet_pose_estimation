@@ -54,14 +54,22 @@ public:
 
     void publishDynamic(const ros::Time &stamp);
     void publishStatic();
+    
+    /**
+     * @brief 只发布传感器相对于阵列的静态 TF（不发布阵列相对于父坐标系的 TF）
+     * 用于可移动传感器阵列场景，其中阵列的 TF 由其他节点发布
+     */
+    void publishSensorTfsOnly();
 
 private:
     std::vector<geometry_msgs::TransformStamped> buildTransforms(const ros::Time &stamp) const;
+    std::vector<geometry_msgs::TransformStamped> buildSensorTransforms(const ros::Time &stamp) const;
 
     const SensorArrayDescription &description_;
     tf2_ros::TransformBroadcaster dynamic_broadcaster_;
     tf2_ros::StaticTransformBroadcaster static_broadcaster_;
     bool static_sent_{false};
+    bool sensor_tfs_sent_{false};
 };
 
 } // namespace mag_core_description

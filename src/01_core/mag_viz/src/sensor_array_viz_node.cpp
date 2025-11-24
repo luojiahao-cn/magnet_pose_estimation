@@ -11,6 +11,8 @@
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/LinearMath/Vector3.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+#include <tf2_ros/transform_listener.h>
+#include <tf2_ros/buffer.h>
 #include <XmlRpcValue.h>
 
 #include <algorithm>
@@ -64,8 +66,11 @@ public:
      * @param pnh 私有节点句柄
      */
     SensorArrayVisualizer(ros::NodeHandle nh, ros::NodeHandle pnh)
-        : nh_(std::move(nh)), pnh_(std::move(pnh))
+        : nh_(std::move(nh)), pnh_(std::move(pnh)), tf_buffer_(), tf_listener_(tf_buffer_)
     {
+        // 记录启动时间，用于延迟TF查询失败的警告
+        start_time_ = ros::Time::now();
+        
         loadParameters();
         loadSensorArray();
 
@@ -83,8 +88,9 @@ private:
     {
         int id{0};
         std::string frame_id;
-        tf2::Transform tf_parent_sensor;
-        tf2::Vector3 up_axis;
+        std::string array_frame;  // 传感器阵列坐标系名称
+        tf2::Transform tf_array_sensor;  // 传感器相对于阵列的变换（固定）
+        tf2::Vector3 up_axis;  // 传感器上轴方向（在传感器坐标系中）
     };
 
     struct MeasurementState
@@ -179,25 +185,22 @@ private:
         sensor_index_.clear();
         sensors_.reserve(description.sensors().size());
 
+        array_frame_ = description.arrayFrame();
+        
         for (const auto &sensor_entry : description.sensors())
         {
             SensorVisual visual;
             visual.id = sensor_entry.id;
             visual.frame_id = sensor_entry.frame_id;
+            visual.array_frame = array_frame_;
 
             tf2::Transform array_sensor;
             tf2::fromMsg(sensor_entry.pose, array_sensor);
-            visual.tf_parent_sensor = parent_array * array_sensor;
-            visual.up_axis = visual.tf_parent_sensor.getBasis() * tf2::Vector3(0.0, 0.0, 1.0);
-            const double up_norm = visual.up_axis.length();
-            if (up_norm > kEpsilon)
-            {
-                visual.up_axis /= up_norm;
-            }
-            else
-            {
-                visual.up_axis = tf2::Vector3(0.0, 0.0, 1.0);
-            }
+            visual.tf_array_sensor = array_sensor;
+            
+            // 计算传感器上轴方向（在传感器坐标系中，通常是 Z 轴）
+            visual.up_axis = tf2::Vector3(0.0, 0.0, 1.0);
+            
             sensors_.push_back(visual);
             sensor_index_.emplace(visual.id, sensors_.size() - 1);
         }
@@ -217,13 +220,12 @@ private:
             ROS_WARN_THROTTLE(5.0, "[sensor_array_viz] ✗ 未知传感器 ID: %u", msg->sensor_id);
             return;
         }
-        const SensorVisual &sensor = sensors_.at(it->second);
-
+        
         MeasurementState state;
         state.stamp = msg->header.stamp.isZero() ? ros::Time::now() : msg->header.stamp;
         state.value_sensor = tf2::Vector3(msg->mag_x, msg->mag_y, msg->mag_z);
-        state.value_parent = sensor.tf_parent_sensor.getBasis() * state.value_sensor;
-        measurements_[sensor.id] = state;
+        // value_parent 将在发布标记时从 TF 树查询后计算
+        measurements_[msg->sensor_id] = state;
     }
 
     /**
@@ -302,6 +304,53 @@ private:
     }
 
     /**
+     * @brief 从 TF 树查询传感器位姿
+     * @param sensor 传感器可视化信息
+     * @param stamp 时间戳
+     * @param tf_parent_sensor 输出：传感器相对于父坐标系的变换
+     * @param up_axis_parent 输出：传感器上轴在父坐标系中的方向
+     * @return 是否成功查询到 TF
+     */
+    bool querySensorTf(const SensorVisual &sensor, const ros::Time &stamp,
+                       tf2::Transform &tf_parent_sensor, tf2::Vector3 &up_axis_parent) const
+    {
+        try
+        {
+            // 查询传感器相对于父坐标系的变换
+            geometry_msgs::TransformStamped tf_stamped = tf_buffer_.lookupTransform(
+                fixed_frame_, sensor.frame_id, stamp, ros::Duration(0.1));
+            tf2::fromMsg(tf_stamped.transform, tf_parent_sensor);
+            
+            // 计算传感器上轴在父坐标系中的方向
+            up_axis_parent = tf_parent_sensor.getBasis() * sensor.up_axis;
+            const double up_norm = up_axis_parent.length();
+            if (up_norm > kEpsilon)
+            {
+                up_axis_parent /= up_norm;
+            }
+            else
+            {
+                up_axis_parent = tf2::Vector3(0.0, 0.0, 1.0);
+            }
+            return true;
+        }
+        catch (const tf2::TransformException &ex)
+        {
+            // 启动后3秒内不报warn，给TF树建立时间
+            const ros::Duration time_since_start = ros::Time::now() - start_time_;
+            if (time_since_start.toSec() > 3.0)
+            {
+                ROS_WARN_THROTTLE(2.0,
+                                  "[sensor_array_viz] ✗ 无法查询传感器 TF (%s -> %s): %s",
+                                  fixed_frame_.c_str(),
+                                  sensor.frame_id.c_str(),
+                                  ex.what());
+            }
+            return false;
+        }
+    }
+
+    /**
      * @brief 创建磁场测量箭头标记
      * 根据传感器测量数据创建表示磁场向量的箭头标记
      * @param sensor 传感器可视化信息
@@ -330,17 +379,29 @@ private:
         marker.pose.orientation.y = 0.0;
         marker.pose.orientation.z = 0.0;
 
-        tf2::Vector3 start_vec = sensor.tf_parent_sensor.getOrigin();
+        // 从 TF 树查询传感器当前位姿
+        tf2::Transform tf_parent_sensor;
+        tf2::Vector3 up_axis_parent;
+        if (!querySensorTf(sensor, stamp, tf_parent_sensor, up_axis_parent))
+        {
+            // 如果查询失败，返回一个不可见的标记
+            marker.action = visualization_msgs::Marker::DELETE;
+            return marker;
+        }
+
+        tf2::Vector3 start_vec = tf_parent_sensor.getOrigin();
         if (arrow_origin_offset_ > 0.0)
         {
-            start_vec += sensor.up_axis * arrow_origin_offset_;
+            start_vec += up_axis_parent * arrow_origin_offset_;
         }
         tf2::Vector3 end_vec = start_vec;
         std_msgs::ColorRGBA color = stale_color_;
 
         if (state)
         {
-            const double magnitude = state->value_parent.length();
+            // 将传感器坐标系中的磁场向量转换到父坐标系
+            tf2::Vector3 value_parent = tf_parent_sensor.getBasis() * state->value_sensor;
+            const double magnitude = value_parent.length();
             if (magnitude > kEpsilon)
             {
                 double length = vector_scale_ * magnitude;
@@ -348,18 +409,18 @@ private:
                 {
                     length = std::min(length, max_arrow_length_);
                 }
-                const tf2::Vector3 direction = state->value_parent.normalized() * length;
+                const tf2::Vector3 direction = value_parent.normalized() * length;
                 end_vec = start_vec + direction;
                 color = colorForMagnitude(magnitude);
             }
             else
             {
-                end_vec = start_vec + sensor.up_axis * 0.001;
+                end_vec = start_vec + up_axis_parent * 0.001;
             }
         }
         else
         {
-            end_vec = start_vec + sensor.up_axis * 0.001;
+            end_vec = start_vec + up_axis_parent * 0.001;
         }
 
         marker.points.push_back(toPoint(start_vec));
@@ -394,9 +455,19 @@ private:
         marker.scale.z = text_scale_;
         marker.lifetime = marker_lifetime_;
 
-        tf2::Vector3 anchor = sensor.tf_parent_sensor.getOrigin();
+        // 从 TF 树查询传感器当前位姿
+        tf2::Transform tf_parent_sensor;
+        tf2::Vector3 up_axis_parent;
+        if (!querySensorTf(sensor, stamp, tf_parent_sensor, up_axis_parent))
+        {
+            // 如果查询失败，返回一个不可见的标记
+            marker.action = visualization_msgs::Marker::DELETE;
+            return marker;
+        }
+
+        tf2::Vector3 anchor = tf_parent_sensor.getOrigin();
         const double total_offset = std::max(text_offset_, 0.0) + (arrow_origin_offset_ > 0.0 ? arrow_origin_offset_ : 0.0);
-        anchor += sensor.up_axis * (total_offset + text_scale_ * 0.5);
+        anchor += up_axis_parent * (total_offset + text_scale_ * 0.5);
         marker.pose.position = toPoint(anchor);
         // 初始化四元数为单位四元数，避免 "Uninitialized quaternion" 警告
         marker.pose.orientation.w = 1.0;
@@ -445,9 +516,15 @@ private:
     ros::Publisher marker_pub_;
     ros::Timer timer_;
 
+    tf2_ros::Buffer tf_buffer_;
+    tf2_ros::TransformListener tf_listener_;
+    
+    ros::Time start_time_;  // 启动时间，用于延迟TF查询失败的警告
+
     std::string measurement_topic_;
     std::string array_param_key_;
     std::string fixed_frame_;
+    std::string array_frame_;
     double publish_rate_{20.0};
 
     std::string field_ns_;

@@ -131,4 +131,31 @@ void SensorArrayTfPublisher::publishStatic()
     static_sent_ = true;
 }
 
+// 构建传感器相对于阵列的变换（不包含阵列相对于父坐标系的变换）
+std::vector<geometry_msgs::TransformStamped> SensorArrayTfPublisher::buildSensorTransforms(const ros::Time &stamp) const
+{
+    std::vector<geometry_msgs::TransformStamped> result;
+    result.reserve(description_.sensors().size());
+
+    for (const auto &sensor : description_.sensors())
+    {
+        result.push_back(poseToTransform(sensor.pose,
+                                         description_.arrayFrame(),
+                                         sensor.frame_id,
+                                         stamp));
+    }
+    return result;
+}
+
+// 只发布传感器相对于阵列的静态 TF
+void SensorArrayTfPublisher::publishSensorTfsOnly()
+{
+    if (sensor_tfs_sent_)
+    {
+        return;
+    }
+    static_broadcaster_.sendTransform(buildSensorTransforms(ros::Time::now()));
+    sensor_tfs_sent_ = true;
+}
+
 } // namespace mag_core_description

@@ -26,6 +26,6 @@ config:
       amplitude: 1.0
 
   tf:
-    enable: true
-    publish_rate: 30.0
+    enable: false  # 对于可移动阵列，禁用 TF 发布，因为 array_motion_node 已经负责发布传感器阵列的 TF
+    publish_rate: 0.0  # 禁用 TF 发布
 

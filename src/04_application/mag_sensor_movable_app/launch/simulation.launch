@@ -4,14 +4,14 @@
   <!-- <env name="ROSCONSOLE_MIN_SEVERITY" value="DEBUG"/> -->
   
   <!-- 参数配置 -->
-  <!-- 仿真专用配置 -->
-  <arg name="magnet_config" default="$(find mag_device_magnet)/config/static.yaml"/>
-  <arg name="sensor_sim_config" default="$(find mag_device_sensor)/config/simulation.yaml"/>
+  <arg name="magnet_config" default="$(find mag_sensor_movable_app)/config/magnet_config.yaml"/>
+  <arg name="sensor_sim_config" default="$(find mag_sensor_movable_app)/config/sensor_sim_config.yaml"/>
+  <arg name="array_motion_config" default="$(find mag_sensor_movable_app)/config/array_motion.yaml"/>
   <!-- 共用配置 -->
-  <arg name="sensor_array_config" default="$(find mag_sensor_fixture_app)/config/sensor_array.yaml"/>
-  <arg name="estimator_config" default="$(find mag_sensor_fixture_app)/config/estimator_config.yaml"/>
-  <arg name="viz_config" default="$(find mag_sensor_fixture_app)/config/magnet_viz_config.yaml"/>
-  <arg name="sensor_viz_config" default="$(find mag_sensor_fixture_app)/config/sensor_array_viz_config.yaml"/>
+  <arg name="sensor_array_config" default="$(find mag_sensor_movable_app)/config/sensor_array.yaml"/>
+  <arg name="estimator_config" default="$(find mag_sensor_movable_app)/config/estimator_config.yaml"/>
+  <arg name="viz_config" default="$(find mag_sensor_movable_app)/config/magnet_viz_config.yaml"/>
+  <arg name="sensor_viz_config" default="$(find mag_sensor_movable_app)/config/sensor_array_viz_config.yaml"/>
   <arg name="use_rviz" default="true"/>
 
   <!-- 磁体设备节点：生成磁体运动轨迹和 TF -->
@@ -19,7 +19,13 @@
     <rosparam command="load" file="$(arg magnet_config)"/>
   </node>
 
+  <!-- 传感器阵列运动控制节点：根据配置发布传感器阵列的动态 TF -->
+  <node pkg="mag_sensor_movable_app" type="array_motion_node" name="array_motion_node" output="screen">
+    <rosparam command="load" file="$(arg array_motion_config)"/>
+  </node>
+
   <!-- 传感器仿真节点：根据 TF 生成磁传感器数据 -->
+  <!-- 注意：对于可移动阵列，传感器阵列的 TF 由 array_motion_node 发布，sensor_sim_node 的 TF 发布已禁用 -->
   <node pkg="mag_device_sensor" type="sensor_sim_node" name="mag_device_sensor_sim" output="screen">
     <rosparam command="load" file="$(arg sensor_array_config)" ns="array"/>
     <rosparam command="load" file="$(arg sensor_sim_config)"/>
@@ -27,7 +33,7 @@
 
   <!-- 传感器批量打包节点：将单个传感器消息打包成批量数据 -->
   <node pkg="mag_device_sensor" type="sensor_array_batcher_node" name="sensor_array_batcher" output="screen">
-    <rosparam command="load" file="$(find mag_sensor_fixture_app)/config/sensor_batcher_config.yaml"/>
+    <rosparam command="load" file="$(find mag_sensor_movable_app)/config/sensor_batcher_config.yaml"/>
   </node>
 
   <!-- 姿态估计节点：估计磁体姿态 -->
@@ -51,7 +57,7 @@
   <group if="$(arg use_rviz)">
     <!-- 将 rviz 输出重定向到 log，不在终端显示 -->
     <node pkg="rviz" type="rviz" name="magnet_viz_rviz" 
-          args="-d $(find mag_sensor_fixture_app)/rviz/magnet_viz.rviz" output="log">
+          args="-d $(find mag_sensor_movable_app)/rviz/magnet_viz.rviz" output="log">
       <!-- 设置 rviz 相关日志级别为 WARN，过滤 INFO 信息 -->
       <env name="ROSCONSOLE_MIN_SEVERITY" value="WARN"/>
     </node>

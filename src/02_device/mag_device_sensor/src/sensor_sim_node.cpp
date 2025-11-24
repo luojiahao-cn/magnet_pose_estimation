@@ -100,6 +100,12 @@ void SensorSimNode::setupTimers()
             tf_publisher_->publishStatic();
         }
     }
+    else if (tf_publisher_)
+    {
+        // 即使 TF 发布被禁用，也发布传感器相对于阵列的静态 TF
+        // 这对于可移动传感器阵列场景很重要，因为阵列的 TF 由其他节点发布
+        tf_publisher_->publishSensorTfsOnly();
+    }
 }
 
 void SensorSimNode::onSimulationTimer(const ros::TimerEvent &)
@@ -178,11 +184,29 @@ void SensorSimNode::publishReadings(const geometry_msgs::TransformStamped &magne
         return;
     }
 
+    // 从 TF 树查询传感器阵列的当前位姿（支持可移动传感器阵列）
+    tf2::Transform parent_array;
+    try
+    {
+        geometry_msgs::TransformStamped array_tf = tf_buffer_.lookupTransform(
+            array_.parentFrame(), array_.arrayFrame(), stamp, ros::Duration(0.1));
+        tf2::fromMsg(array_tf.transform, parent_array);
+    }
+    catch (const tf2::TransformException &ex)
+    {
+        // 如果查询失败，回退到使用配置文件中的静态位姿
+        const ros::Duration time_since_start = ros::Time::now() - start_time_;
+        if (time_since_start.toSec() > 3.0)
+        {
+            ROS_WARN_THROTTLE(2.0,
+                              "[mag_device_sensor_sim] ✗ 无法查询传感器阵列 TF (%s -> %s)，使用配置中的静态位姿: %s",
+                              array_.parentFrame().c_str(), array_.arrayFrame().c_str(), ex.what());
+        }
+        tf2::fromMsg(array_.arrayPose(), parent_array);
+    }
+
     Eigen::Matrix<double, Eigen::Dynamic, 3> sensor_positions(sensors.size(), 3);
     std::vector<tf2::Transform> parent_sensor_transforms(sensors.size());
-
-    tf2::Transform parent_array;
-    tf2::fromMsg(array_.arrayPose(), parent_array);
 
     for (size_t i = 0; i < sensors.size(); ++i)
     {

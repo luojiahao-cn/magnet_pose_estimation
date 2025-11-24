@@ -5,7 +5,7 @@
   <description>
     Orchestrator package for fixed magnetic sensor arrays. It wires together the
     core description, device drivers, estimator, and visualization stacks to
-    deliver a ready-to-run simulation or hardware bringup.
+    deliver a ready-to-run simulation.
   </description>
   <maintainer email="maintainer@example.com">TODO</maintainer>
   <license>BSD-3-Clause</license>
