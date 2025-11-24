@@ -4,10 +4,8 @@
   <!-- <env name="ROSCONSOLE_MIN_SEVERITY" value="DEBUG"/> -->
   
   <!-- 参数配置 -->
-  <!-- 仿真专用配置 -->
-  <arg name="magnet_config" default="$(find mag_device_magnet)/config/static.yaml"/>
-  <arg name="sensor_sim_config" default="$(find mag_device_sensor)/config/simulation.yaml"/>
-  <!-- 共用配置 -->
+  <arg name="magnet_config" default="$(find mag_sensor_fixture_app)/config/magnet_config.yaml"/>
+  <arg name="sensor_sim_config" default="$(find mag_sensor_fixture_app)/config/sensor_sim_config.yaml"/>
   <arg name="sensor_array_config" default="$(find mag_sensor_fixture_app)/config/sensor_array.yaml"/>
   <arg name="estimator_config" default="$(find mag_sensor_fixture_app)/config/estimator_config.yaml"/>
   <arg name="viz_config" default="$(find mag_sensor_fixture_app)/config/magnet_viz_config.yaml"/>

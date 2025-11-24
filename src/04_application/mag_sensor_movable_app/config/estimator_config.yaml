@@ -1,7 +1,7 @@
 # 磁铁姿态估计器节点配置文件
 config:
   frames:
-    output_frame: sensor_array  # 输出姿态的参考坐标系（相对于世界坐标系）
+    output_frame: world  # 输出姿态的参考坐标系（相对于世界坐标系）
 
   topics:
     mag_field: /magnetic/sensor/field
@@ -35,7 +35,7 @@ config:
       initial_direction: [1.0, 0.0, 0.0]  # 真实方向（RPY [0, π/2, 0] 对应 X 轴方向）
       initial_strength: 10.0  # 仿真磁矩强度（真实值）
       strength_delta: 5.0
-      optimize_strength: false
+      optimize_strength: true
       max_iterations: 100
       function_tolerance: 1.0e-6  # 放宽函数值容差，避免过度优化
       gradient_tolerance: 1.0e-8  # 放宽梯度容差
