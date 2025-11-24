@@ -8,7 +8,7 @@
   <arg name="magnet_config" default="$(find mag_sensor_fixture_app)/simulation/magnet_config.yaml"/>
   <arg name="sensor_sim_config" default="$(find mag_sensor_fixture_app)/simulation/sensor_sim_config.yaml"/>
   <!-- 共用配置 -->
-  <arg name="sensor_array_config" default="$(find mag_core_description)/config/sensor_array.yaml"/>
+  <arg name="sensor_array_config" default="$(find mag_sensor_fixture_app)/config/sensor_array.yaml"/>
   <arg name="estimator_config" default="$(find mag_sensor_fixture_app)/config/estimator_config.yaml"/>
   <arg name="viz_config" default="$(find mag_sensor_fixture_app)/config/magnet_viz_config.yaml"/>
   <arg name="sensor_viz_config" default="$(find mag_sensor_fixture_app)/config/sensor_array_viz_config.yaml"/>

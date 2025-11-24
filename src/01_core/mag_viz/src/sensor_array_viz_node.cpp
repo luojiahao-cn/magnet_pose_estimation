@@ -324,6 +324,11 @@ private:
         marker.scale.y = arrow_head_diameter_;
         marker.scale.z = arrow_head_length_;
         marker.lifetime = marker_lifetime_;
+        // 初始化四元数为单位四元数，避免 "Uninitialized quaternion" 警告
+        marker.pose.orientation.w = 1.0;
+        marker.pose.orientation.x = 0.0;
+        marker.pose.orientation.y = 0.0;
+        marker.pose.orientation.z = 0.0;
 
         tf2::Vector3 start_vec = sensor.tf_parent_sensor.getOrigin();
         if (arrow_origin_offset_ > 0.0)
@@ -393,7 +398,11 @@ private:
         const double total_offset = std::max(text_offset_, 0.0) + (arrow_origin_offset_ > 0.0 ? arrow_origin_offset_ : 0.0);
         anchor += sensor.up_axis * (total_offset + text_scale_ * 0.5);
         marker.pose.position = toPoint(anchor);
+        // 初始化四元数为单位四元数，避免 "Uninitialized quaternion" 警告
         marker.pose.orientation.w = 1.0;
+        marker.pose.orientation.x = 0.0;
+        marker.pose.orientation.y = 0.0;
+        marker.pose.orientation.z = 0.0;
         marker.text = formatMeasurementText(sensor.id, state);
         marker.color = state ? makeColor(1.0, 1.0, 1.0, 0.95) : makeColor(0.7, 0.7, 0.7, 0.6);
         return marker;

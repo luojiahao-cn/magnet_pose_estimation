@@ -17,17 +17,18 @@ config:
     rectangular:
       width: 0.03
       height: 0.03
-      z: 0.08
+      z: 0.06
       center_xyz: [0.02, 0.02, 0.0]
       velocity: 0.02
       orientation_rpy: [0.0, 0.0, 0.0]
   orientation:
-    # mode: spin # 自旋模式
-    # spin:
-    #   axis: xyz
-    #   angular_velocity: 1.0
-    #   initial_rpy: [0.0, 0.0, 0.0]
-    mode: fixed  # 固定姿态模式（不旋转）
-    fixed:
-      rpy: [0.0, 0.0, 0.0]  # 固定姿态 [roll, pitch, yaw] (弧度)
+    mode: spin # 自旋模式
+    spin:
+      axis: xyz
+      angular_velocity: 1.0
+      initial_rpy: [0.0, 0.0, 0.0]
+    #########################
+    # mode: fixed  # 固定姿态模式（不旋转）
+    # fixed:
+    #   rpy: [0.0, 0.0, 0.0]  # 固定姿态 [roll, pitch, yaw] (弧度)
 

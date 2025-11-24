@@ -180,7 +180,11 @@ void OptimizerEstimator::resetState() {
   }
   
   last_pose_ = geometry_msgs::Pose();
+  // 初始化四元数为单位四元数，避免 "Uninitialized quaternion" 警告
   last_pose_.orientation.w = 1.0;
+  last_pose_.orientation.x = 0.0;
+  last_pose_.orientation.y = 0.0;
+  last_pose_.orientation.z = 0.0;
 }
 
 void OptimizerEstimator::reset() {
@@ -198,12 +202,22 @@ bool OptimizerEstimator::processBatch(
     geometry_msgs::Pose &pose_out,
     double *error_out) {
   if (measurements.empty()) {
+    // 返回上一次的估计结果，避免未初始化的四元数
+    pose_out = last_pose_;
+    if (error_out) {
+      *error_out = 0.0;
+    }
     return false;
   }
 
   if (measurements.size() < static_cast<size_t>(config_.optimizer.min_sensors)) {
     ROS_WARN_THROTTLE(2.0, "[mag_pose_estimator] 传感器数量不足 (当前: %zu, 需要: %zu)",
                       measurements.size(), static_cast<size_t>(config_.optimizer.min_sensors));
+    // 返回上一次的估计结果，避免未初始化的四元数
+    pose_out = last_pose_;
+    if (error_out) {
+      *error_out = 0.0;
+    }
     return false;
   }
 
@@ -232,6 +246,11 @@ bool OptimizerEstimator::processBatch(
   if (batch.size() < static_cast<size_t>(config_.optimizer.min_sensors)) {
     ROS_WARN_THROTTLE(2.0, "[mag_pose_estimator] TF 查询后传感器数量不足 (当前: %zu, 需要: %zu)",
                       batch.size(), static_cast<size_t>(config_.optimizer.min_sensors));
+    // 返回上一次的估计结果，避免未初始化的四元数
+    pose_out = last_pose_;
+    if (error_out) {
+      *error_out = 0.0;
+    }
     return false;
   }
 
@@ -245,6 +264,12 @@ geometry_msgs::Pose OptimizerEstimator::buildPoseFromDirection(const Eigen::Vect
   pose.position.y = position.y();
   pose.position.z = position.z();
 
+  // 初始化四元数为单位四元数，避免 "Uninitialized quaternion" 警告
+  pose.orientation.w = 1.0;
+  pose.orientation.x = 0.0;
+  pose.orientation.y = 0.0;
+  pose.orientation.z = 0.0;
+
   // 使用简洁的姿态计算方式（从 Z 轴到方向向量的旋转）
   tf2::Vector3 z_axis(0, 0, 1);
   tf2::Vector3 dir_v(direction.x(), direction.y(), direction.z());
@@ -253,17 +278,15 @@ geometry_msgs::Pose OptimizerEstimator::buildPoseFromDirection(const Eigen::Vect
   double angle = std::acos(dot);
   
   if (axis.length() < 1e-6) {
-    if (dir_v.z() > 0) {
-      pose.orientation.w = 1.0;
-      pose.orientation.x = 0.0;
-      pose.orientation.y = 0.0;
-      pose.orientation.z = 0.0;
-    } else {
+    // 方向向量与 Z 轴平行或反平行
+    if (dir_v.z() < 0) {
+      // 方向向量指向 -Z 方向，需要旋转 180 度
       pose.orientation.w = 0.0;
       pose.orientation.x = 1.0;
       pose.orientation.y = 0.0;
       pose.orientation.z = 0.0;
     }
+    // 如果 dir_v.z() > 0，已经是单位四元数 [1, 0, 0, 0]，无需修改
   } else {
     axis.normalize();
     tf2::Quaternion q(axis, angle);
@@ -279,6 +302,11 @@ bool OptimizerEstimator::estimateFromBatch(const std::vector<OptimizerMeasuremen
                                           double *error_out) {
   if (batch.empty()) {
     ROS_WARN_THROTTLE(1.0, "[mag_pose_estimator] 批量数据为空，无法估计");
+    // 返回上一次的估计结果，避免未初始化的四元数
+    pose_out = last_pose_;
+    if (error_out) {
+      *error_out = 0.0;
+    }
     return false;
   }
 
@@ -355,6 +383,11 @@ bool OptimizerEstimator::estimateFromBatch(const std::vector<OptimizerMeasuremen
   for (const auto &meas : batch) {
     if (!meas.sensor_position.allFinite() || !meas.magnetic_field.allFinite()) {
       ROS_WARN_THROTTLE(1.0, "[mag_pose_estimator] 测量数据包含无效值");
+      // 返回上一次的估计结果，避免未初始化的四元数
+      pose_out = last_pose_;
+      if (error_out) {
+        *error_out = 0.0;
+      }
       return false;
     }
   }
@@ -419,19 +452,19 @@ bool OptimizerEstimator::estimateFromBatch(const std::vector<OptimizerMeasuremen
       if (error_reduction > 0.1 && final_error < initial_error * 0.9) {
         // 误差有明显改善（至少10%），认为优化有效
         optimization_success = true;
-        ROS_WARN_THROTTLE(1.0, "[mag_pose_estimator] 优化未完全收敛但误差已改善，迭代次数: %d，初始误差: %.2f，最终误差: %.2f，改善: %.1f%%",
+        ROS_WARN_THROTTLE(1.0, "[mag_pose_estimator] 优化未完全收敛但误差已改善，迭代次数: %d，初始误差: %.9f，最终误差: %.9f，改善: %.2f%%",
                          summary.num_successful_steps, initial_error, final_error, error_reduction * 100.0);
       } else {
-        ROS_WARN_THROTTLE(1.0, "[mag_pose_estimator] 优化未收敛且改善不足，迭代次数: %d，初始误差: %.2f，最终误差: %.2f，改善: %.1f%%",
+        ROS_WARN_THROTTLE(1.0, "[mag_pose_estimator] 优化未收敛且改善不足，迭代次数: %d，初始误差: %.9f，最终误差: %.9f，改善: %.2f%%",
                          summary.num_successful_steps, initial_error, final_error, error_reduction * 100.0);
       }
     } else {
       // 初始误差过小，无法判断改善情况
-      ROS_WARN_THROTTLE(1.0, "[mag_pose_estimator] 优化未收敛，初始误差过小 (%.2e)，无法判断改善情况",
+      ROS_WARN_THROTTLE(1.0, "[mag_pose_estimator] 优化未收敛，初始误差过小 (%.9e)，无法判断改善情况",
                        initial_error);
     }
   } else if (summary.termination_type == ceres::FAILURE) {
-    ROS_WARN_THROTTLE(1.0, "[mag_pose_estimator] 优化失败: %s，初始误差: %.2f", 
+    ROS_WARN_THROTTLE(1.0, "[mag_pose_estimator] 优化失败: %s，初始误差: %.9f", 
                      summary.BriefReport().c_str(), initial_error);
   }
   
@@ -453,13 +486,13 @@ bool OptimizerEstimator::estimateFromBatch(const std::vector<OptimizerMeasuremen
       if (error_out) {
         *error_out = final_error;
       }
-      ROS_WARN_THROTTLE(1.0, "[mag_pose_estimator] 优化未收敛但误差已改善，更新状态供下次使用，平均残差: %.3f -> %.3f mT，初始误差: %.2f，最终误差: %.2f",
+      ROS_WARN_THROTTLE(1.0, "[mag_pose_estimator] 优化未收敛但误差已改善，更新状态供下次使用，平均残差: %.9f -> %.9f mT，初始误差: %.9f，最终误差: %.9f",
                         avg_initial_residual, avg_final_residual, initial_error, final_error);
       return false;  // 虽然误差改善了，但未收敛，仍返回 false
     }
     
     // 否则使用备份状态（优化前的状态）
-    ROS_WARN_THROTTLE(1.0, "[mag_pose_estimator] 优化未收敛且误差未改善，使用备份状态，平均残差: %.3f mT，初始误差: %.2f，最终误差: %.2f",
+    ROS_WARN_THROTTLE(1.0, "[mag_pose_estimator] 优化未收敛且误差未改善，使用备份状态，平均残差: %.9f mT，初始误差: %.9f，最终误差: %.9f",
                       avg_final_residual, initial_error, final_error);
     position_ = backup_position;
     magnet_direction_ = backup_direction;
@@ -480,7 +513,7 @@ bool OptimizerEstimator::estimateFromBatch(const std::vector<OptimizerMeasuremen
     // 误差过大，即使优化收敛也认为失败
     // 使用备份状态（上一次的优化结果），不重置为配置初始值
     // 因为实际应用中不知道磁铁的真实位置
-    ROS_WARN_THROTTLE(1.0, "[mag_pose_estimator] 优化收敛但误差过大，平均残差: %.3f mT (阈值: %.3f mT)，使用备份状态，初始误差: %.2f，最终误差: %.2f",
+    ROS_WARN_THROTTLE(1.0, "[mag_pose_estimator] 优化收敛但误差过大，平均残差: %.9f mT (阈值: %.9f mT)，使用备份状态，初始误差: %.9f，最终误差: %.9f",
                       avg_final_residual, max_acceptable_residual, initial_error, final_error);
     position_ = backup_position;
     magnet_direction_ = backup_direction;
@@ -515,7 +548,7 @@ bool OptimizerEstimator::estimateFromBatch(const std::vector<OptimizerMeasuremen
 
   // 记录优化信息
   if (summary.termination_type == ceres::CONVERGENCE || summary.termination_type == ceres::USER_SUCCESS) {
-    ROS_DEBUG_THROTTLE(1.0, "[mag_pose_estimator] 优化成功收敛，迭代次数: %d，初始误差: %.2f，最终误差: %.2f，平均残差: %.3f mT，改善: %.1f%%",
+    ROS_DEBUG_THROTTLE(1.0, "[mag_pose_estimator] 优化成功收敛，迭代次数: %d，初始误差: %.9f，最终误差: %.9f，平均残差: %.9f mT，改善: %.2f%%",
                       summary.num_successful_steps, initial_error, final_error, avg_final_residual,
                       (initial_error - final_error) / initial_error * 100.0);
   }

@@ -286,7 +286,7 @@ void MagPoseEstimatorNode::batchCallback(
     publishPose(pose, msg->header.stamp);
     // 计算平均残差（误差是平方和，传感器数量 * 3 个残差）
     double avg_residual = std::sqrt(error / (processed_measurements.size() * 3));
-    ROS_INFO_THROTTLE(1.0, "[mag_pose_estimator] 姿态估计成功，总误差: %.2f，平均残差: %.3f mT，传感器数: %zu",
+    ROS_INFO_THROTTLE(1.0, "[mag_pose_estimator] 姿态估计成功，总误差: %.9f，平均残差: %.9f mT，传感器数: %zu",
                       error, avg_residual, processed_measurements.size());
   } else {
     ROS_WARN_THROTTLE(1.0, "[mag_pose_estimator] 姿态估计失败，传感器数量: %zu", processed_measurements.size());
