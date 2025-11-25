@@ -1,0 +1,47 @@
+# 跟踪控制节点配置文件
+# 支持通过 strategy/type 切换不同的控制算法
+config:
+  # 策略配置
+  strategy:
+    type: fixed_offset  # 策略类型：fixed_offset, adaptive_distance
+    
+    # 固定偏移策略参数
+    fixed_offset:
+      offset:
+        x: 0.0
+        y: 0.0
+        z: 0.05  # 在磁铁上方5cm
+      max_movement_per_step: 0.02  # 每步最大移动距离 (米)
+    
+    # 自适应距离策略参数
+    adaptive_distance:
+      target_field_strength: 35.0  # 目标磁场强度 (mT)
+      min_field_strength: 20.0     # 最小磁场强度 (mT)
+      max_field_strength: 50.0     # 最大磁场强度 (mT)
+      adjustment_gain: 0.02        # 调整增益系数
+      max_movement_per_step: 0.02  # 每步最大移动距离 (米)
+  
+  # 机械臂配置
+  sensor_arm_name: sensor  # 传感器机械臂名称（用于调用 mag_device_arm 服务）
+  
+  # 话题配置
+  topics:
+    magnet_pose: /magnetic/pose_estimated  # 磁铁位姿估计话题
+    target_pose: tracking_control/target_pose  # 目标位姿发布话题（用于可视化）
+  
+  # 服务配置
+  services:
+    arm_service: /mag_device_arm/set_end_effector_pose  # 机械臂服务名称
+  
+  # 坐标系配置
+  frames:
+    sensor_frame: sensor_array  # 传感器阵列坐标系
+    magnet_frame: magnet        # 磁铁坐标系
+  
+  # 控制参数
+  control:
+    update_rate: 10.0           # 控制循环频率 (Hz)
+    enable_execution: false     # 是否实际执行运动（false=仅规划，true=执行）
+    velocity_scaling: 0.2       # 速度缩放因子 (0.0-1.0)
+    acceleration_scaling: 0.2   # 加速度缩放因子 (0.0-1.0)
+

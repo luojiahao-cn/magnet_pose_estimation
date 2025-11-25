@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="config_file" default="$(find mag_tracking_control)/config/tracking_control.yaml"/>
+  <arg name="enable_execution" default="false" doc="是否实际执行运动（false=仅规划，true=执行）"/>
+  
+  <!-- 加载配置文件 -->
+  <rosparam file="$(arg config_file)" command="load" ns="tracking_control_node"/>
+  
+  <!-- 覆盖 enable_execution 参数 -->
+  <param name="tracking_control_node/config/control/enable_execution" value="$(arg enable_execution)"/>
+  
+  <!-- 启动跟踪控制节点 -->
+  <node name="tracking_control_node" pkg="mag_tracking_control" type="tracking_control_node" output="screen">
+    <remap from="~config" to="config"/>
+  </node>
+</launch>
+
