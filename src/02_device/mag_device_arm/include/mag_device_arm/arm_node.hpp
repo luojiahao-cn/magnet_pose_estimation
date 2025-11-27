@@ -11,12 +11,9 @@
 #include <tf2_ros/static_transform_broadcaster.h>
 
 #include <moveit/move_group_interface/move_group_interface.h>
-#include <moveit/planning_scene_interface/planning_scene_interface.h>
 
-#include <array>
 #include <memory>
 #include <mutex>
-#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -31,17 +28,6 @@ struct BaseTransformConfig
     std::string parent_frame;
     std::string child_frame;
     geometry_msgs::Pose pose;
-};
-
-// 工具安装配置
-struct ToolMountOption
-{
-    std::string name;
-    std::string parent_frame;
-    std::string child_frame;
-    geometry_msgs::Pose pose;
-    std::string mesh_resource;
-    std::array<double, 3> scale{ {1.0, 1.0, 1.0} };
 };
 
 // 单个机械臂的 MoveIt 参数
@@ -60,8 +46,6 @@ struct ArmConfig
     BaseTransformConfig base_tf;
     std::unordered_map<std::string, std::string> named_targets;
     std::string default_named_target;
-    std::vector<ToolMountOption> tool_options;
-    std::optional<ToolMountOption> selected_tool;
 };
 
 struct ArmHandle
@@ -95,8 +79,6 @@ private:
 
     static geometry_msgs::TransformStamped makeTransform(const BaseTransformConfig &cfg,
                                                          const ros::Time &stamp);
-    static geometry_msgs::TransformStamped makeTransform(const ToolMountOption &cfg,
-                                                         const ros::Time &stamp);
 
     ros::NodeHandle nh_;
     ros::NodeHandle pnh_;
@@ -106,7 +88,6 @@ private:
     ros::ServiceServer execute_named_srv_;
 
     tf2_ros::StaticTransformBroadcaster static_broadcaster_;
-    moveit::planning_interface::PlanningSceneInterface planning_scene_interface_;
 };
 
 } // namespace mag_device_arm

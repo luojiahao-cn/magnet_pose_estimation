@@ -1,7 +1,9 @@
 cmake_minimum_required(VERSION 3.0.2)
 project(mag_device_arm)
 
-add_compile_options(-std=c++17)
+## Compile as C++17, supports modern features
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(catkin REQUIRED COMPONENTS
 	roscpp
@@ -51,19 +53,17 @@ include_directories(
 	${catkin_INCLUDE_DIRS}
 )
 
-add_executable(arm_main
-	src/arm_main.cpp
-	src/arm_config_loader.cpp
+add_executable(arm_node
 	src/arm_node.cpp
 )
 
-add_dependencies(arm_main ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+add_dependencies(arm_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
-target_link_libraries(arm_main
+target_link_libraries(arm_node
 	${catkin_LIBRARIES}
 )
 
-install(TARGETS arm_main
+install(TARGETS arm_node
 	RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

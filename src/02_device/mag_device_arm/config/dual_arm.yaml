@@ -22,23 +22,7 @@ config:
           target: up
         - name: ready
           target: ready
-      tool_mount:
-        selected: none
-        options:
-          - name: magnetic_sensor_bracket
-            frame: magnet_sensor_tool
-            parent_frame: magnet_arm_tool
-            mesh: package://mag_device_arm/meshes/magnetic_sensor_bracket.STL
-            pose:
-              xyz: [0.0, 0.0, 0.0]
-              rpy: [1.5708, 0.0, -1.5708]
-            scale: [0.001, 0.001, 0.001]
-          - name: none
-            frame: magnet_arm_tool_mount
-            parent_frame: magnet_arm_tool
-            pose:
-              xyz: [0.0, 0.0, 0.0]
-              rpy: [0.0, 0.0, 0.0]
+
     - name: sensor
       group_name: fr5v6_sensor_arm
       end_effector_link: sensor_arm_tool
@@ -61,20 +45,4 @@ config:
           target: home
         - name: ready
           target: ready
-      tool_mount:
-        selected: magnetic_sensor_bracket
-        options:
-          - name: magnetic_sensor_bracket
-            frame: sensor_payload_tool
-            parent_frame: sensor_arm_tool
-            mesh: package://mag_device_arm/meshes/magnetic_sensor_bracket.STL
-            pose:
-              xyz: [0.0, 0.0, 0.0]
-              rpy: [1.5708, 0.0, -1.5708]
-            scale: [0.001, 0.001, 0.001]
-          - name: none
-            frame: sensor_arm_tool_mount
-            parent_frame: sensor_arm_tool
-            pose:
-              xyz: [0.0, 0.0, 0.0]
-              rpy: [0.0, 0.0, 0.0]
+

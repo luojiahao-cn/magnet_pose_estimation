@@ -1,100 +1,158 @@
 #include <mag_device_arm/arm_node.hpp>
 
+#include <mag_core_utils/xmlrpc_utils.hpp>
+#include <mag_core_utils/rosparam_shortcuts_extensions.hpp>
+
+#include <rosparam_shortcuts/rosparam_shortcuts.h>
+#include <XmlRpcValue.h>
+
 #include <ros/console.h>
 #include <ros/ros.h>
+#include <ros/spinner.h>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
-#include <geometric_shapes/shapes.h>
-#include <geometric_shapes/shape_operations.h>
-#include <moveit_msgs/AttachedCollisionObject.h>
-#include <shape_msgs/Mesh.h>
 
-#include <Eigen/Core>
+#include <algorithm>
+#include <cctype>
+#include <locale>
 #include <memory>
+#include <mutex>
 #include <stdexcept>
-#include <tuple>
-#include <utility>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
 namespace mag_device_arm
 {
 namespace
 {
+namespace xml = mag_core_utils::xmlrpc;
 
-shape_msgs::Mesh meshToMsg(const shapes::Mesh &mesh)
+geometry_msgs::Pose poseFromXyzRpy(const std::vector<double> &xyz,
+                                   const std::vector<double> &rpy)
 {
-    shape_msgs::Mesh msg;
-    msg.vertices.resize(mesh.vertex_count);
-    for (size_t i = 0; i < mesh.vertex_count; ++i)
-    {
-        geometry_msgs::Point p;
-        p.x = mesh.vertices[3 * i + 0];
-        p.y = mesh.vertices[3 * i + 1];
-        p.z = mesh.vertices[3 * i + 2];
-        msg.vertices[i] = p;
-    }
-
-    msg.triangles.resize(mesh.triangle_count);
-    for (size_t i = 0; i < mesh.triangle_count; ++i)
-    {
-        shape_msgs::MeshTriangle tri;
-        tri.vertex_indices[0] = mesh.triangles[3 * i + 0];
-        tri.vertex_indices[1] = mesh.triangles[3 * i + 1];
-        tri.vertex_indices[2] = mesh.triangles[3 * i + 2];
-        msg.triangles[i] = tri;
-    }
-
-    return msg;
+    geometry_msgs::Pose pose;
+    pose.position.x = xyz[0];
+    pose.position.y = xyz[1];
+    pose.position.z = xyz[2];
+    tf2::Quaternion q;
+    q.setRPY(rpy[0], rpy[1], rpy[2]);
+    pose.orientation = tf2::toMsg(q);
+    return pose;
 }
 
-std::optional<moveit_msgs::AttachedCollisionObject> makeAttachedCollisionObject(const ArmConfig &cfg,
-                                                                                const ToolMountOption &tool)
+std::string toLower(std::string value)
 {
-    if (tool.mesh_resource.empty())
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+    return value;
+}
+
+ArmConfig parseArmConfig(const XmlRpc::XmlRpcValue &arm_node,
+                         const std::string &context)
+{
+    const auto &node = xml::asStruct(arm_node, context);
+    ArmConfig cfg;
+    cfg.name = xml::requireStringField(node, "name", context);
+    cfg.group_name = xml::requireStringField(node, "group_name", context);
+    cfg.end_effector_link = xml::requireStringField(node, "end_effector_link", context);
+    cfg.reference_frame = xml::optionalStringField(node, "reference_frame", context, cfg.reference_frame);
+    cfg.default_velocity = xml::optionalNumberField(node, "default_velocity", context, cfg.default_velocity);
+    cfg.default_acceleration = xml::optionalNumberField(node, "default_acceleration", context, cfg.default_acceleration);
+    cfg.planning_time = xml::optionalNumberField(node, "planning_time", context, cfg.planning_time);
+    cfg.allow_replanning = xml::optionalBoolField(node, "allow_replanning", context, cfg.allow_replanning);
+    cfg.position_tolerance = xml::optionalNumberField(node, "goal_position_tolerance", context, cfg.position_tolerance);
+    cfg.orientation_tolerance = xml::optionalNumberField(node, "goal_orientation_tolerance", context, cfg.orientation_tolerance);
+    cfg.default_named_target = xml::optionalStringField(node, "default_named_target", context, cfg.default_named_target);
+
+    if (xml::hasMember(node, "base_tf"))
     {
-        return std::nullopt;
+        const auto &base_tf = xml::requireStructField(node, "base_tf", context);
+        cfg.base_tf.enabled = true;
+        const auto base_ctx = xml::makeContext(context, "base_tf");
+        cfg.base_tf.parent_frame = xml::requireStringField(base_tf, "parent", base_ctx);
+        cfg.base_tf.child_frame = xml::requireStringField(base_tf, "child", base_ctx);
+        cfg.base_tf.pose.orientation.w = 1.0;
+        if (xml::hasMember(base_tf, "pose"))
+        {
+            const auto &pose_node = xml::requireStructField(base_tf, "pose", base_ctx);
+            const auto pose_ctx = xml::makeContext(base_ctx, "pose");
+            const auto xyz = xml::requireVector3Field(pose_node, "xyz", pose_ctx);
+            const auto rpy = xml::requireVector3Field(pose_node, "rpy", pose_ctx);
+            cfg.base_tf.pose = poseFromXyzRpy(xyz, rpy);
+        }
     }
 
-    Eigen::Vector3d scale(tool.scale[0], tool.scale[1], tool.scale[2]);
-    std::unique_ptr<shapes::Mesh> mesh(shapes::createMeshFromResource(tool.mesh_resource, scale));
-    if (!mesh)
+    if (xml::hasMember(node, "named_targets"))
     {
-        ROS_WARN_STREAM("[mag_device_arm] 无法加载工具 mesh: " << tool.mesh_resource);
-        return std::nullopt;
+        const auto &named_targets = xml::requireArrayField(node, "named_targets", context);
+        for (int i = 0; i < named_targets.size(); ++i)
+        {
+            const auto idx_ctx = xml::makeContext(context, "named_targets[" + std::to_string(i) + "]");
+            const auto &entry = xml::asStruct(named_targets[i], idx_ctx);
+            const auto alias = xml::requireStringField(entry, "name", idx_ctx);
+            const auto target = xml::requireStringField(entry, "target", idx_ctx);
+            cfg.named_targets.emplace(alias, target);
+        }
     }
 
-    moveit_msgs::AttachedCollisionObject attached;
-    attached.link_name = cfg.end_effector_link;
-    attached.object.header.frame_id = tool.parent_frame.empty() ? cfg.end_effector_link : tool.parent_frame;
-    attached.object.id = cfg.name + "_" + tool.name + "_tool";
-    attached.object.operation = moveit_msgs::CollisionObject::ADD;
-    attached.object.meshes.push_back(meshToMsg(*mesh));
-    attached.object.mesh_poses.push_back(tool.pose);
-    attached.touch_links.push_back(cfg.end_effector_link);
-    return attached;
+    return cfg;
 }
 
 } // namespace
 
 using moveit::planning_interface::MoveGroupInterface;
 
-ArmNode::ArmNode(ros::NodeHandle nh,
-                 ros::NodeHandle pnh,
-                 std::vector<ArmConfig> arm_configs)
-    : nh_(std::move(nh)), pnh_(std::move(pnh))
+std::vector<ArmConfig> loadArmConfigs(const XmlRpc::XmlRpcValue &root,
+                                      const std::string &context)
 {
-    // 预先构造哈希表槽位，确保互斥量等成员不会被复制或移动
-    for (auto &cfg : arm_configs)
+    const auto &cfg_root = xml::asStruct(root, context);
+    std::vector<ArmConfig> result;
+    if (!xml::hasMember(cfg_root, "arms"))
     {
-        auto key = cfg.name;
-        auto inserted = arms_.emplace(std::piecewise_construct,
-                                      std::forward_as_tuple(std::move(key)),
-                                      std::forward_as_tuple());
-        if (!inserted.second)
+        throw std::runtime_error("缺少 config.arms 配置");
+    }
+    const auto &arms_array = xml::requireArrayField(cfg_root, "arms", context);
+    result.reserve(arms_array.size());
+    std::unordered_set<std::string> names;
+    for (int i = 0; i < arms_array.size(); ++i)
+    {
+        const auto arm_ctx = xml::makeContext(context, "arms[" + std::to_string(i) + "]");
+        ArmConfig cfg = parseArmConfig(arms_array[i], arm_ctx);
+        auto lower_name = toLower(cfg.name);
+        if (!names.insert(lower_name).second)
         {
             throw std::runtime_error("重复的机械臂名称: " + cfg.name);
         }
-        ArmHandle &handle = inserted.first->second;
-        handle.config = std::move(cfg);
+        result.push_back(cfg);
+    }
+    if (result.empty())
+    {
+        throw std::runtime_error("config.arms 至少需要一个条目");
+    }
+    return result;
+}
+
+ArmNode::ArmNode(ros::NodeHandle nh,
+                 ros::NodeHandle pnh,
+                 std::vector<ArmConfig> arm_configs)
+    : nh_(nh), pnh_(pnh)
+{
+    // 初始化机械臂配置
+    for (size_t i = 0; i < arm_configs.size(); ++i)
+    {
+        const std::string& key = arm_configs[i].name;
+        if (arms_.find(key) != arms_.end())
+        {
+            throw std::runtime_error("重复的机械臂名称: " + key);
+        }
+        // 使用 piecewise_construct 直接构造，避免复制不可复制的成员
+        arms_.emplace(std::piecewise_construct,
+                      std::forward_as_tuple(key),
+                      std::forward_as_tuple());
+        arms_[key].config = std::move(arm_configs[i]);
     }
 }
 
@@ -102,7 +160,6 @@ void ArmNode::start()
 {
     // 初始化 MoveGroupInterface 并按需发布静态 TF
     std::vector<geometry_msgs::TransformStamped> static_transforms;
-    std::vector<moveit_msgs::AttachedCollisionObject> attached_tools;
 
     for (auto &kv : arms_)
     {
@@ -131,29 +188,11 @@ void ArmNode::start()
         {
             static_transforms.push_back(makeTransform(handle.config.base_tf, stamp));
         }
-        if (handle.config.selected_tool)
-        {
-            static_transforms.push_back(makeTransform(handle.config.selected_tool.value(), stamp));
-            ROS_INFO_STREAM("[mag_device_arm] " << handle.config.name << " 工具挂载: "
-                                                 << handle.config.selected_tool->name << " -> "
-                                                 << handle.config.selected_tool->parent_frame << " -> "
-                                                 << handle.config.selected_tool->child_frame);
-
-            if (auto attached = makeAttachedCollisionObject(handle.config, handle.config.selected_tool.value()))
-            {
-                attached_tools.push_back(*attached);
-            }
-        }
     }
 
     if (!static_transforms.empty())
     {
         static_broadcaster_.sendTransform(static_transforms);
-    }
-
-    for (const auto &obj : attached_tools)
-    {
-        planning_scene_interface_.applyAttachedCollisionObject(obj);
     }
 
     set_pose_srv_ = pnh_.advertiseService("set_end_effector_pose", &ArmNode::handleSetPose, this);
@@ -318,18 +357,41 @@ geometry_msgs::TransformStamped ArmNode::makeTransform(const BaseTransformConfig
     return tf;
 }
 
-geometry_msgs::TransformStamped ArmNode::makeTransform(const ToolMountOption &cfg,
-                                                       const ros::Time &stamp)
-{
-    geometry_msgs::TransformStamped tf;
-    tf.header.stamp = stamp;
-    tf.header.frame_id = cfg.parent_frame;
-    tf.child_frame_id = cfg.child_frame;
-    tf.transform.translation.x = cfg.pose.position.x;
-    tf.transform.translation.y = cfg.pose.position.y;
-    tf.transform.translation.z = cfg.pose.position.z;
-    tf.transform.rotation = cfg.pose.orientation;
-    return tf;
-}
-
 } // namespace mag_device_arm
+
+int main(int argc, char **argv)
+{
+    setlocale(LC_ALL, "zh_CN.UTF-8");
+    ros::init(argc, argv, "mag_device_arm");
+    ros::NodeHandle nh;
+    ros::NodeHandle pnh("~");
+
+    ros::AsyncSpinner spinner(2);
+    spinner.start();
+
+    namespace rps = rosparam_shortcuts;
+    const std::string ns = "mag_device_arm";
+
+    try
+    {
+        XmlRpc::XmlRpcValue config;
+        std::size_t error = 0;
+        error += !rps::get(ns, pnh, "config", config);
+        rps::shutdownIfError(ns, error);
+
+        std::vector<mag_device_arm::ArmConfig> arm_configs = 
+            mag_device_arm::loadArmConfigs(config, ns + ".config");
+
+        mag_device_arm::ArmNode node(nh, pnh, arm_configs);
+        node.start();
+
+        ros::waitForShutdown();
+    }
+    catch (const std::exception &e)
+    {
+        ROS_FATAL("mag_device_arm 启动失败: %s", e.what());
+        return 1;
+    }
+
+    return 0;
+}

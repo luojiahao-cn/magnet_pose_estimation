@@ -1,0 +1,13 @@
+<launch>
+  <!-- 配置参数 -->
+  <arg name="config" default="$(find mag_device_arm)/config/single_arm.yaml" />
+
+  <!-- 启动 Gazebo 和 MoveIt 配置 -->
+  <include file="$(find fr5v6_single_moveit_config)/launch/demo_gazebo_with_tool.launch">
+    <arg name="tool_name" value="magnetic_sensor_bracket" />
+  </include>
+
+  <node pkg="mag_device_arm" type="arm_node" name="mag_device_arm" output="screen">
+    <rosparam command="load" file="$(arg config)" />
+  </node>
+</launch>

@@ -1,16 +1,6 @@
 {
     "C_Cpp.default.compileCommands": "${workspaceFolder}/build/compile_commands.json",
     "C_Cpp.default.compilerPath": "/usr/bin/g++",
-    "python.autoComplete.extraPaths": [
-        "/home/lawkaho/workshop/magnet_pose_estimation/devel/lib/python3/dist-packages",
-        "/home/lawkaho/workshop/zlab_robots/catkin_ws/devel/lib/python3/dist-packages",
-        "/opt/ros/noetic/lib/python3/dist-packages"
-    ],
-    "python.analysis.extraPaths": [
-        "/home/lawkaho/workshop/magnet_pose_estimation/devel/lib/python3/dist-packages",
-        "/home/lawkaho/workshop/zlab_robots/catkin_ws/devel/lib/python3/dist-packages",
-        "/opt/ros/noetic/lib/python3/dist-packages"
-    ],
     "cmake.ignoreCMakeListsMissing": true,
     "files.associations": {
         "cctype": "cpp",
@@ -102,5 +92,4 @@
         "qvboxlayout": "cpp",
         "dense": "cpp"
     },
-    "github.copilot.chat.codeGeneration.useInstructionFiles": true
 }

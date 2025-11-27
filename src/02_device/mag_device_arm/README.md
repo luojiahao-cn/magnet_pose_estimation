@@ -6,46 +6,41 @@
 
 - 基于 MoveIt 的机械臂控制封装，支持多机械臂并行管理。
 - 通过服务接口执行末端位姿规划、执行 MoveIt Named Target。
-- 可选发布机械臂基座与工具挂载点的静态 TF，统一坐标系管理。
+- 可选发布机械臂基座的静态 TF，统一坐标系管理。
+- 工具配置由 zlab_robots 通过 launch 参数管理，无需在包内配置。
 
 ## 配置示例
 
 `config/single_arm.yaml`
 
-```yaml
-config:
-	arms:
-		- name: magnet
-			group_name: fr5v6_arm
-			end_effector_link: frrobot_tool_link
-			reference_frame: world
-			default_velocity: 0.1
-			default_acceleration: 0.1
-			planning_time: 5.0
-			allow_replanning: false
-			goal_position_tolerance: 0.005
-			goal_orientation_tolerance: 0.01
-			base_tf:
-				parent: world
-				child: magnet_arm_base
-				pose:
-					xyz: [0.0, 0.0, 0.0]
-					rpy: [0.0, 0.0, 0.0]
-			named_targets:
-				- name: ready
-					 target: ready
-				- name: up
-						 target: up
+- 多机械臂配置参考：`config/dual_arm.yaml`。
+
+## 启动方式
+
+### Gazebo 仿真模式
+
+```bash
+# 单臂仿真（默认无工具）
+roslaunch mag_device_arm single_arm_gazebo.launch
+
+# 单臂仿真（指定工具，如永久磁铁）
+roslaunch mag_device_arm single_arm_gazebo.launch tool_name:=permanent_magnet
+
+# 单臂仿真（指定工具，如磁传感器支架）
+roslaunch mag_device_arm single_arm_gazebo.launch tool_name:=magnetic_sensor_bracket
 ```
 
-- 多机械臂配置参考：`config/dual_arm.yaml`。
-- 默认示例：`roslaunch mag_device_arm single_arm.launch`。
-- 工具挂载可选示例：
-	- 单臂（裸端法兰）：`roslaunch mag_device_arm single_arm.launch`（使用 `config/single_arm.yaml`）
-	- 单臂（默认带磁传感器支架）：`roslaunch mag_device_arm single_arm_tool.launch`（使用 `config/single_arm_tool.yaml`，其中 `tool_mount.options` 描述 mesh/TF/缩放）
-	- 若需进一步自定义，可复制 YAML 后通过 `single_arm.launch config:=<your_yaml>` 指定
-	- 双臂：`roslaunch mag_device_arm dual_arm_tool.launch magnet_tool:=none sensor_tool:=magnetic_sensor_bracket`
-- `tool_mount.selected` 可以在 launch 或 YAML 中调整，以选择具体安装在某条机械臂上的工具选项；节点会自动发布对应的静态 TF，并在 MoveIt 规划场景中附着对应 mesh。
+### 真实机器人模式
+
+首先启动 zlab_robots 的控制栈（例如 `connect_single_arm.launch`），然后启动：
+
+```bash
+# 单臂
+roslaunch mag_device_arm single_arm.launch
+
+# 双臂
+roslaunch mag_device_arm dual_arm.launch
+```
 
 ## 示例：往复运动脚本
 
@@ -61,4 +56,12 @@ config:
 	- 输入：`arm`、`target`（配置中的别名）、可选速度/加速度缩放、是否执行。
 	- 功能：调用 MoveIt Named Target。
 
-调用前需启动对应的 MoveIt 控制/驱动节点（例如 `zlab_robots` 项目中的控制栈）。
+## 工具配置
+
+工具配置由 zlab_robots 的 launch 文件通过 `tool_name` 参数管理，支持的工具有：
+- `permanent_magnet`：永久磁铁
+- `electronic_magnet`：电磁铁
+- `magnetic_sensor_bracket`：磁传感器支架
+- `none`：无工具（默认）
+
+工具会在 MoveIt 的 URDF 加载时自动配置，无需在 `mag_device_arm` 包内进行额外配置。
