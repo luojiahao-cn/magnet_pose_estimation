@@ -1,5 +1,4 @@
 # 传感器仿真配置
-# 用于仿真场景的传感器数据生成配置
 config:
   topics:
     raw: ""
@@ -11,7 +10,7 @@ config:
       raw_max: 32767.0
 
   simulation:
-    update_rate_hz: 60.0
+    update_rate_hz: 60.0  # 传感器数据发布频率 (Hz)
     magnet_frame:
       parent: world
       child: magnet

@@ -31,16 +31,13 @@ config:
     #   phase: 0.0                     # 初始相位（弧度）
     #   orientation_rpy: [0.0, 0.0, 0.0]  # 姿态 [roll, pitch, yaw] (弧度)
     
-    #########################
-    # 矩形轨迹模式
     type: rectangular
     rectangular:
-      width: 0.03                   # 宽度（米）
-      height: 0.03                   # 高度（米）
-      z: 0.06                        # Z 坐标（米）
-      center_xyz: [0.02, 0.02, 0.0]  # 中心位置 [x, y, z]（米）
-      velocity: 0.02                 # 线速度（米/秒）
-      orientation_rpy: [0.0, 0.0, 0.0]  # 姿态 [roll, pitch, yaw] (弧度)
+      width: 0.03
+      height: 0.03
+      center_xyz: [0.02, 0.02, 0.06]
+      velocity: 0.02
+      orientation_rpy: [0.0, 0.0, 0.0]
     
   orientation:
     # mode: fixed  # 固定姿态模式（不旋转）

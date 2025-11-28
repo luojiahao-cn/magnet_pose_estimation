@@ -102,8 +102,7 @@ struct RectangularTrajectoryConfig
     }
     double width = 0.02;              ///< 宽度（米）
     double height = 0.02;             ///< 高度（米）
-    double z = 0.0;                   ///< Z 坐标（米）
-    geometry_msgs::Point center;       ///< 中心位置
+    geometry_msgs::Point center;       ///< 中心位置（包含 x, y, z）
     double velocity = 0.01;            ///< 线速度（米/秒）
     geometry_msgs::Quaternion orientation;  ///< 默认姿态四元数（当未单独指定时使用）
     double perimeter = 0.0;            ///< 周长（自动计算）

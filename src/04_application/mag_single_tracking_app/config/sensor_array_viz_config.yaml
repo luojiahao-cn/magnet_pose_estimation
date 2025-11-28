@@ -1,39 +1,29 @@
 # 传感器阵列可视化节点配置文件
-# 该文件定义了传感器阵列磁场测量可视化的所有配置参数
 config:
-  # 元信息配置
-  meta:
-    profile: default  # 配置配置文件名
-    description: "传感器阵列可视化配置"  # 配置描述
-
-  # 坐标系配置
   frames:
-    fixed_frame: world  # 固定坐标系，所有可视化标记都发布在此坐标系下
+    fixed_frame: world
 
-  # 话题配置
   topics:
-    measurement: "/magnetic/sensor/field"  # 磁传感器测量数据话题
+    measurement: "/magnetic/sensor/field"
 
-  # 功能参数配置
   params:
-    array_param: "array"  # 传感器阵列参数名（从参数服务器加载）
-    publish_rate: 20.0  # 可视化标记发布频率（Hz）
-    marker_lifetime: 0.0  # 标记生存时间（0表示永久）
-    measurement_timeout: 0.3  # 测量数据超时时间（秒）
-    color_min_mT: 0.0  # 颜色映射最小磁场强度（毫特斯拉）
-    color_max_mT: 3.0  # 颜色映射最大磁场强度（毫特斯拉）
-    show_text: false  # 是否显示传感器ID和测量值文本
-    text_scale: 0.02  # 文本标记大小
-    text_offset: 0.015  # 文本标记偏移距离（米）
+    array_param: "array"
+    publish_rate: 20.0
+    marker_lifetime: 0.0
+    measurement_timeout: 0.3
+    color_min_mT: 0.0
+    color_max_mT: 3.0
+    show_text: false
+    text_scale: 0.02
+    text_offset: 0.015
 
-  # 可视化配置
   visualization:
-    field_marker_ns: "sensor_field"  # 磁场箭头标记命名空间
-    text_marker_ns: "sensor_text"  # 文本标记命名空间
-    arrow_shaft_diameter: 0.001  # 箭头杆直径
-    arrow_head_diameter: 0.003  # 箭头头部直径
-    arrow_head_length: 0.004  # 箭头头部长度
-    vector_scale: 0.002  # 向量缩放因子（箭头长度 = 磁场强度 * 缩放因子）
-    max_arrow_length: 0.01  # 箭头最大长度限制（米）
-    arrow_origin_offset: 0.0  # 箭头起点偏移（沿传感器上轴方向）
+    field_marker_ns: "sensor_field"
+    text_marker_ns: "sensor_text"
+    arrow_shaft_diameter: 0.001
+    arrow_head_diameter: 0.003
+    arrow_head_length: 0.004
+    vector_scale: 0.002
+    max_arrow_length: 0.01
+    arrow_origin_offset: 0.0
 

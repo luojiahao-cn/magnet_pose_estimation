@@ -140,6 +140,24 @@ private:
                              Eigen::Vector3d &position,
                              geometry_msgs::TransformStamped &transform) const;
 
+  /**
+   * @brief 转换并处理传感器数据
+   * @param sensor_data 传感器原始数据
+   * @return 处理后的磁场数据
+   */
+  sensor_msgs::MagneticField convertAndProcess(const mag_core_msgs::MagSensorData &sensor_data);
+
+  /**
+   * @brief 处理测量数据并估计姿态
+   * @param measurements 测量数据列表
+   * @param pose_out 输出的姿态估计结果
+   * @param error_out 输出的估计误差（可选）
+   * @return 是否成功估计
+   */
+  bool processMeasurements(const std::vector<sensor_msgs::MagneticField> &measurements,
+                           geometry_msgs::Pose &pose_out,
+                           double *error_out = nullptr);
+
   ros::NodeHandle nh_;  // 全局节点句柄
   ros::NodeHandle pnh_;  // 私有节点句柄
   ros::Subscriber batch_sub_;  // 批量传感器数据订阅者（主要接口）

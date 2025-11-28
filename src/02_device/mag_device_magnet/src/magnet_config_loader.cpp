@@ -241,14 +241,10 @@ RectangularTrajectoryConfig parseRectangularConfig(const XmlRpc::XmlRpcValue &tr
     cfg.width = xml::readNumber(xml::requireMember(rect, "width", rect_ctx), xml::makeContext(rect_ctx, "width"));
     cfg.height = xml::readNumber(xml::requireMember(rect, "height", rect_ctx), xml::makeContext(rect_ctx, "height"));
     cfg.velocity = xml::optionalNumberField(rect, "velocity", rect_ctx, cfg.velocity);
-    cfg.z = xml::optionalNumberField(rect, "z", rect_ctx, cfg.z);
-    if (xml::hasMember(rect, "center_xyz"))
-    {
-        const auto center = xml::requireVector3Field(rect, "center_xyz", rect_ctx);
-        cfg.center.x = center[0];
-        cfg.center.y = center[1];
-        cfg.center.z = center[2];
-    }
+    const auto center = xml::requireVector3Field(rect, "center_xyz", rect_ctx);
+    cfg.center.x = center[0];
+    cfg.center.y = center[1];
+    cfg.center.z = center[2];
     if (xml::hasMember(rect, "orientation_rpy"))
     {
         const auto rpy = xml::requireVector3Field(rect, "orientation_rpy", rect_ctx);

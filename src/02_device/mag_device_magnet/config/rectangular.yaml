@@ -15,8 +15,7 @@ config:
     rectangular:
       width: 0.03
       height: 0.03
-      z: 0.03
-      center_xyz: [0.02, 0.02, 0.0]
+      center_xyz: [0.02, 0.02, 0.03]
       velocity: 0.02
       orientation_rpy: [0.0, 0.0, 0.0]
   orientation:

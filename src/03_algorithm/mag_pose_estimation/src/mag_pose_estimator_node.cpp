@@ -39,13 +39,10 @@ MagPoseEstimatorNode::MagPoseEstimatorNode(ros::NodeHandle nh, ros::NodeHandle p
 
   if (!batch_topic_.empty()) {
     batch_sub_ = nh_.subscribe(batch_topic_, 10, &MagPoseEstimatorNode::batchCallback, this);
-    ROS_INFO("[mag_pose_estimator] 订阅批量数据话题: %s", batch_topic_.c_str());
   } else {
     mag_sub_ = nh_.subscribe(mag_topic_, 25, &MagPoseEstimatorNode::magCallback, this);
-    ROS_INFO("[mag_pose_estimator] 订阅单个数据话题: %s", mag_topic_.c_str());
   }
   pose_pub_ = nh_.advertise<mag_core_msgs::MagnetPose>(pose_topic_, 10);
-  ROS_INFO("[mag_pose_estimator] 发布姿态估计话题: %s", pose_topic_.c_str());
 }
 
 /**
@@ -68,15 +65,10 @@ void MagPoseEstimatorNode::loadParameters() {
   batch_topic_ = cfg.batch_topic;
   pose_topic_ = cfg.pose_topic;
   
-  ROS_INFO("[mag_pose_estimator] 配置加载完成");
-  ROS_INFO("[mag_pose_estimator] 估计器类型: %s", estimator_type_.c_str());
-  ROS_INFO("[mag_pose_estimator] 输出坐标系: %s", cfg.output_frame.c_str());
-  if (!batch_topic_.empty()) {
-    ROS_INFO("[mag_pose_estimator] 批量数据话题: %s", batch_topic_.c_str());
-  } else {
-    ROS_INFO("[mag_pose_estimator] 单个数据话题: %s", mag_topic_.c_str());
-  }
-  ROS_INFO("[mag_pose_estimator] 姿态估计话题: %s", pose_topic_.c_str());
+  ROS_INFO("[mag_pose_estimator] 配置加载完成: 估计器类型=%s, 输出坐标系=%s, 数据话题=%s, 结果话题=%s",
+           estimator_type_.c_str(), cfg.output_frame.c_str(),
+           (!batch_topic_.empty() ? batch_topic_.c_str() : mag_topic_.c_str()),
+           pose_topic_.c_str());
   output_frame_ = cfg.output_frame;
   tf_timeout_ = cfg.tf_timeout;
 
@@ -268,23 +260,13 @@ void MagPoseEstimatorNode::batchCallback(
   std::vector<sensor_msgs::MagneticField> processed_measurements;
   processed_measurements.reserve(msg->measurements.size());
   for (const auto &sensor_data : msg->measurements) {
-    sensor_msgs::MagneticField mag_msg;
-    mag_msg.header = sensor_data.header;
-    mag_msg.magnetic_field.x = sensor_data.mag_x;
-    mag_msg.magnetic_field.y = sensor_data.mag_y;
-    mag_msg.magnetic_field.z = sensor_data.mag_z;
-    processed_measurements.push_back(preprocessor_.process(mag_msg));
+    processed_measurements.push_back(convertAndProcess(sensor_data));
   }
-
-  auto tf_query = [this](const std::string &frame_id, const ros::Time &stamp, Eigen::Vector3d &position, geometry_msgs::TransformStamped &transform) -> bool {
-    return querySensorTransform(frame_id, stamp, position, transform);
-  };
 
   geometry_msgs::Pose pose;
   double error = 0.0;
-  if (estimator_->processBatch(processed_measurements, tf_query, output_frame_, pose, &error)) {
+  if (processMeasurements(processed_measurements, pose, &error)) {
     publishPose(pose, msg->header.stamp);
-    // 计算平均残差（误差是平方和，传感器数量 * 3 个残差）
     double avg_residual = std::sqrt(error / (processed_measurements.size() * 3));
     ROS_INFO_THROTTLE(1.0, "[mag_pose_estimator] 姿态估计成功，总误差: %.9f，平均残差: %.9f mT，传感器数: %zu",
                       error, avg_residual, processed_measurements.size());
@@ -299,25 +281,40 @@ void MagPoseEstimatorNode::batchCallback(
  */
 void MagPoseEstimatorNode::magCallback(
     const mag_core_msgs::MagSensorDataConstPtr &msg) {
-  sensor_msgs::MagneticField mag_msg;
-  mag_msg.header = msg->header;
-  mag_msg.magnetic_field.x = msg->mag_x;
-  mag_msg.magnetic_field.y = msg->mag_y;
-  mag_msg.magnetic_field.z = msg->mag_z;
-
-  sensor_msgs::MagneticField processed = preprocessor_.process(mag_msg);
-
-  auto tf_query = [this](const std::string &frame_id, const ros::Time &stamp, Eigen::Vector3d &position, geometry_msgs::TransformStamped &transform) -> bool {
-    return querySensorTransform(frame_id, stamp, position, transform);
-  };
-
-  // 对于单个数据，转换为批量数据格式调用统一接口
-  std::vector<sensor_msgs::MagneticField> single_measurement = {processed};
+  std::vector<sensor_msgs::MagneticField> single_measurement = {convertAndProcess(*msg)};
   geometry_msgs::Pose pose;
-  if (estimator_->processBatch(single_measurement, tf_query, output_frame_, pose)) {
+  if (processMeasurements(single_measurement, pose)) {
     ros::Time stamp = msg->header.stamp.isZero() ? ros::Time::now() : msg->header.stamp;
     publishPose(pose, stamp);
   }
+}
+
+/**
+ * @brief 转换并处理传感器数据
+ */
+sensor_msgs::MagneticField MagPoseEstimatorNode::convertAndProcess(
+    const mag_core_msgs::MagSensorData &sensor_data) {
+  sensor_msgs::MagneticField mag_msg;
+  mag_msg.header = sensor_data.header;
+  mag_msg.magnetic_field.x = sensor_data.mag_x;
+  mag_msg.magnetic_field.y = sensor_data.mag_y;
+  mag_msg.magnetic_field.z = sensor_data.mag_z;
+  return preprocessor_.process(mag_msg);
+}
+
+/**
+ * @brief 处理测量数据并估计姿态
+ */
+bool MagPoseEstimatorNode::processMeasurements(
+    const std::vector<sensor_msgs::MagneticField> &measurements,
+    geometry_msgs::Pose &pose_out,
+    double *error_out) {
+  auto tf_query = [this](const std::string &frame_id, const ros::Time &stamp,
+                         Eigen::Vector3d &position,
+                         geometry_msgs::TransformStamped &transform) -> bool {
+    return querySensorTransform(frame_id, stamp, position, transform);
+  };
+  return estimator_->processBatch(measurements, tf_query, output_frame_, pose_out, error_out);
 }
 
 /**
@@ -353,25 +350,21 @@ bool MagPoseEstimatorNode::querySensorTransform(const std::string &frame_id,
   }
 
   try {
-    ros::Time query_time = stamp;
+    ros::Time query_time = ros::Time(0);
     if (!stamp.isZero()) {
-      ros::Time now = ros::Time::now();
-      double age = (now - stamp).toSec();
-      if (age > 0.5 || age < -0.1) {
-        query_time = ros::Time(0);
+      double age = (ros::Time::now() - stamp).toSec();
+      if (age <= 0.5 && age >= -0.1) {
+        query_time = stamp;
       }
-    } else {
-      query_time = ros::Time(0);
     }
     
     try {
       transform = tf_buffer_.lookupTransform(
           output_frame_, frame_id, query_time, ros::Duration(tf_timeout_));
-    } catch (const tf2::ExtrapolationException &ex) {
+    } catch (const tf2::ExtrapolationException &) {
       if (query_time != ros::Time(0)) {
-        query_time = ros::Time(0);
         transform = tf_buffer_.lookupTransform(
-            output_frame_, frame_id, query_time, ros::Duration(tf_timeout_));
+            output_frame_, frame_id, ros::Time(0), ros::Duration(tf_timeout_));
       } else {
         throw;
       }
@@ -401,16 +394,12 @@ std::unique_ptr<EstimatorBase> MagPoseEstimatorNode::createEstimator(
   std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
 
   if (lower == "ekf") {
-    ROS_INFO("[mag_pose_estimator] 创建 EKF 估计器");
     return std::make_unique<EKFEstimator>();
   }
-
   if (lower == "optimizer") {
-    ROS_INFO("[mag_pose_estimator] 创建优化器估计器");
     return std::make_unique<OptimizerEstimator>();
   }
 
-  // 未知类型默认使用 EKF
   ROS_WARN("[mag_pose_estimator] 未知估计器类型 '%s'，默认使用 EKF", type.c_str());
   return std::make_unique<EKFEstimator>();
 }
@@ -425,13 +414,7 @@ std::unique_ptr<EstimatorBase> MagPoseEstimatorNode::createEstimator(
  */
 int main(int argc, char **argv) {
   setlocale(LC_ALL, "zh_CN.UTF-8");
-  
   ros::init(argc, argv, "mag_pose_estimator_node");
-  
-  // 设置日志级别为 DEBUG（如果环境变量未设置）
-  if (getenv("ROSCONSOLE_MIN_SEVERITY") == nullptr) {
-    ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Debug);
-  }
   
   ros::NodeHandle nh;
   ros::NodeHandle pnh("~");

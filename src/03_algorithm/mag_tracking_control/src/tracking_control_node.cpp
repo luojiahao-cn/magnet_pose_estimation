@@ -140,7 +140,7 @@ void TrackingControlNode::controlLoop(const ros::TimerEvent &/*event*/) {
     TrackingControlInput input;
     input.current_sensor_pose = current_sensor_pose;
     input.magnet_pose = current_magnet_pose_;
-    input.field_strengths = last_field_strengths_;  // TODO: 从传感器数据获取
+    input.field_strengths = last_field_strengths_;  // 为 adaptive_distance 策略预留，fixed_offset 策略不使用
     input.timestamp = ros::Time::now();
     
     // 计算目标位姿

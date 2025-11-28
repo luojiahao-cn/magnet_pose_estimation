@@ -1,7 +1,7 @@
 # 磁铁姿态估计器节点配置文件
 config:
   frames:
-    output_frame: world  # 输出姿态的参考坐标系（相对于世界坐标系）
+    output_frame: world
 
   topics:
     mag_field: /magnetic/sensor/field
@@ -31,17 +31,17 @@ config:
 
     optimizer:
       min_sensors: 25
-      initial_position: [0.02, 0.02, 0.06]  # 初始位置（相对于 world 坐标系，单位：米）
-      initial_direction: [1.0, 0.0, 0.0]  # 真实方向（RPY [0, π/2, 0] 对应 X 轴方向）
-      initial_strength: 10.0  # 仿真磁矩强度（真实值）
+      initial_position: [0.02, 0.02, 0.06]
+      initial_direction: [1.0, 0.0, 0.0]
+      initial_strength: 10.0
       strength_delta: 5.0
       optimize_strength: false
       max_iterations: 100
-      function_tolerance: 1.0e-6  # 放宽函数值容差，避免过度优化
-      gradient_tolerance: 1.0e-8  # 放宽梯度容差
-      parameter_tolerance: 1.0e-8  # 放宽参数容差
+      function_tolerance: 1.0e-6
+      gradient_tolerance: 1.0e-8
+      parameter_tolerance: 1.0e-8
       num_threads: 8
-      minimizer_progress: false # 是否显示优化器进度信息
+      minimizer_progress: false
       linear_solver: DENSE_QR
-      max_acceptable_residual: 1.0  # 可接受的最大平均残差 (mT)，超过此值即使优化收敛也认为失败
+      max_acceptable_residual: 1.0
 

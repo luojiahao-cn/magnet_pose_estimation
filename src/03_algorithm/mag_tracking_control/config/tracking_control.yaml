@@ -1,5 +1,4 @@
 # 跟踪控制节点配置文件
-# 支持通过 strategy/type 切换不同的控制算法
 config:
   # 策略配置
   strategy:
@@ -40,7 +39,7 @@ config:
   
   # 控制参数
   control:
-    update_rate: 10.0           # 控制循环频率 (Hz)
+    update_rate: 20.0           # 控制循环频率 (Hz)，机械臂控制频率
     enable_execution: false     # 是否实际执行运动（false=仅规划，true=执行）
     velocity_scaling: 0.2       # 速度缩放因子 (0.0-1.0)
     acceleration_scaling: 0.2   # 加速度缩放因子 (0.0-1.0)

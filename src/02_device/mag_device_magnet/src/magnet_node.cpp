@@ -209,7 +209,7 @@ TrajectorySample MagnetNode::sampleRectangular(double elapsed_seconds) const
         sample.pose.position.x = left;
         sample.pose.position.y = top - ratio * height;
     }
-    sample.pose.position.z = cfg.z;
+    sample.pose.position.z = cfg.center.z;
     sample.pose.orientation = cfg.orientation;
     return sample;
 }
