@@ -1,0 +1,61 @@
+# 磁体设备配置
+# 用于仿真场景的磁体运动配置（磁铁独立运动）
+config:
+  frames:
+    parent: world
+    child: magnet
+  topics:
+    pose: /magnetic/pose_true
+  motion:
+    update_rate_hz: 60.0
+    magnetic_strength: 10.0 
+  tf:
+    enable: true
+    static: false # 动态轨迹模式
+  trajectory:
+    #########################
+    # 静态轨迹模式
+    # type: static
+    # static:
+    #   pose:
+    #     xyz: [0.02, 0.02, 0.06]
+    #     rpy: [0.0, 0.0, 0.0]
+    
+    #########################
+    # 圆形轨迹模式
+    # type: circular
+    # circular:
+    #   center_xyz: [0.0, 0.0, 0.05]  # 圆心位置 [x, y, z]（米）
+    #   radius: 0.1                   # 半径（米）
+    #   angular_speed: 0.5            # 角速度（弧度/秒）
+    #   phase: 0.0                     # 初始相位（弧度）
+    #   orientation_rpy: [0.0, 0.0, 0.0]  # 姿态 [roll, pitch, yaw] (弧度)
+    
+    #########################
+    # 矩形轨迹模式
+    type: rectangular
+    rectangular:
+      width: 0.03                   # 宽度（米）
+      height: 0.03                   # 高度（米）
+      z: 0.06                        # Z 坐标（米）
+      center_xyz: [0.02, 0.02, 0.0]  # 中心位置 [x, y, z]（米）
+      velocity: 0.02                 # 线速度（米/秒）
+      orientation_rpy: [0.0, 0.0, 0.0]  # 姿态 [roll, pitch, yaw] (弧度)
+    
+  orientation:
+    # mode: fixed  # 固定姿态模式（不旋转）
+    # fixed:
+    #   rpy: [0.0, 0.0, 0.0]  # 固定姿态 [roll, pitch, yaw] (弧度)
+    
+    #########################
+    # 自旋模式（注释示例）
+    mode: spin  # 自旋模式
+    spin:
+      axis: xyz                      # 旋转轴：x, y, z, xy, xz, yz, xyz
+      angular_velocity: 1.0          # 角速度（弧度/秒）
+      initial_rpy: [0.0, 0.0, 0.0]   # 初始姿态 [roll, pitch, yaw] (弧度)
+    
+    #########################
+    # 轨迹模式（注释示例，姿态跟随轨迹方向）
+    # mode: trajectory
+

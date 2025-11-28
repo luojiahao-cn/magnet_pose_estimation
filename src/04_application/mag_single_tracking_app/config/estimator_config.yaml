@@ -1,0 +1,47 @@
+# 磁铁姿态估计器节点配置文件
+config:
+  frames:
+    output_frame: world  # 输出姿态的参考坐标系（相对于世界坐标系）
+
+  topics:
+    mag_field: /magnetic/sensor/field
+    mag_batch: /magnetic/sensor/batch
+    pose_estimate: /magnetic/pose_estimated
+
+  params:
+    estimator:
+      type: optimizer
+      tf_timeout: 0.1
+
+    ekf:
+      position_gain: 0.02
+      process_noise_position: 1.0e-4
+      process_noise_orientation: 5.0e-5
+      measurement_noise: 1.0e-3
+      world_field: [0.02, 0.01, 0.045]
+
+    preprocessor:
+      enable_calibration: false
+      soft_iron_matrix: [1.02, 0.00, 0.00,
+                         0.00, 0.99, 0.01,
+                         0.00, 0.01, 1.01]
+      hard_iron_offset: [1.0, -2.0, 0.5]
+      enable_filter: false
+      low_pass_alpha: 0.2
+
+    optimizer:
+      min_sensors: 25
+      initial_position: [0.02, 0.02, 0.06]  # 初始位置（相对于 world 坐标系，单位：米）
+      initial_direction: [1.0, 0.0, 0.0]  # 真实方向（RPY [0, π/2, 0] 对应 X 轴方向）
+      initial_strength: 10.0  # 仿真磁矩强度（真实值）
+      strength_delta: 5.0
+      optimize_strength: false
+      max_iterations: 100
+      function_tolerance: 1.0e-6  # 放宽函数值容差，避免过度优化
+      gradient_tolerance: 1.0e-8  # 放宽梯度容差
+      parameter_tolerance: 1.0e-8  # 放宽参数容差
+      num_threads: 8
+      minimizer_progress: false # 是否显示优化器进度信息
+      linear_solver: DENSE_QR
+      max_acceptable_residual: 1.0  # 可接受的最大平均残差 (mT)，超过此值即使优化收敛也认为失败
+

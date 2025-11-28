@@ -1,0 +1,38 @@
+# 磁铁可视化节点配置文件
+# 该文件定义了磁铁姿态可视化的所有配置参数
+config:
+  # 元信息配置
+  meta:
+    profile: default  # 配置配置文件名
+    description: "磁铁可视化配置"  # 配置描述
+
+  # 坐标系配置
+  frames:
+    reference_frame: world  # 参考坐标系，所有可视化标记都发布在此坐标系下
+
+  # 话题配置
+  topics:
+    pose: "/magnetic/pose_true"  # 磁铁真实姿态话题
+    estimated_pose: "/magnetic/pose_estimated"  # 磁铁估算姿态话题
+
+  # 功能参数配置
+  params:
+    enable_estimated_pose: true  # 是否启用估算姿态可视化
+    trail_size: 600  # 轨迹最大点数限制
+    trail_duration: 2.0  # 轨迹时间长度限制（秒）
+    trail_min_distance: 0.0001  # 轨迹采样最小距离（米）
+    trail_width: 0.0003  # 真实轨迹线宽度（米）
+    estimated_trail_width: 0.0003  # 估算轨迹线宽度（米）
+    magnet_length: 0.004  # 磁铁长度（米）
+    magnet_radius: 0.001  # 磁铁半径（米）
+    marker_lifetime: 2  # 标记生存时间（0表示永久，单位：秒）
+    strength_text_size: 0.003  # 磁矩强度文本大小
+    strength_offset_scale: 1  # 强度文本偏移比例（相对于磁铁长度）
+    show_strength_text: true  # 是否显示磁矩强度文本
+    strength_label: "magnet"  # 强度文本标签前缀
+
+  # 可视化配置
+  visualization:
+    marker_ns: "magnet"  # 真实姿态标记命名空间
+    estimated_marker_ns: "magnet_est"  # 估算姿态标记命名空间
+

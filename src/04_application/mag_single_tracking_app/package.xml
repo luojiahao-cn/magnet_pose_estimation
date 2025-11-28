@@ -1,0 +1,34 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>mag_single_tracking_app</name>
+  <version>0.1.0</version>
+  <description>
+    Orchestrator package for single-arm magnetic sensor array tracking (simulation only). 
+    The sensor array is rigidly attached to the robot arm end effector (bracket_tcp_link).
+    This package wires together the core description, device drivers (arm, magnet, sensor), 
+    estimator, and visualization stacks to deliver a ready-to-run simulation for 
+    single-arm tracking scenarios.
+  </description>
+  <maintainer email="maintainer@example.com">TODO</maintainer>
+  <license>BSD-3-Clause</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <depend>roscpp</depend>
+  <depend>geometry_msgs</depend>
+  <depend>tf2</depend>
+  <depend>tf2_ros</depend>
+  <depend>tf2_geometry_msgs</depend>
+  <depend>mag_core_description</depend>
+  <depend>mag_core_msgs</depend>
+  <depend>mag_core_utils</depend>
+  <depend>mag_device_sensor</depend>
+  <depend>mag_device_magnet</depend>
+  <depend>mag_device_arm</depend>
+  <depend>mag_pose_estimator</depend>
+  <depend>mag_viz</depend>
+  <depend>rosparam_shortcuts</depend>
+
+  <export />
+</package>
+

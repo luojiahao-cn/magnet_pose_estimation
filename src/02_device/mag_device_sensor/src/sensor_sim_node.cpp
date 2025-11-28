@@ -205,52 +205,141 @@ void SensorSimNode::publishReadings(const geometry_msgs::TransformStamped &magne
         tf2::fromMsg(array_.arrayPose(), parent_array);
     }
 
-    Eigen::Matrix<double, Eigen::Dynamic, 3> sensor_positions(sensors.size(), 3);
-    std::vector<tf2::Transform> parent_sensor_transforms(sensors.size());
+    // 查询 world -> array_parent 的 TF，用于将传感器位置转换到 world 坐标系
+    tf2::Transform world_to_array_parent;
+    bool need_array_transform = (array_.parentFrame() != "world");
+    if (need_array_transform)
+    {
+        try
+        {
+            geometry_msgs::TransformStamped world_to_array_parent_tf = tf_buffer_.lookupTransform(
+                "world", array_.parentFrame(), stamp, ros::Duration(0.1));
+            tf2::fromMsg(world_to_array_parent_tf.transform, world_to_array_parent);
+        }
+        catch (const tf2::TransformException &ex)
+        {
+            ROS_WARN_THROTTLE(2.0,
+                              "[mag_device_sensor_sim] ✗ 无法查询 world -> %s 的 TF，磁场计算可能不正确: %s",
+                              array_.parentFrame().c_str(), ex.what());
+            need_array_transform = false;
+        }
+    }
 
+    // 查询 world -> magnet_parent 的 TF，用于将磁铁位置转换到 world 坐标系
+    tf2::Transform world_to_magnet_parent;
+    bool need_magnet_transform = (simulation_.magnet_parent_frame != "world");
+    if (need_magnet_transform)
+    {
+        try
+        {
+            geometry_msgs::TransformStamped world_to_magnet_parent_tf = tf_buffer_.lookupTransform(
+                "world", simulation_.magnet_parent_frame, stamp, ros::Duration(0.1));
+            tf2::fromMsg(world_to_magnet_parent_tf.transform, world_to_magnet_parent);
+        }
+        catch (const tf2::TransformException &ex)
+        {
+            ROS_WARN_THROTTLE(2.0,
+                              "[mag_device_sensor_sim] ✗ 无法查询 world -> %s 的 TF，磁场计算可能不正确: %s",
+                              simulation_.magnet_parent_frame.c_str(), ex.what());
+            need_magnet_transform = false;
+        }
+    }
+
+    // 计算传感器在各自 parent 坐标系下的位置，并保存变换（用于后续将磁场转换回传感器坐标系）
+    std::vector<tf2::Transform> parent_sensor_transforms(sensors.size());
     for (size_t i = 0; i < sensors.size(); ++i)
     {
         tf2::Transform array_sensor;
         tf2::fromMsg(sensors[i].pose, array_sensor);
         tf2::Transform parent_sensor = parent_array * array_sensor;
         parent_sensor_transforms[i] = parent_sensor;
-        const tf2::Vector3 &origin = parent_sensor.getOrigin();
-        sensor_positions(static_cast<int>(i), 0) = origin.x();
-        sensor_positions(static_cast<int>(i), 1) = origin.y();
-        sensor_positions(static_cast<int>(i), 2) = origin.z();
     }
 
-    Eigen::Vector3d magnet_position(magnet_tf.transform.translation.x,
-                                    magnet_tf.transform.translation.y,
-                                    magnet_tf.transform.translation.z);
+    // 将传感器位置转换到 world 坐标系
+    Eigen::Matrix<double, Eigen::Dynamic, 3> sensor_positions_world(sensors.size(), 3);
+    for (size_t i = 0; i < sensors.size(); ++i)
+    {
+        tf2::Transform sensor_world;
+        if (need_array_transform)
+        {
+            sensor_world = world_to_array_parent * parent_sensor_transforms[i];
+        }
+        else
+        {
+            sensor_world = parent_sensor_transforms[i];
+        }
+        const tf2::Vector3 &origin = sensor_world.getOrigin();
+        sensor_positions_world(static_cast<int>(i), 0) = origin.x();
+        sensor_positions_world(static_cast<int>(i), 1) = origin.y();
+        sensor_positions_world(static_cast<int>(i), 2) = origin.z();
+    }
 
+    // 将磁铁位置转换到 world 坐标系
+    tf2::Vector3 magnet_pos_parent(magnet_tf.transform.translation.x,
+                                   magnet_tf.transform.translation.y,
+                                   magnet_tf.transform.translation.z);
+    tf2::Vector3 magnet_pos_world;
+    if (need_magnet_transform)
+    {
+        magnet_pos_world = world_to_magnet_parent * magnet_pos_parent;
+    }
+    else
+    {
+        magnet_pos_world = magnet_pos_parent;
+    }
+    Eigen::Vector3d magnet_position(magnet_pos_world.x(), magnet_pos_world.y(), magnet_pos_world.z());
+
+    // 将磁铁方向转换到 world 坐标系
     tf2::Quaternion magnet_q;
     tf2::fromMsg(magnet_tf.transform.rotation, magnet_q);
     tf2::Vector3 base_dir(simulation_.base_direction.x(),
                           simulation_.base_direction.y(),
                           simulation_.base_direction.z());
-    tf2::Vector3 rotated = tf2::quatRotate(magnet_q, base_dir);
-    Eigen::Vector3d magnet_direction(rotated.x(), rotated.y(), rotated.z());
+    tf2::Vector3 rotated_parent = tf2::quatRotate(magnet_q, base_dir);
+    tf2::Vector3 rotated_world;
+    if (need_magnet_transform)
+    {
+        rotated_world = world_to_magnet_parent.getBasis() * rotated_parent;
+    }
+    else
+    {
+        rotated_world = rotated_parent;
+    }
+    Eigen::Vector3d magnet_direction(rotated_world.x(), rotated_world.y(), rotated_world.z());
 
-    Eigen::MatrixXd fields_mT = computeField(sensor_positions,
-                                             magnet_position,
-                                             magnet_direction.normalized(),
-                                             simulation_.dipole_strength);
+    // 在 world 坐标系下计算磁场
+    Eigen::MatrixXd fields_world_mT = computeField(sensor_positions_world,
+                                                     magnet_position,
+                                                     magnet_direction.normalized(),
+                                                     simulation_.dipole_strength);
 
+    // 将 world 坐标系下的磁场转换回每个传感器自身坐标系
     for (size_t i = 0; i < sensors.size(); ++i)
     {
-        // 获取世界坐标系下的磁场
-        Eigen::Vector3d field_world_mT(fields_mT(static_cast<int>(i), 0),
-                                       fields_mT(static_cast<int>(i), 1),
-                                       fields_mT(static_cast<int>(i), 2));
+        // 获取 world 坐标系下的磁场
+        Eigen::Vector3d field_world_mT(fields_world_mT(static_cast<int>(i), 0),
+                                       fields_world_mT(static_cast<int>(i), 1),
+                                       fields_world_mT(static_cast<int>(i), 2));
         
-        // 将磁场从世界坐标系转换到传感器坐标系
-        // getBasis() 返回从传感器坐标系到世界坐标系的旋转矩阵
-        // 需要取逆来得到从世界坐标系到传感器坐标系的旋转
-        tf2::Matrix3x3 R_world_to_sensor = parent_sensor_transforms[i].getBasis().transpose();
-        tf2::Vector3 field_sensor_tf2 = R_world_to_sensor * tf2::Vector3(field_world_mT.x(),
-                                                                          field_world_mT.y(),
-                                                                          field_world_mT.z());
+        // 将磁场从 world 坐标系转换到传感器坐标系
+        // 首先转换到传感器阵列的 parent 坐标系
+        tf2::Vector3 field_parent_tf2;
+        if (need_array_transform)
+        {
+            tf2::Transform array_parent_to_world = world_to_array_parent.inverse();
+            tf2::Vector3 field_world_tf2(field_world_mT.x(), field_world_mT.y(), field_world_mT.z());
+            field_parent_tf2 = array_parent_to_world.getBasis() * field_world_tf2;
+        }
+        else
+        {
+            field_parent_tf2 = tf2::Vector3(field_world_mT.x(), field_world_mT.y(), field_world_mT.z());
+        }
+        
+        // 然后转换到传感器坐标系
+        // getBasis() 返回从传感器坐标系到 parent 坐标系的旋转矩阵
+        // 需要取转置来得到从 parent 坐标系到传感器坐标系的旋转
+        tf2::Matrix3x3 R_parent_to_sensor = parent_sensor_transforms[i].getBasis().transpose();
+        tf2::Vector3 field_sensor_tf2 = R_parent_to_sensor * field_parent_tf2;
         Eigen::Vector3d value_mT(field_sensor_tf2.x(), field_sensor_tf2.y(), field_sensor_tf2.z());
         
         // 叠加噪声

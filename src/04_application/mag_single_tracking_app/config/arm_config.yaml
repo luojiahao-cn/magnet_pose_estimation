@@ -1,6 +1,8 @@
+# 机械臂配置
+# 用于单臂跟踪场景的机械臂配置
 config:
   arms:
-    - name: magnet
+    - name: sensor
       group_name: fr5v6_arm
       end_effector_link: bracket_tcp_link
       reference_frame: world

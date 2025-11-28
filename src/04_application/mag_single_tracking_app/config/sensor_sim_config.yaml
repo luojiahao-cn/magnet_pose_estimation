@@ -1,0 +1,31 @@
+# 传感器仿真配置
+# 用于仿真场景的传感器数据生成配置
+config:
+  topics:
+    raw: ""
+    field: /magnetic/sensor/field
+
+  params:
+    calibration:
+      full_scale_mT: 3.2
+      raw_max: 32767.0
+
+  simulation:
+    update_rate_hz: 60.0
+    magnet_frame:
+      parent: world
+      child: magnet
+    magnet:
+      dipole_strength: 10.0
+      base_direction: [0.0, 0.0, 1.0]
+    noise:
+      enable: false
+      type: gaussian
+      mean: 0.0
+      stddev: 1.0
+      amplitude: 1.0
+
+  tf:
+    enable: true   # 启用 TF 发布
+    publish_rate: 0.0  # 0.0 表示发布静态 TF（仅发布一次）
+
