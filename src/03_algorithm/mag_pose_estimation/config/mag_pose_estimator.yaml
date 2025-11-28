@@ -3,7 +3,9 @@
 config:
   # 坐标系配置
   frames:
-    output_frame: sensor_array  # 输出姿态的参考坐标系
+    output_frame: sensor_array
+    magnet_frame: magnet_estimated
+    enable_tf: true
 
   # 话题配置
   topics:

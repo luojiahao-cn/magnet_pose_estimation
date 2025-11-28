@@ -7,6 +7,7 @@
 #include <sensor_msgs/MagneticField.h>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
+#include <tf2_ros/transform_broadcaster.h>
 
 #include <Eigen/Dense>
 #include <map>
@@ -26,6 +27,8 @@ namespace mag_pose_estimator {
  */
 struct MagPoseEstimatorConfig {
   std::string output_frame;  ///< 输出姿态的参考坐标系
+  std::string magnet_frame;  ///< 磁铁坐标系名称（用于发布 TF）
+  bool enable_tf;  ///< 是否发布 TF
   std::string mag_topic;  ///< 单个传感器数据输入话题
   std::string batch_topic;  ///< 批量传感器数据输入话题
   std::string pose_topic;  ///< 姿态估计结果输出话题
@@ -172,6 +175,8 @@ private:
   std::string batch_topic_;  ///< 批量传感器数据话题
   std::string pose_topic_;  ///< 姿态估计结果话题
   std::string output_frame_;  ///< 输出坐标系
+  std::string magnet_frame_;  ///< 磁铁坐标系名称
+  bool enable_tf_;  ///< 是否发布 TF
 
   EKFParameters ekf_params_;  ///< EKF 估计器参数
   OptimizerParameters optimizer_params_;  ///< 优化器参数
@@ -180,6 +185,7 @@ private:
 
   tf2_ros::Buffer tf_buffer_;  ///< TF 缓冲区
   std::unique_ptr<tf2_ros::TransformListener> tf_listener_;  ///< TF 监听器
+  tf2_ros::TransformBroadcaster tf_broadcaster_;  ///< TF 发布器
 };
 
 }  // 命名空间 mag_pose_estimator

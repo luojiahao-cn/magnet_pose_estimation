@@ -2,6 +2,8 @@
 config:
   frames:
     output_frame: sensor_array
+    magnet_frame: magnet_estimated
+    enable_tf: true
 
   topics:
     mag_field: /magnetic/sensor/field

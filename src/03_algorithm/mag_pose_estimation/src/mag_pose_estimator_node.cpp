@@ -64,13 +64,16 @@ void MagPoseEstimatorNode::loadParameters() {
   mag_topic_ = cfg.mag_topic;
   batch_topic_ = cfg.batch_topic;
   pose_topic_ = cfg.pose_topic;
+  output_frame_ = cfg.output_frame;
+  magnet_frame_ = cfg.magnet_frame;
+  enable_tf_ = cfg.enable_tf;
+  tf_timeout_ = cfg.tf_timeout;
   
-  ROS_INFO("[mag_pose_estimator] 配置加载完成: 估计器类型=%s, 输出坐标系=%s, 数据话题=%s, 结果话题=%s",
-           estimator_type_.c_str(), cfg.output_frame.c_str(),
+  ROS_INFO("[mag_pose_estimator] 配置加载完成: 估计器类型=%s, 输出坐标系=%s, 磁铁坐标系=%s, TF发布=%s, 数据话题=%s, 结果话题=%s",
+           estimator_type_.c_str(), cfg.output_frame.c_str(), magnet_frame_.c_str(),
+           (enable_tf_ ? "启用" : "禁用"),
            (!batch_topic_.empty() ? batch_topic_.c_str() : mag_topic_.c_str()),
            pose_topic_.c_str());
-  output_frame_ = cfg.output_frame;
-  tf_timeout_ = cfg.tf_timeout;
 
   // EKF 参数
   ekf_params_.world_field = cfg.world_field;
@@ -140,6 +143,8 @@ MagPoseEstimatorConfig MagPoseEstimatorNode::loadMagPoseEstimatorConfig(
   const auto frames_ctx = xml::makeContext(context, "frames");
   const auto &frames = xml::requireStructField(node, "frames", context);
   cfg.output_frame = xml::requireStringField(frames, "output_frame", frames_ctx);
+  cfg.magnet_frame = xml::optionalStringField(frames, "magnet_frame", frames_ctx, "magnet_estimated");
+  cfg.enable_tf = xml::optionalBoolField(frames, "enable_tf", frames_ctx, true);
 
   // 解析话题配置
   const auto topics_ctx = xml::makeContext(context, "topics");
@@ -329,8 +334,20 @@ void MagPoseEstimatorNode::publishPose(const geometry_msgs::Pose &pose,
   msg.header.frame_id = output_frame_;
   msg.position = pose.position;
   msg.orientation = pose.orientation;
-  msg.magnetic_strength = estimator_->getMagneticStrength();  // 获取估计的磁矩强度 (Am²)
+  msg.magnetic_strength = estimator_->getMagneticStrength();
   pose_pub_.publish(msg);
+
+  if (enable_tf_) {
+    geometry_msgs::TransformStamped transform;
+    transform.header.stamp = stamp;
+    transform.header.frame_id = output_frame_;
+    transform.child_frame_id = magnet_frame_;
+    transform.transform.translation.x = pose.position.x;
+    transform.transform.translation.y = pose.position.y;
+    transform.transform.translation.z = pose.position.z;
+    transform.transform.rotation = pose.orientation;
+    tf_broadcaster_.sendTransform(transform);
+  }
 }
 
 /**

@@ -2,6 +2,8 @@
 config:
   frames:
     output_frame: world
+    magnet_frame: magnet_estimated
+    enable_tf: true
 
   topics:
     mag_field: /magnetic/sensor/field
@@ -34,8 +36,8 @@ config:
       initial_position: [0.02, 0.02, 0.06]
       initial_direction: [1.0, 0.0, 0.0]
       initial_strength: 10.0
-      strength_delta: 5.0
-      optimize_strength: false
+      strength_delta: 1.0
+      optimize_strength: true
       max_iterations: 100
       function_tolerance: 1.0e-6
       gradient_tolerance: 1.0e-8
