@@ -11,7 +11,6 @@
   
   <!-- 启动跟踪控制节点 -->
   <node name="tracking_control_node" pkg="mag_tracking_control" type="tracking_control_node" output="screen">
-    <remap from="~config" to="config"/>
   </node>
 </launch>
 

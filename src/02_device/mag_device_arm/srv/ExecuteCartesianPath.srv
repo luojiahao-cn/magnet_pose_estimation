@@ -1,0 +1,16 @@
+# 执行笛卡尔路径服务
+# 接受多个位姿点，使用 computeCartesianPath 规划连续轨迹并执行
+
+string arm                          # 机械臂名称
+geometry_msgs/Pose[] waypoints      # 路径点序列（位姿数组）
+float64 step_size                   # 笛卡尔路径步长 (米)，0.0 表示使用默认值
+float64 jump_threshold              # 跳跃阈值，0.0 表示禁用跳跃检测
+float64 velocity_scaling            # 速度缩放因子，0.0 表示使用默认值
+float64 acceleration_scaling        # 加速度缩放因子，0.0 表示使用默认值
+bool execute                        # 是否实际执行（false=仅规划）
+---
+bool success                        # 是否成功
+string message                      # 状态消息
+float64 fraction                    # 路径规划完成度 (0.0-1.0)
+moveit_msgs/RobotTrajectory trajectory  # 规划的轨迹（如果成功）
+

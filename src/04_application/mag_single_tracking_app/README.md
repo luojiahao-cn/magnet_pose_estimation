@@ -19,6 +19,7 @@
 - **mag_device_sensor** (仿真模式): 根据 TF 生成 `mag_core_msgs/MagSensorData` 消息，并发布传感器阵列的静态 TF（从 `bracket_tcp_link` 到 `sensor_array`）
 - **mag_device_magnet**: 负责磁铁运动与 TF 变换（独立运动）
 - **mag_pose_estimator**: 估计磁铁姿态
+- **mag_tracking_control**: 根据磁体位姿估计结果自动控制机械臂跟踪（可选）
 - **mag_viz**: 展示真值与估计结果
 - **mag_core_description**: 提供传感器阵列结构描述
 
@@ -51,6 +52,15 @@ roslaunch mag_single_tracking_app simulation.launch use_rviz:=false
 
 # 指定磁体运动轨迹
 roslaunch mag_single_tracking_app simulation.launch magnet_config:=$(find mag_single_tracking_app)/config/magnet_config.yaml
+
+# 启用跟踪控制（自动跟踪磁铁，仅规划不执行）
+roslaunch mag_single_tracking_app simulation.launch enable_tracking_control:=true enable_execution:=false
+
+# 启用跟踪控制并实际执行运动
+roslaunch mag_single_tracking_app simulation.launch enable_tracking_control:=true enable_execution:=true
+
+# 禁用跟踪控制
+roslaunch mag_single_tracking_app simulation.launch enable_tracking_control:=false
 ```
 
 ## 目录结构
@@ -65,6 +75,7 @@ mag_single_tracking_app/
 │   ├── magnet_config.yaml      # 磁体运动配置
 │   ├── sensor_sim_config.yaml  # 传感器仿真配置
 │   ├── estimator_config.yaml  # 姿态估计器配置
+│   ├── tracking_control_config.yaml  # 跟踪控制配置（机械臂自动跟踪）
 │   ├── magnet_viz_config.yaml # 磁体可视化配置
 │   ├── sensor_array_viz_config.yaml  # 传感器阵列可视化配置
 │   └── sensor_batcher_config.yaml    # 传感器批量打包配置
@@ -134,6 +145,37 @@ config:
 
 定义传感器数据生成的参数，包括更新频率、磁体偶极子参数、噪声模型等。
 
+### 跟踪控制配置 (`config/tracking_control_config.yaml`)
+
+定义机械臂自动跟踪磁铁的控制策略和参数：
+
+```yaml
+config:
+  strategy:
+    type: fixed_offset  # 策略类型：fixed_offset, adaptive_distance
+    fixed_offset:
+      offset:
+        x: 0.0
+        y: 0.0
+        z: 0.05  # 在磁铁上方5cm
+      max_movement_per_step: 0.02  # 每步最大移动距离
+  control:
+    update_rate: 20.0           # 控制循环频率 (Hz)
+    enable_execution: false     # 是否实际执行运动
+    velocity_scaling: 0.2       # 速度缩放因子
+    acceleration_scaling: 0.2   # 加速度缩放因子
+```
+
+**跟踪控制功能**：
+- 订阅 `/magnetic/pose_estimated` 话题获取磁体位姿估计结果
+- 根据配置的策略计算目标传感器位姿
+- 调用 `/mag_device_arm/set_end_effector_pose` 服务控制机械臂
+- 发布 `/tracking_control/target_pose` 话题用于可视化
+
+**支持的策略**：
+- `fixed_offset`: 固定偏移策略，保持传感器相对于磁铁的固定偏移
+- `adaptive_distance`: 自适应距离策略，根据磁场强度自动调整距离
+
 ### 其他配置
 
 - `estimator_config.yaml`: 姿态估计器配置
@@ -150,6 +192,7 @@ config:
 - `mag_device_magnet`: 磁体运动仿真
 - `mag_device_arm`: 机械臂控制
 - `mag_pose_estimator`: 姿态估计算法
+- `mag_tracking_control`: 跟踪控制算法（机械臂自动跟踪）
 - `mag_viz`: 可视化工具
 - `rosparam_shortcuts`: ROS 参数快捷工具
 - `fr5v6_single_moveit_config`: MoveIt 配置（Gazebo 仿真）
@@ -194,4 +237,24 @@ rosservice call /mag_device_arm/set_end_effector_pose \
 ### 调整传感器阵列偏移
 
 编辑 `config/sensor_array.yaml` 中的 `frames.pose` 字段，修改传感器阵列相对于工具末端的位置和姿态。
+
+### 使用跟踪控制
+
+跟踪控制功能可以根据磁体位姿估计结果自动控制机械臂跟踪磁铁：
+
+```bash
+# 启用跟踪控制（仅规划，不执行）
+roslaunch mag_single_tracking_app simulation.launch enable_tracking_control:=true enable_execution:=false
+
+# 启用跟踪控制并实际执行运动
+roslaunch mag_single_tracking_app simulation.launch enable_tracking_control:=true enable_execution:=true
+```
+
+跟踪控制节点会：
+1. 订阅 `/magnetic/pose_estimated` 获取磁体位姿估计
+2. 根据配置的策略计算目标传感器位姿
+3. 调用机械臂服务执行运动（如果 `enable_execution:=true`）
+4. 发布 `/tracking_control/target_pose` 用于可视化
+
+可以通过修改 `config/tracking_control_config.yaml` 来调整跟踪策略和参数。
 

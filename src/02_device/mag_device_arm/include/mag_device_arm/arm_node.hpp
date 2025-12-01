@@ -2,6 +2,7 @@
 
 #include <mag_device_arm/ExecuteNamedTarget.h>
 #include <mag_device_arm/SetEndEffectorPose.h>
+#include <mag_device_arm/ExecuteCartesianPath.h>
 
 #include <XmlRpcValue.h>
 #include <geometry_msgs/Pose.h>
@@ -74,6 +75,9 @@ private:
     bool handleExecuteNamedTarget(mag_device_arm::ExecuteNamedTarget::Request &req,
                                   mag_device_arm::ExecuteNamedTarget::Response &res);
 
+    bool handleExecuteCartesianPath(mag_device_arm::ExecuteCartesianPath::Request &req,
+                                    mag_device_arm::ExecuteCartesianPath::Response &res);
+
     moveit::planning_interface::MoveGroupInterface *getMoveGroup(const std::string &arm_name,
                                                                   std::string &error_message);
 
@@ -86,6 +90,7 @@ private:
 
     ros::ServiceServer set_pose_srv_;
     ros::ServiceServer execute_named_srv_;
+    ros::ServiceServer execute_cartesian_path_srv_;
 
     tf2_ros::StaticTransformBroadcaster static_broadcaster_;
 };

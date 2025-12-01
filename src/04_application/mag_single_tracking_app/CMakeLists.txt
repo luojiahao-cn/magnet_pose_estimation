@@ -16,6 +16,7 @@ find_package(catkin REQUIRED COMPONENTS
   mag_device_magnet
   mag_device_arm
   mag_pose_estimator
+  mag_tracking_control
   mag_viz
   rosparam_shortcuts
 )
@@ -34,6 +35,7 @@ catkin_package(
     mag_device_magnet
     mag_device_arm
     mag_pose_estimator
+    mag_tracking_control
     mag_viz
     rosparam_shortcuts
 )

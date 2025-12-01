@@ -26,6 +26,7 @@
   <depend>mag_device_magnet</depend>
   <depend>mag_device_arm</depend>
   <depend>mag_pose_estimator</depend>
+  <depend>mag_tracking_control</depend>
   <depend>mag_viz</depend>
   <depend>rosparam_shortcuts</depend>
 

@@ -24,12 +24,14 @@ add_service_files(
 	FILES
 		SetEndEffectorPose.srv
 		ExecuteNamedTarget.srv
+		ExecuteCartesianPath.srv
 )
 
 generate_messages(
 	DEPENDENCIES
 		geometry_msgs
 		std_msgs
+		moveit_msgs
 )
 
 catkin_package(

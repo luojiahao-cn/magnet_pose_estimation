@@ -9,6 +9,10 @@
   - `fixed_offset`：固定偏移策略（最简单）
   - `adaptive_distance`：自适应距离策略（基于磁场强度）
   - 预留接口，方便后续添加 Fisher 信息矩阵等高级算法
+- **连续轨迹模式**：支持平滑连续的机械臂运动，避免分段运动的不连续性
+  - 使用 MoveIt 的笛卡尔路径规划 (`computeCartesianPath`)
+  - 轨迹缓冲机制，累积多个目标点后执行连续轨迹
+  - 异步轨迹执行，不阻塞控制循环
 
 ## 架构设计
 
@@ -80,6 +84,9 @@ config:
 - `strategy/adaptive_distance/*`：自适应距离策略参数
 - `control/enable_execution`：是否实际执行运动
 - `control/update_rate`：控制循环频率
+- `control/use_continuous_trajectory`：是否启用连续轨迹模式（推荐用于平滑跟踪）
+- `control/trajectory_buffer_size`：轨迹缓冲大小（累积多少个点后执行）
+- `control/cartesian_path_step_size`：笛卡尔路径步长（越小越平滑）
 
 ## 接口说明
 
@@ -120,10 +127,51 @@ class MyNewStrategy : public TrackingControlStrategyBase {
 3. **更新配置文件**：
 在配置文件中添加新策略的参数。
 
+## 连续轨迹模式
+
+### 为什么需要连续轨迹模式？
+
+传统的控制方式每次都会独立规划并执行一条路径，导致机械臂运动不连续、分段明显。连续轨迹模式通过以下方式实现平滑运动：
+
+1. **轨迹缓冲**：控制循环将目标位姿添加到缓冲队列，而不是立即执行
+2. **批量规划**：当缓冲中累积足够多的点（默认5个）时，使用 MoveIt 的 `computeCartesianPath` 将这些点组合成一条连续的笛卡尔路径
+3. **异步执行**：轨迹执行在独立线程中进行，不阻塞控制循环
+
+### 启用连续轨迹模式
+
+在配置文件中设置：
+
+```yaml
+config:
+  control:
+    use_continuous_trajectory: true  # 启用连续轨迹模式
+    trajectory_buffer_size: 5         # 累积5个点后执行
+    cartesian_path_step_size: 0.01   # 笛卡尔路径步长（米）
+    move_group_name: fr5v6_arm       # MoveIt 规划组名称
+    end_effector_link: bracket_tcp_link  # 末端执行器链接
+    reference_frame: world           # 参考坐标系
+```
+
+### 工作原理
+
+1. **控制循环**（20Hz）：计算目标位姿并添加到缓冲队列
+2. **轨迹执行线程**（10Hz）：检查缓冲队列，当有足够点时：
+   - 取出缓冲中的点
+   - 使用 `computeCartesianPath` 规划连续路径
+   - 执行轨迹
+3. **平滑效果**：多个点被组合成一条连续轨迹，机械臂运动更加平滑
+
+### 参数调优
+
+- **`trajectory_buffer_size`**：较大的值会产生更长的连续轨迹，但会增加延迟
+- **`cartesian_path_step_size`**：较小的值会产生更平滑的轨迹，但计算时间更长
+- **`update_rate`**：控制循环频率，影响目标位姿的更新速度
+
 ## 依赖
 
 - `mag_core_msgs`：消息定义
-- `mag_device_arm`：机械臂控制接口
+- `mag_device_arm`：机械臂控制接口（用于非连续模式）
+- `moveit_core`, `moveit_ros_planning_interface`：MoveIt 规划接口（用于连续轨迹模式）
 - `tf2`, `tf2_ros`：坐标变换
 - `Eigen3`：矩阵运算
 

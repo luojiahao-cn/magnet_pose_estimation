@@ -55,6 +55,11 @@ roslaunch mag_device_arm dual_arm.launch
 - `~/execute_named_target` (`mag_device_arm/ExecuteNamedTarget`)
 	- 输入：`arm`、`target`（配置中的别名）、可选速度/加速度缩放、是否执行。
 	- 功能：调用 MoveIt Named Target。
+- `~/execute_cartesian_path` (`mag_device_arm/ExecuteCartesianPath`) **新增**
+	- 输入：`arm`、`waypoints`（位姿数组）、`step_size`、`jump_threshold`、可选速度/加速度缩放、是否执行。
+	- 功能：使用 MoveIt 的 `computeCartesianPath` 规划连续笛卡尔路径并执行，实现平滑连续运动。
+	- 返回：`success`、`message`、`fraction`（路径规划完成度）、`trajectory`（规划的轨迹）。
+	- 用途：适用于需要平滑连续跟踪的场景，如磁铁跟踪、轨迹跟踪等。
 
 ## 工具配置
 

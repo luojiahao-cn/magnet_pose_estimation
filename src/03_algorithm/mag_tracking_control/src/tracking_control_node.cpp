@@ -15,6 +15,8 @@ TrackingControlNode::TrackingControlNode(ros::NodeHandle nh, ros::NodeHandle pnh
     , tf_buffer_(ros::Duration(10.0))
     , tf_listener_(tf_buffer_)
     , has_magnet_pose_(false)
+    , is_executing_trajectory_(false)
+    , should_stop_thread_(false)
 {
     loadParameters();
     
@@ -52,6 +54,27 @@ TrackingControlNode::TrackingControlNode(ros::NodeHandle nh, ros::NodeHandle pnh
         ROS_WARN("[tracking_control] 机械臂服务不可用，将不会执行实际运动");
     }
     
+    // 根据配置选择使用连续轨迹模式还是服务模式
+    if (config_.use_continuous_trajectory) {
+        // 初始化笛卡尔路径服务客户端
+        cartesian_path_service_name_ = config_.cartesian_path_service_name;
+        
+        cartesian_path_client_ = nh_.serviceClient<mag_device_arm::ExecuteCartesianPath>(
+            cartesian_path_service_name_
+        );
+        ROS_INFO("[tracking_control] 等待笛卡尔路径服务: %s", cartesian_path_service_name_.c_str());
+        if (!cartesian_path_client_.waitForExistence(ros::Duration(5.0))) {
+            ROS_WARN("[tracking_control] 笛卡尔路径服务不可用，连续轨迹模式将无法工作");
+        } else {
+            ROS_INFO("[tracking_control] 使用连续轨迹模式（通过服务接口）");
+        }
+        
+        // 启动轨迹执行线程
+        should_stop_thread_ = false;
+        trajectory_execution_thread_ = std::thread(&TrackingControlNode::trajectoryExecutionThread, this);
+        ROS_INFO("[tracking_control] 轨迹执行线程已启动");
+    }
+    
     // 启动控制循环
     if (config_.update_rate > 0) {
         control_timer_ = nh_.createTimer(
@@ -60,6 +83,16 @@ TrackingControlNode::TrackingControlNode(ros::NodeHandle nh, ros::NodeHandle pnh
             this
         );
         ROS_INFO("[tracking_control] 控制循环频率: %.1f Hz", config_.update_rate);
+    }
+}
+
+TrackingControlNode::~TrackingControlNode() {
+    // 停止轨迹执行线程
+    if (config_.use_continuous_trajectory) {
+        should_stop_thread_.store(true);
+        if (trajectory_execution_thread_.joinable()) {
+            trajectory_execution_thread_.join();
+        }
     }
 }
 
@@ -76,10 +109,16 @@ void TrackingControlNode::loadParameters() {
     // 解析配置
     config_ = loadTrackingControlConfig(config, ns + "/config");
     
+    // 连续轨迹模式不再需要 move_group_name 等信息，因为使用服务接口
+    
     ROS_INFO("[tracking_control] 配置加载完成");
     ROS_INFO("[tracking_control] 策略类型: %s", config_.strategy_type.c_str());
     ROS_INFO("[tracking_control] 传感器机械臂: %s", config_.sensor_arm_name.c_str());
     ROS_INFO("[tracking_control] 控制频率: %.1f Hz", config_.update_rate);
+    if (config_.use_continuous_trajectory) {
+        ROS_INFO("[tracking_control] 连续轨迹模式: 启用");
+        ROS_INFO("[tracking_control] 轨迹缓冲大小: %zu", config_.trajectory_buffer_size);
+    }
 }
 
 std::unique_ptr<TrackingControlStrategyBase> TrackingControlNode::createStrategy(const std::string &type) {
@@ -164,8 +203,14 @@ void TrackingControlNode::controlLoop(const ros::TimerEvent &/*event*/) {
     
     // 执行运动
     if (config_.enable_execution) {
-        if (executePose(output.target_pose)) {
-            ROS_DEBUG("[tracking_control] 成功执行目标位姿，质量评分: %.3f", output.quality_score);
+        if (config_.use_continuous_trajectory) {
+            // 连续轨迹模式：添加到缓冲队列
+            addToTrajectoryBuffer(output.target_pose);
+        } else {
+            // 旧模式：直接执行
+            if (executePose(output.target_pose)) {
+                ROS_DEBUG("[tracking_control] 成功执行目标位姿，质量评分: %.3f", output.quality_score);
+            }
         }
     }
 }
@@ -216,9 +261,86 @@ bool TrackingControlNode::executePose(const geometry_msgs::Pose &target_pose) {
     }
 }
 
+void TrackingControlNode::addToTrajectoryBuffer(const geometry_msgs::Pose &target_pose) {
+    std::lock_guard<std::mutex> lock(trajectory_buffer_mutex_);
+    
+    // 限制缓冲大小，避免内存无限增长
+    if (trajectory_buffer_.size() >= config_.trajectory_buffer_size * 2) {
+        ROS_WARN_THROTTLE(1.0, "[tracking_control] 轨迹缓冲已满，丢弃最旧的点");
+        trajectory_buffer_.pop();
+    }
+    
+    trajectory_buffer_.push(target_pose);
+}
+
+void TrackingControlNode::executeContinuousTrajectory() {
+    if (!cartesian_path_client_.exists() || is_executing_trajectory_.load()) {
+        return;
+    }
+    
+    // 从缓冲中取出点
+    std::vector<geometry_msgs::Pose> waypoints;
+    {
+        std::lock_guard<std::mutex> lock(trajectory_buffer_mutex_);
+        
+        if (trajectory_buffer_.size() < config_.trajectory_buffer_size) {
+            // 缓冲中的点还不够，等待更多点
+            return;
+        }
+        
+        // 取出足够的点
+        while (!trajectory_buffer_.empty() && waypoints.size() < config_.trajectory_buffer_size) {
+            waypoints.push_back(trajectory_buffer_.front());
+            trajectory_buffer_.pop();
+        }
+    }
+    
+    if (waypoints.empty()) {
+        return;
+    }
+    
+    // 调用笛卡尔路径服务
+    is_executing_trajectory_.store(true);
+    
+    mag_device_arm::ExecuteCartesianPath srv;
+    srv.request.arm = config_.sensor_arm_name;
+    srv.request.waypoints = waypoints;
+    srv.request.step_size = config_.cartesian_path_step_size;
+    srv.request.jump_threshold = config_.cartesian_path_jump_threshold;
+    srv.request.velocity_scaling = config_.velocity_scaling;
+    srv.request.acceleration_scaling = config_.acceleration_scaling;
+    srv.request.execute = true;
+    
+    if (cartesian_path_client_.call(srv)) {
+        if (srv.response.success) {
+            ROS_DEBUG("[tracking_control] 成功执行连续轨迹，包含 %zu 个点，完成度: %.2f%%", 
+                     waypoints.size(), srv.response.fraction * 100.0);
+        } else {
+            ROS_WARN("[tracking_control] 笛卡尔路径执行失败: %s (完成度: %.2f%%)", 
+                    srv.response.message.c_str(), srv.response.fraction * 100.0);
+        }
+    } else {
+        ROS_WARN_THROTTLE(1.0, "[tracking_control] 调用笛卡尔路径服务失败");
+    }
+    
+    is_executing_trajectory_.store(false);
+}
+
+void TrackingControlNode::trajectoryExecutionThread() {
+    ros::Rate rate(10.0);  // 10 Hz 检查频率
+    
+    while (ros::ok() && !should_stop_thread_.load()) {
+        if (config_.enable_execution && !is_executing_trajectory_.load()) {
+            executeContinuousTrajectory();
+        }
+        rate.sleep();
+    }
+}
+
 void TrackingControlNode::run() {
     ROS_INFO("[tracking_control] 节点已启动，开始控制循环");
     ros::spin();
+    // 析构函数会处理线程清理
 }
 
 }  // namespace mag_tracking_control

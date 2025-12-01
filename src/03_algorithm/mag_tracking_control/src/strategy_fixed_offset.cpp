@@ -5,12 +5,14 @@
 
 namespace mag_tracking_control {
 
+// 固定偏移策略构造函数
 FixedOffsetStrategy::FixedOffsetStrategy()
     : offset_(0.0, 0.0, 0.05)
     , max_movement_per_step_(0.02)
 {
 }
 
+// 初始化固定偏移策略
 bool FixedOffsetStrategy::initialize(const Eigen::Vector3d &offset, double max_movement_per_step) {
     offset_ = offset;
     max_movement_per_step_ = max_movement_per_step;
@@ -18,6 +20,7 @@ bool FixedOffsetStrategy::initialize(const Eigen::Vector3d &offset, double max_m
     return true;
 }
 
+// 计算目标位姿
 bool FixedOffsetStrategy::computeTargetPose(
     const TrackingControlInput &input,
     TrackingControlOutput &output
@@ -49,6 +52,7 @@ bool FixedOffsetStrategy::computeTargetPose(
     return true;
 }
 
+// 限制移动距离
 void FixedOffsetStrategy::limitMovement(
     const geometry_msgs::Point &current_pos,
     geometry_msgs::Point &target_pos
@@ -64,6 +68,7 @@ void FixedOffsetStrategy::limitMovement(
     }
 }
 
+// 计算距离
 double FixedOffsetStrategy::computeDistance(
     const geometry_msgs::Point &a,
     const geometry_msgs::Point &b

@@ -50,6 +50,8 @@ TrackingControlConfig loadTrackingControlConfig(const XmlRpc::XmlRpcValue &root,
     const auto services_ctx = xml::makeContext(context, "services");
     const auto &services = xml::requireStructField(node, "services", context);
     cfg.arm_service_name = xml::requireStringField(services, "arm_service", services_ctx);
+    cfg.cartesian_path_service_name = xml::optionalStringField(
+        services, "cartesian_path_service", services_ctx, "/mag_device_arm/execute_cartesian_path");
 
     // 解析坐标系配置
     const auto frames_ctx = xml::makeContext(context, "frames");
@@ -70,6 +72,17 @@ TrackingControlConfig loadTrackingControlConfig(const XmlRpc::XmlRpcValue &root,
     cfg.acceleration_scaling = xml::readNumber(
         xml::requireMember(control, "acceleration_scaling", control_ctx),
         control_ctx + "/acceleration_scaling");
+    
+    // 解析连续轨迹参数（可选）
+    cfg.use_continuous_trajectory = xml::optionalBoolField(control, "use_continuous_trajectory", control_ctx, false);
+    if (cfg.use_continuous_trajectory) {
+        cfg.trajectory_buffer_size = static_cast<size_t>(
+            xml::optionalNumberField(control, "trajectory_buffer_size", control_ctx, 5.0));
+        cfg.cartesian_path_step_size = xml::optionalNumberField(
+            control, "cartesian_path_step_size", control_ctx, 0.01);
+        cfg.cartesian_path_jump_threshold = xml::optionalNumberField(
+            control, "cartesian_path_jump_threshold", control_ctx, 0.0);
+    }
 
     // 根据策略类型解析相应参数
     if (lower_type == "fixed_offset") {

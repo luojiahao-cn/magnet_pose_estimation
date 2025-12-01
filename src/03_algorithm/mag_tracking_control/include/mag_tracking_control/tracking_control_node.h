@@ -6,6 +6,7 @@
 
 #include <mag_core_msgs/MagnetPose.h>
 #include <mag_device_arm/SetEndEffectorPose.h>
+#include <mag_device_arm/ExecuteCartesianPath.h>
 
 #include <ros/ros.h>
 #include <tf2_ros/buffer.h>
@@ -16,6 +17,10 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <queue>
+#include <mutex>
+#include <thread>
+#include <atomic>
 
 namespace mag_tracking_control {
 
@@ -27,13 +32,20 @@ struct TrackingControlConfig {
     std::string sensor_arm_name;            ///< 传感器机械臂名称
     std::string magnet_pose_topic;          ///< 磁铁位姿估计话题
     std::string target_pose_topic;          ///< 目标位姿发布话题
-    std::string arm_service_name;           ///< 机械臂服务名称
+    std::string arm_service_name;           ///< 机械臂服务名称（用于非连续模式）
+    std::string cartesian_path_service_name; ///< 笛卡尔路径服务名称（用于连续轨迹模式）
     std::string sensor_frame;               ///< 传感器阵列坐标系名称
     std::string magnet_frame;               ///< 磁铁坐标系名称
     double update_rate;                     ///< 控制循环频率 (Hz)
     bool enable_execution;                  ///< 是否实际执行运动
     double velocity_scaling;                ///< 速度缩放因子
     double acceleration_scaling;            ///< 加速度缩放因子
+    
+    // 连续轨迹参数
+    bool use_continuous_trajectory;         ///< 是否使用连续轨迹模式
+    size_t trajectory_buffer_size;          ///< 轨迹缓冲大小（累积多少个点后执行）
+    double cartesian_path_step_size;        ///< 笛卡尔路径步长 (米)
+    double cartesian_path_jump_threshold;   ///< 笛卡尔路径跳跃阈值
     
     // 固定偏移策略参数
     Eigen::Vector3d fixed_offset;
@@ -58,6 +70,11 @@ struct TrackingControlConfig {
 class TrackingControlNode {
 public:
     TrackingControlNode(ros::NodeHandle nh, ros::NodeHandle pnh);
+    
+    /**
+     * @brief 析构函数，确保线程正确停止
+     */
+    ~TrackingControlNode();
     
     /**
      * @brief 运行控制循环
@@ -91,9 +108,24 @@ private:
     bool getCurrentSensorPose(geometry_msgs::Pose &pose);
     
     /**
-     * @brief 执行传感器位姿运动
+     * @brief 执行传感器位姿运动（旧方法，用于兼容）
      */
     bool executePose(const geometry_msgs::Pose &target_pose);
+    
+    /**
+     * @brief 添加目标位姿到轨迹缓冲
+     */
+    void addToTrajectoryBuffer(const geometry_msgs::Pose &target_pose);
+    
+    /**
+     * @brief 执行连续轨迹（使用笛卡尔路径规划）
+     */
+    void executeContinuousTrajectory();
+    
+    /**
+     * @brief 轨迹执行线程函数
+     */
+    void trajectoryExecutionThread();
 
     ros::NodeHandle nh_;                    ///< 全局节点句柄
     ros::NodeHandle pnh_;                   ///< 私有节点句柄
@@ -105,7 +137,8 @@ private:
     ros::Publisher target_pose_pub_;        ///< 目标位姿发布者（用于可视化）
     ros::Timer control_timer_;              ///< 控制循环定时器
     
-    ros::ServiceClient arm_service_client_; ///< 机械臂服务客户端
+    ros::ServiceClient arm_service_client_; ///< 机械臂服务客户端（用于非连续模式）
+    ros::ServiceClient cartesian_path_client_; ///< 笛卡尔路径服务客户端（用于连续轨迹模式）
     
     tf2_ros::Buffer tf_buffer_;             ///< TF缓冲
     tf2_ros::TransformListener tf_listener_; ///< TF监听器
@@ -115,6 +148,14 @@ private:
     bool has_magnet_pose_;                   ///< 是否已收到磁铁位姿
     
     std::vector<Eigen::Vector3d> last_field_strengths_;  ///< 上次的磁场强度数据
+    
+    // 连续轨迹相关
+    std::queue<geometry_msgs::Pose> trajectory_buffer_;  ///< 轨迹点缓冲队列
+    std::mutex trajectory_buffer_mutex_;                  ///< 轨迹缓冲互斥锁
+    std::atomic<bool> is_executing_trajectory_;           ///< 是否正在执行轨迹
+    std::thread trajectory_execution_thread_;             ///< 轨迹执行线程
+    std::atomic<bool> should_stop_thread_;                ///< 线程停止标志
+    std::string cartesian_path_service_name_;              ///< 笛卡尔路径服务名称
 };
 
 }  // namespace mag_tracking_control

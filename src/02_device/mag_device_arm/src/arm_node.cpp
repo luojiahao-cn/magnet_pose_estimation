@@ -197,6 +197,7 @@ void ArmNode::start()
 
     set_pose_srv_ = pnh_.advertiseService("set_end_effector_pose", &ArmNode::handleSetPose, this);
     execute_named_srv_ = pnh_.advertiseService("execute_named_target", &ArmNode::handleExecuteNamedTarget, this);
+    execute_cartesian_path_srv_ = pnh_.advertiseService("execute_cartesian_path", &ArmNode::handleExecuteCartesianPath, this);
 
     ROS_INFO_STREAM("[mag_device_arm] 已初始化 " << arms_.size() << " 个机械臂接口");
 }
@@ -322,6 +323,81 @@ bool ArmNode::handleExecuteNamedTarget(mag_device_arm::ExecuteNamedTarget::Reque
     res.success = true;
     res.message = req.execute ? "规划并执行成功" : "规划成功";
     group->clearPoseTargets();
+    return true;
+}
+
+bool ArmNode::handleExecuteCartesianPath(mag_device_arm::ExecuteCartesianPath::Request &req,
+                                         mag_device_arm::ExecuteCartesianPath::Response &res)
+{
+    // 使用 MoveIt 的 computeCartesianPath 规划并可选执行连续轨迹
+    std::string error;
+    auto *group = getMoveGroup(req.arm, error);
+    if (!group)
+    {
+        res.success = false;
+        res.message = error;
+        res.fraction = 0.0;
+        return true;
+    }
+
+    if (req.waypoints.empty())
+    {
+        res.success = false;
+        res.message = "路径点序列为空";
+        res.fraction = 0.0;
+        return true;
+    }
+
+    ArmHandle &handle = arms_.at(req.arm);
+    std::lock_guard<std::mutex> lock(handle.mutex);
+
+    group->setStartStateToCurrentState();
+    group->setPoseReferenceFrame(handle.config.reference_frame);
+    group->setEndEffectorLink(handle.config.end_effector_link);
+
+    const double vel = req.velocity_scaling > 0.0 ? req.velocity_scaling : handle.config.default_velocity;
+    const double acc = req.acceleration_scaling > 0.0 ? req.acceleration_scaling : handle.config.default_acceleration;
+    group->setMaxVelocityScalingFactor(vel);
+    group->setMaxAccelerationScalingFactor(acc);
+
+    // 设置默认步长（如果未指定）
+    const double step_size = req.step_size > 0.0 ? req.step_size : 0.01;
+    const double jump_threshold = req.jump_threshold >= 0.0 ? req.jump_threshold : 0.0;
+
+    // 计算笛卡尔路径
+    moveit_msgs::RobotTrajectory trajectory;
+    double fraction = group->computeCartesianPath(
+        req.waypoints,
+        step_size,
+        jump_threshold,
+        trajectory
+    );
+
+    res.fraction = fraction;
+    res.trajectory = trajectory;
+
+    if (fraction < 0.5)
+    {
+        res.success = false;
+        res.message = "笛卡尔路径规划失败，完成度: " + std::to_string(fraction * 100.0) + "%";
+        return true;
+    }
+
+    if (req.execute)
+    {
+        moveit::planning_interface::MoveGroupInterface::Plan plan;
+        plan.trajectory_ = trajectory;
+        auto exec_result = group->execute(plan);
+        if (exec_result != moveit::planning_interface::MoveItErrorCode::SUCCESS)
+        {
+            res.success = false;
+            res.message = "轨迹执行失败，MoveIt 错误码=" + std::to_string(exec_result.val);
+            return true;
+        }
+    }
+
+    res.success = true;
+    res.message = req.execute ? "笛卡尔路径规划并执行成功" : "笛卡尔路径规划成功";
     return true;
 }
 
