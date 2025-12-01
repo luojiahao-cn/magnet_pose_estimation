@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <launch>
-  <!-- 设置日志级别为 DEBUG（可选，取消注释以启用） -->
-  <!-- <env name="ROSCONSOLE_MIN_SEVERITY" value="DEBUG"/> -->
+  <!-- 设置全局日志级别为 WARN，减少终端输出 -->
+  <env name="ROSCONSOLE_MIN_SEVERITY" value="WARN"/>
   
   <!-- 参数配置 -->
   <arg name="sensor_array_config" default="$(find mag_single_tracking_app)/config/sensor_array.yaml"/>
@@ -18,35 +18,39 @@
   <arg name="use_rviz" default="true"/>
 
   <!-- 启动 Gazebo 和 MoveIt 配置 -->
-  <include file="$(find fr5v6_single_moveit_config)/launch/demo_gazebo_with_tool.launch">
+  <include file="$(find mag_device_arm)/launch/gazebo_moveit.launch">
     <arg name="tool_name" value="magnetic_sensor_bracket" />
   </include>
 
   <!-- 机械臂控制节点 -->
   <node pkg="mag_device_arm" type="arm_node" name="mag_device_arm" output="screen">
+    <env name="ROSCONSOLE_MIN_SEVERITY" value="WARN"/>
     <rosparam command="load" file="$(arg arm_config)"/>
   </node>
 
   <!-- 磁体设备节点：生成磁体运动轨迹和 TF -->
   <node pkg="mag_device_magnet" type="magnet_main" name="mag_device_magnet" output="screen">
+    <env name="ROSCONSOLE_MIN_SEVERITY" value="WARN"/>
     <rosparam command="load" file="$(arg magnet_config)"/>
   </node>
 
   <!-- 传感器仿真节点：根据 TF 生成磁传感器数据，并发布传感器阵列的静态 TF -->
   <!-- 注意：sensor_sim_node 会发布从 bracket_tcp_link 到 sensor_array 的静态 TF（根据 sensor_array.yaml 配置） -->
   <node pkg="mag_device_sensor" type="sensor_sim_node" name="mag_device_sensor_sim" output="screen">
+    <env name="ROSCONSOLE_MIN_SEVERITY" value="WARN"/>
     <rosparam command="load" file="$(arg sensor_array_config)" ns="array"/>
     <rosparam command="load" file="$(arg sensor_sim_config)"/>
   </node>
 
   <!-- 传感器批量打包节点：将单个传感器消息打包成批量数据 -->
   <node pkg="mag_device_sensor" type="sensor_array_batcher_node" name="sensor_array_batcher" output="screen">
+    <env name="ROSCONSOLE_MIN_SEVERITY" value="WARN"/>
     <rosparam command="load" file="$(arg sensor_batcher_config)"/>
   </node>
 
   <!-- 姿态估计节点：估计磁体姿态 -->
   <node pkg="mag_pose_estimator" type="mag_pose_estimator_node" name="mag_pose_estimator" output="screen">
-    <env name="ROSCONSOLE_MIN_SEVERITY" value="DEBUG"/>
+    <env name="ROSCONSOLE_MIN_SEVERITY" value="WARN"/>
     <rosparam command="load" file="$(arg estimator_config)"/>
   </node>
 
@@ -58,16 +62,19 @@
     <param name="tracking_control_node/config/control/enable_execution" value="$(arg enable_execution)"/>
     <!-- 启动跟踪控制节点 -->
     <node name="tracking_control_node" pkg="mag_tracking_control" type="tracking_control_node" output="screen">
+      <env name="ROSCONSOLE_MIN_SEVERITY" value="WARN"/>
     </node>
   </group>
 
   <!-- 可视化节点：展示真值和估计结果 -->
   <node pkg="mag_viz" type="magnet_viz_node" name="magnet_viz" output="screen">
+    <env name="ROSCONSOLE_MIN_SEVERITY" value="WARN"/>
     <rosparam command="load" file="$(arg magnet_viz_config)"/>
   </node>
 
   <!-- 传感器阵列可视化节点 -->
   <node pkg="mag_viz" type="sensor_array_viz_node" name="sensor_array_viz" output="screen">
+    <env name="ROSCONSOLE_MIN_SEVERITY" value="WARN"/>
     <rosparam command="load" file="$(arg sensor_array_viz_config)"/>
     <rosparam command="load" file="$(arg sensor_array_config)" ns="array"/>
   </node>
