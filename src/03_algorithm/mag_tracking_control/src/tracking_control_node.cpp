@@ -1,6 +1,8 @@
 #include "mag_tracking_control/tracking_control_node.h"
 #include "mag_tracking_control/tracking_control_config_loader.h"
 
+#include <mag_core_utils/logger_utils.hpp>
+
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf2/LinearMath/Quaternion.h>
 #include <ros/console.h>
@@ -26,7 +28,11 @@ TrackingControlNode::TrackingControlNode(ros::NodeHandle nh, ros::NodeHandle pnh
         ROS_ERROR("[tracking_control] 策略初始化失败");
         throw std::runtime_error("策略初始化失败");
     }
-    ROS_INFO("[tracking_control] 使用策略: %s", strategy_->name().c_str());
+    
+    // 使用统一的日志格式化工具整合初始化信息
+    namespace logger = mag_core_utils::logger;
+    std::vector<std::pair<std::string, std::string>> init_items;
+    init_items.emplace_back("使用策略", strategy_->name());
     
     // 订阅磁铁位姿
     if (!config_.magnet_pose_topic.empty()) {
@@ -36,22 +42,31 @@ TrackingControlNode::TrackingControlNode(ros::NodeHandle nh, ros::NodeHandle pnh
             &TrackingControlNode::magnetPoseCallback,
             this
         );
-        ROS_INFO("[tracking_control] 订阅磁铁位姿: %s", config_.magnet_pose_topic.c_str());
+        init_items.emplace_back("订阅磁铁位姿", config_.magnet_pose_topic);
     }
     
     // 发布目标位姿（用于可视化）
     target_pose_pub_ = nh_.advertise<geometry_msgs::PoseStamped>(
         config_.target_pose_topic, 10
     );
-    ROS_INFO("[tracking_control] 发布目标位姿话题: %s", config_.target_pose_topic.c_str());
+    init_items.emplace_back("发布目标位姿话题", config_.target_pose_topic);
     
     // 初始化机械臂服务客户端
     arm_service_client_ = nh_.serviceClient<mag_device_arm::SetEndEffectorPose>(
         config_.arm_service_name
     );
-    ROS_INFO("[tracking_control] 等待机械臂服务: %s", config_.arm_service_name.c_str());
-    if (!arm_service_client_.waitForExistence(ros::Duration(5.0))) {
-        ROS_WARN("[tracking_control] 机械臂服务不可用，将不会执行实际运动");
+    bool arm_service_available = arm_service_client_.waitForExistence(ros::Duration(5.0));
+    if (arm_service_available) {
+        init_items.emplace_back("机械臂服务", config_.arm_service_name + " (可用)");
+    } else {
+        // 服务暂时不可用，记录状态并继续等待（不阻塞）
+        init_items.emplace_back("机械臂服务", config_.arm_service_name + " (等待中...)");
+        ROS_INFO("[tracking_control] 等待机械臂服务: %s", config_.arm_service_name.c_str());
+        // 在后台等待服务可用（不阻塞构造函数）
+        std::thread([this, name = config_.arm_service_name]() {
+            arm_service_client_.waitForExistence();
+            ROS_INFO("[tracking_control] 机械臂服务已可用: %s", name.c_str());
+        }).detach();
     }
     
     // 根据配置选择使用连续轨迹模式还是服务模式
@@ -62,17 +77,26 @@ TrackingControlNode::TrackingControlNode(ros::NodeHandle nh, ros::NodeHandle pnh
         cartesian_path_client_ = nh_.serviceClient<mag_device_arm::ExecuteCartesianPath>(
             cartesian_path_service_name_
         );
-        ROS_INFO("[tracking_control] 等待笛卡尔路径服务: %s", cartesian_path_service_name_.c_str());
-        if (!cartesian_path_client_.waitForExistence(ros::Duration(5.0))) {
-            ROS_WARN("[tracking_control] 笛卡尔路径服务不可用，连续轨迹模式将无法工作");
+        bool cartesian_service_available = cartesian_path_client_.waitForExistence(ros::Duration(5.0));
+        if (cartesian_service_available) {
+            init_items.emplace_back("笛卡尔路径服务", cartesian_path_service_name_ + " (可用)");
+            init_items.emplace_back("连续轨迹模式", "已启用（通过服务接口）");
         } else {
-            ROS_INFO("[tracking_control] 使用连续轨迹模式（通过服务接口）");
+            // 服务暂时不可用，记录状态并继续等待（不阻塞）
+            init_items.emplace_back("笛卡尔路径服务", cartesian_path_service_name_ + " (等待中...)");
+            ROS_INFO("[tracking_control] 等待笛卡尔路径服务: %s", cartesian_path_service_name_.c_str());
+            // 在后台等待服务可用（不阻塞构造函数）
+            std::thread([this, name = cartesian_path_service_name_]() {
+                cartesian_path_client_.waitForExistence();
+                ROS_INFO("[tracking_control] 笛卡尔路径服务已可用: %s", name.c_str());
+            }).detach();
+            init_items.emplace_back("连续轨迹模式", "已启用（通过服务接口）");
         }
         
         // 启动轨迹执行线程
         should_stop_thread_ = false;
         trajectory_execution_thread_ = std::thread(&TrackingControlNode::trajectoryExecutionThread, this);
-        ROS_INFO("[tracking_control] 轨迹执行线程已启动");
+        init_items.emplace_back("轨迹执行线程", "已启动");
     }
     
     // 启动控制循环
@@ -82,8 +106,11 @@ TrackingControlNode::TrackingControlNode(ros::NodeHandle nh, ros::NodeHandle pnh
             &TrackingControlNode::controlLoop,
             this
         );
-        ROS_INFO("[tracking_control] 控制循环频率: %.1f Hz", config_.update_rate);
+        init_items.emplace_back("控制循环频率", logger::formatFrequency(config_.update_rate));
     }
+    
+    // 统一输出初始化信息（在所有服务检查完成后）
+    ROS_INFO("[tracking_control] %s", logger::formatInit(init_items).c_str());
 }
 
 TrackingControlNode::~TrackingControlNode() {
@@ -109,16 +136,19 @@ void TrackingControlNode::loadParameters() {
     // 解析配置
     config_ = loadTrackingControlConfig(config, ns + "/config");
     
-    // 连续轨迹模式不再需要 move_group_name 等信息，因为使用服务接口
+    // 使用统一的日志格式化工具
+    namespace logger = mag_core_utils::logger;
+    std::vector<std::pair<std::string, std::string>> config_items;
+    config_items.emplace_back("策略类型", config_.strategy_type);
+    config_items.emplace_back("传感器机械臂", config_.sensor_arm_name);
+    config_items.emplace_back("控制频率", logger::formatFrequency(config_.update_rate));
     
-    ROS_INFO("[tracking_control] 配置加载完成");
-    ROS_INFO("[tracking_control] 策略类型: %s", config_.strategy_type.c_str());
-    ROS_INFO("[tracking_control] 传感器机械臂: %s", config_.sensor_arm_name.c_str());
-    ROS_INFO("[tracking_control] 控制频率: %.1f Hz", config_.update_rate);
     if (config_.use_continuous_trajectory) {
-        ROS_INFO("[tracking_control] 连续轨迹模式: 启用");
-        ROS_INFO("[tracking_control] 轨迹缓冲大小: %zu", config_.trajectory_buffer_size);
+        config_items.emplace_back("连续轨迹模式", logger::boolToString(true));
+        config_items.emplace_back("轨迹缓冲大小", std::to_string(config_.trajectory_buffer_size));
     }
+    
+    ROS_INFO("[tracking_control] %s", logger::formatConfig(config_items).c_str());
 }
 
 std::unique_ptr<TrackingControlStrategyBase> TrackingControlNode::createStrategy(const std::string &type) {

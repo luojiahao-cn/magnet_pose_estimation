@@ -1,6 +1,7 @@
 #include <mag_device_sensor/sensor_array_batcher_node.hpp>
 
 #include <mag_core_utils/xmlrpc_utils.hpp>
+#include <mag_core_utils/logger_utils.hpp>
 
 #include <ros/ros.h>
 
@@ -14,6 +15,13 @@ SensorArrayBatcherNode::SensorArrayBatcherNode(ros::NodeHandle nh, ros::NodeHand
     loadParameters();
     setupSubscribers();
     setupPublishers();
+    
+    // 统一输出初始化信息
+    namespace logger = mag_core_utils::logger;
+    std::vector<std::pair<std::string, std::string>> init_items;
+    init_items.emplace_back("已订阅话题", input_topic_);
+    init_items.emplace_back("已发布话题", output_topic_);
+    ROS_INFO("[sensor_array_batcher] %s", logger::formatInit(init_items).c_str());
 }
 
 void SensorArrayBatcherNode::loadParameters()
@@ -62,19 +70,27 @@ void SensorArrayBatcherNode::loadParameters()
     // 确定目标传感器数量
     size_t target_sensors = (total_sensors_ > 0) ? total_sensors_ : min_sensors_;
 
-    ROS_INFO("[sensor_array_batcher] ========== 配置加载完成 ==========");
-    ROS_INFO("[sensor_array_batcher] 输入话题: %s", input_topic_.c_str());
-    ROS_INFO("[sensor_array_batcher] 输出话题: %s", output_topic_.c_str());
-    ROS_INFO("[sensor_array_batcher] 参考坐标系: %s", output_frame_.c_str());
-    ROS_INFO("[sensor_array_batcher] 超时时间: %.3f 秒", timeout_seconds_);
+    // 使用统一的日志格式化工具
+    namespace logger = mag_core_utils::logger;
+    std::vector<std::pair<std::string, std::string>> config_items;
+    config_items.emplace_back("输入话题", input_topic_);
+    config_items.emplace_back("输出话题", output_topic_);
+    config_items.emplace_back("参考坐标系", output_frame_);
+    config_items.emplace_back("超时时间", logger::formatTime(timeout_seconds_));
+    
     if (total_sensors_ > 0) {
-        ROS_INFO("[sensor_array_batcher] 期望传感器总数: %zu (收集齐后立即发布)", total_sensors_);
+        config_items.emplace_back("期望传感器总数", std::to_string(total_sensors_) + " (收集齐后立即发布)");
     } else if (min_sensors_ > 0) {
-        ROS_INFO("[sensor_array_batcher] 目标传感器数量: %zu (收集齐后立即发布)", min_sensors_);
+        config_items.emplace_back("目标传感器数量", std::to_string(min_sensors_) + " (收集齐后立即发布)");
     } else {
+        config_items.emplace_back("传感器数量", "未设置（将收集到任何数据就发布，不推荐）");
+    }
+
+    ROS_INFO("[sensor_array_batcher] %s", logger::formatConfig(config_items).c_str());
+    
+    if (total_sensors_ == 0 && min_sensors_ == 0) {
         ROS_WARN("[sensor_array_batcher] 未设置 total_sensors 或 min_sensors，将收集到任何数据就发布（不推荐）");
     }
-    ROS_INFO("[sensor_array_batcher] =====================================");
 }
 
 void SensorArrayBatcherNode::setupSubscribers()
@@ -84,13 +100,11 @@ void SensorArrayBatcherNode::setupSubscribers()
         100,  // 队列大小：足够大以处理多个传感器的高频数据
         &SensorArrayBatcherNode::sensorCallback,
         this);
-    ROS_INFO("[sensor_array_batcher] 已订阅话题: %s", input_topic_.c_str());
 }
 
 void SensorArrayBatcherNode::setupPublishers()
 {
     batch_pub_ = nh_.advertise<mag_core_msgs::MagSensorBatch>(output_topic_, 10);
-    ROS_INFO("[sensor_array_batcher] 已发布话题: %s", output_topic_.c_str());
 }
 
 void SensorArrayBatcherNode::sensorCallback(const mag_core_msgs::MagSensorDataConstPtr &msg)
@@ -197,7 +211,7 @@ bool SensorArrayBatcherNode::publishBatch()
 
 void SensorArrayBatcherNode::start()
 {
-    ROS_INFO("[sensor_array_batcher] >>> 节点已启动，等待传感器数据...");
+    ROS_INFO("[sensor_array_batcher] 节点已启动，等待传感器数据...");
     ros::spin();
 }
 

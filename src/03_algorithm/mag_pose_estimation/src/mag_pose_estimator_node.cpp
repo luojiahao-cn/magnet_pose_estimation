@@ -21,6 +21,7 @@
 
 // 工具库
 #include <mag_core_utils/xmlrpc_utils.hpp>
+#include <mag_core_utils/logger_utils.hpp>
 
 // XML-RPC
 #include <XmlRpcValue.h>
@@ -69,11 +70,17 @@ void MagPoseEstimatorNode::loadParameters() {
   enable_tf_ = cfg.enable_tf;
   tf_timeout_ = cfg.tf_timeout;
   
-  ROS_INFO("[mag_pose_estimator] 配置加载完成: 估计器类型=%s, 输出坐标系=%s, 磁铁坐标系=%s, TF发布=%s, 数据话题=%s, 结果话题=%s",
-           estimator_type_.c_str(), cfg.output_frame.c_str(), magnet_frame_.c_str(),
-           (enable_tf_ ? "启用" : "禁用"),
-           (!batch_topic_.empty() ? batch_topic_.c_str() : mag_topic_.c_str()),
-           pose_topic_.c_str());
+  // 使用统一的日志格式化工具
+  namespace logger = mag_core_utils::logger;
+  std::vector<std::pair<std::string, std::string>> config_items;
+  config_items.emplace_back("估计器类型", estimator_type_);
+  config_items.emplace_back("输出坐标系", cfg.output_frame);
+  config_items.emplace_back("磁铁坐标系", magnet_frame_);
+  config_items.emplace_back("TF发布", logger::boolToString(enable_tf_));
+  config_items.emplace_back("数据话题", !batch_topic_.empty() ? batch_topic_ : mag_topic_);
+  config_items.emplace_back("结果话题", pose_topic_);
+  
+  ROS_INFO("[mag_pose_estimator] %s", logger::formatConfig(config_items).c_str());
 
   // EKF 参数
   ekf_params_.world_field = cfg.world_field;
@@ -112,7 +119,12 @@ void MagPoseEstimatorNode::initializeEstimator() {
   estimator_->initialize();
   
   tf_listener_ = std::make_unique<tf2_ros::TransformListener>(tf_buffer_);
-  ROS_INFO("[mag_pose_estimator] 估计器已初始化: %s", estimator_type_.c_str());
+  
+  // 使用统一的日志格式化工具
+  namespace logger = mag_core_utils::logger;
+  std::vector<std::pair<std::string, std::string>> init_items;
+  init_items.emplace_back("估计器类型", estimator_type_);
+  ROS_INFO("[mag_pose_estimator] %s", logger::formatInit(init_items).c_str());
 }
 
 /**
