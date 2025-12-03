@@ -106,6 +106,21 @@ public:
   }
 
   /**
+   * @brief 获取估计的协方差矩阵
+   * @param covariance_out 输出的协方差矩阵（6x6，位置3维+姿态3维）
+   * @return 是否成功获取协方差矩阵
+   * 
+   * 协方差矩阵的排列顺序：
+   * [0:3, 0:3] - 位置协方差 (x, y, z)
+   * [3:6, 3:6] - 姿态协方差（方向向量的x, y, z分量）
+   */
+  virtual bool getCovariance(Eigen::Matrix<double, 6, 6> &covariance_out) const {
+    // 默认实现：返回单位矩阵（表示不确定）
+    covariance_out = Eigen::Matrix<double, 6, 6>::Identity();
+    return false;
+  }
+
+  /**
    * @brief 获取估计器名称
    * @return 估计器类型名称
    */

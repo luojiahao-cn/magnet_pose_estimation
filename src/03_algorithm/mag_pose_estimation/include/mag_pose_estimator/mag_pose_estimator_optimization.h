@@ -58,6 +58,13 @@ public:
                          double *error_out);
 
   /**
+   * @brief 获取估计的协方差矩阵
+   * @param covariance_out 输出的协方差矩阵（6x6，位置3维+姿态3维）
+   * @return 是否成功获取协方差矩阵
+   */
+  bool getCovariance(Eigen::Matrix<double, 6, 6> &covariance_out) const override;
+
+  /**
    * @brief 重置估计器状态
    */
   void reset();
@@ -77,6 +84,16 @@ private:
   geometry_msgs::Pose buildPoseFromDirection(const Eigen::Vector3d &direction,
                                              const Eigen::Vector3d &position) const;
 
+  /**
+   * @brief 计算协方差矩阵
+   * @param problem Ceres优化问题
+   * @param position 优化后的位置参数
+   * @param direction 优化后的方向参数
+   */
+  void computeCovariance(ceres::Problem &problem,
+                         const double *position,
+                         const double *direction);
+
   Eigen::Vector3d position_;  ///< 当前估计的磁铁位置 [x, y, z] (米)
   Eigen::Vector3d magnet_direction_;  ///< 当前估计的磁矩方向向量（归一化）
   double magnet_strength_;  ///< 当前估计的磁矩强度 (Am²)
@@ -85,6 +102,8 @@ private:
   double strength_max_;  ///< 磁矩强度优化上界
   ceres::LinearSolverType linear_solver_type_;  ///< Ceres 线性求解器类型
   geometry_msgs::Pose last_pose_;  ///< 上次估计的姿态
+  Eigen::Matrix<double, 6, 6> covariance_;  ///< 估计的协方差矩阵（6x6，位置3维+姿态3维）
+  bool has_covariance_;  ///< 是否已计算协方差矩阵
 };
 
 }  // 命名空间 mag_pose_estimator

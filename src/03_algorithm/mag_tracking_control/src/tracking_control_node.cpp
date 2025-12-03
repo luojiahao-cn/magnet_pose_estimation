@@ -17,6 +17,7 @@ TrackingControlNode::TrackingControlNode(ros::NodeHandle nh, ros::NodeHandle pnh
     , tf_buffer_(ros::Duration(10.0))
     , tf_listener_(tf_buffer_)
     , has_magnet_pose_(false)
+    , current_magnet_confidence_(0.0)
     , is_executing_trajectory_(false)
     , should_stop_thread_(false)
 {
@@ -175,6 +176,7 @@ std::unique_ptr<TrackingControlStrategyBase> TrackingControlNode::createStrategy
 void TrackingControlNode::magnetPoseCallback(const mag_core_msgs::MagnetPose::ConstPtr &msg) {
     current_magnet_pose_.position = msg->position;
     current_magnet_pose_.orientation = msg->orientation;
+    current_magnet_confidence_ = msg->confidence;
     last_magnet_pose_time_ = ros::Time::now();
     has_magnet_pose_ = true;
 }
@@ -191,6 +193,20 @@ void TrackingControlNode::controlLoop(const ros::TimerEvent &/*event*/) {
     if (time_since_last > 1.0) {
         ROS_WARN_THROTTLE(2.0, "[tracking_control] 磁铁位姿已过期 (%.2f 秒)", time_since_last);
         return;
+    }
+    
+    // 检查位姿估计置信度
+    const double min_confidence_threshold = 0.3;  // 最小置信度阈值
+    if (current_magnet_confidence_ < min_confidence_threshold) {
+        ROS_WARN_THROTTLE(2.0, "[tracking_control] 位姿估计置信度过低 (%.3f < %.3f)，暂停控制", 
+                          current_magnet_confidence_, min_confidence_threshold);
+        return;
+    }
+    
+    // 如果置信度较低但未低于阈值，发出警告但继续控制
+    if (current_magnet_confidence_ < 0.5) {
+        ROS_WARN_THROTTLE(1.0, "[tracking_control] 位姿估计置信度较低 (%.3f)，控制精度可能受影响", 
+                          current_magnet_confidence_);
     }
     
     // 检查策略是否需要更新

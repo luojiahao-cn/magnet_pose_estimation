@@ -256,6 +256,7 @@ void MagnetNode::publishPose(const ros::Time &stamp, const geometry_msgs::Pose &
     msg.position = pose.position;
     msg.orientation = pose.orientation;
     msg.magnetic_strength = motion_config_.magnetic_strength;
+    msg.confidence = 1.0;  // 真实位姿，置信度为1.0（完全可信）
     pose_pub_.publish(msg);
 }
 

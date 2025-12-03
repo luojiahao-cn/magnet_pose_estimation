@@ -127,8 +127,9 @@ private:
    * @brief 发布姿态估计结果
    * @param pose 估计的姿态
    * @param stamp 时间戳
+   * @param confidence 估计置信度 [0.0, 1.0]
    */
-  void publishPose(const geometry_msgs::Pose &pose, const ros::Time &stamp);
+  void publishPose(const geometry_msgs::Pose &pose, const ros::Time &stamp, double confidence = 1.0);
 
   /**
    * @brief 查询传感器位置和变换
@@ -160,6 +161,14 @@ private:
   bool processMeasurements(const std::vector<sensor_msgs::MagneticField> &measurements,
                            geometry_msgs::Pose &pose_out,
                            double *error_out = nullptr);
+
+  /**
+   * @brief 计算位姿估计置信度（基于协方差矩阵）
+   * @param covariance 估计的协方差矩阵（6x6，位置3维+姿态3维）
+   * @param success 估计是否成功
+   * @return 置信度值 [0.0, 1.0]
+   */
+  double computeConfidence(const Eigen::Matrix<double, 6, 6> &covariance, bool success) const;
 
   ros::NodeHandle nh_;  // 全局节点句柄
   ros::NodeHandle pnh_;  // 私有节点句柄

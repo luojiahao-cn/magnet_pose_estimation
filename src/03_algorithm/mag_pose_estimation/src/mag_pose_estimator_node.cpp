@@ -9,8 +9,12 @@
 
 // 标准库
 #include <algorithm>
+#include <cmath>
 #include <locale>
 #include <vector>
+
+// Eigen
+#include <Eigen/SVD>
 
 // ROS 相关
 #include <ros/console.h>
@@ -282,13 +286,27 @@ void MagPoseEstimatorNode::batchCallback(
 
   geometry_msgs::Pose pose;
   double error = 0.0;
-  if (processMeasurements(processed_measurements, pose, &error)) {
-    publishPose(pose, msg->header.stamp);
-    double avg_residual = std::sqrt(error / (processed_measurements.size() * 3));
-    ROS_INFO_THROTTLE(1.0, "[mag_pose_estimator] 姿态估计成功，总误差: %.9f，平均残差: %.9f mT，传感器数: %zu",
-                      error, avg_residual, processed_measurements.size());
+  bool success = processMeasurements(processed_measurements, pose, &error);
+  
+  // 获取协方差矩阵并计算置信度
+  Eigen::Matrix<double, 6, 6> covariance;
+  double confidence = 0.0;
+  if (estimator_->getCovariance(covariance)) {
+    confidence = computeConfidence(covariance, success);
   } else {
-    ROS_WARN_THROTTLE(1.0, "[mag_pose_estimator] 姿态估计失败，传感器数量: %zu", processed_measurements.size());
+    // 如果无法获取协方差矩阵，使用默认值
+    confidence = success ? 0.5 : 0.0;
+  }
+  
+  publishPose(pose, msg->header.stamp, confidence);
+  
+  if (success) {
+    double avg_residual = std::sqrt(error / (processed_measurements.size() * 3));
+    ROS_INFO_THROTTLE(1.0, "[mag_pose_estimator] 姿态估计成功，总误差: %.9f，平均残差: %.9f mT，传感器数: %zu，置信度: %.3f",
+                      error, avg_residual, processed_measurements.size(), confidence);
+  } else {
+    ROS_WARN_THROTTLE(1.0, "[mag_pose_estimator] 姿态估计失败，传感器数量: %zu，置信度: %.3f", 
+                      processed_measurements.size(), confidence);
   }
 }
 
@@ -300,10 +318,22 @@ void MagPoseEstimatorNode::magCallback(
     const mag_core_msgs::MagSensorDataConstPtr &msg) {
   std::vector<sensor_msgs::MagneticField> single_measurement = {convertAndProcess(*msg)};
   geometry_msgs::Pose pose;
-  if (processMeasurements(single_measurement, pose)) {
-    ros::Time stamp = msg->header.stamp.isZero() ? ros::Time::now() : msg->header.stamp;
-    publishPose(pose, stamp);
+  double error = 0.0;
+  bool success = processMeasurements(single_measurement, pose, &error);
+  
+  ros::Time stamp = msg->header.stamp.isZero() ? ros::Time::now() : msg->header.stamp;
+  
+  // 获取协方差矩阵并计算置信度
+  Eigen::Matrix<double, 6, 6> covariance;
+  double confidence = 0.0;
+  if (estimator_->getCovariance(covariance)) {
+    confidence = computeConfidence(covariance, success);
+  } else {
+    // 如果无法获取协方差矩阵，使用默认值
+    confidence = success ? 0.5 : 0.0;
   }
+  
+  publishPose(pose, stamp, confidence);
 }
 
 /**
@@ -335,18 +365,65 @@ bool MagPoseEstimatorNode::processMeasurements(
 }
 
 /**
+ * @brief 计算位姿估计置信度（基于协方差矩阵）
+ * @param covariance 估计的协方差矩阵（6x6，位置3维+姿态3维）
+ * @param success 估计是否成功
+ * @return 置信度值 [0.0, 1.0]
+ */
+double MagPoseEstimatorNode::computeConfidence(const Eigen::Matrix<double, 6, 6> &covariance, bool success) const {
+  if (!success) {
+    return 0.0;  // 估计失败，置信度为0
+  }
+  
+  // 计算位置不确定性（位置协方差矩阵的行列式的平方根）
+  Eigen::Matrix3d position_cov = covariance.block<3, 3>(0, 0);
+  double position_uncertainty = std::sqrt(position_cov.determinant());
+  
+  // 计算姿态不确定性（方向协方差矩阵的行列式的平方根）
+  Eigen::Matrix3d orientation_cov = covariance.block<3, 3>(3, 3);
+  double orientation_uncertainty = std::sqrt(orientation_cov.determinant());
+  
+  // 计算协方差矩阵的条件数（可观测性指标）
+  Eigen::JacobiSVD<Eigen::Matrix<double, 6, 6>> svd(covariance);
+  double condition_number = svd.singularValues()(0) / 
+                           svd.singularValues()(svd.singularValues().size() - 1);
+  
+  // 归一化不确定性（假设合理的不确定性范围）
+  // 位置不确定性：0.001 m (1mm) 到 0.1 m (10cm)
+  double normalized_position_uncertainty = std::min(1.0, position_uncertainty / 0.1);
+  
+  // 姿态不确定性：0.01 rad 到 1.0 rad
+  double normalized_orientation_uncertainty = std::min(1.0, orientation_uncertainty / 1.0);
+  
+  // 基于不确定性的置信度（不确定性越小，置信度越高）
+  double position_confidence = 1.0 / (1.0 + normalized_position_uncertainty * 10.0);
+  double orientation_confidence = 1.0 / (1.0 + normalized_orientation_uncertainty * 10.0);
+  
+  // 条件数惩罚（条件数越大，可观测性越差）
+  double condition_penalty = 1.0 / (1.0 + condition_number / 1000.0);
+  
+  // 综合置信度：位置权重0.5，姿态权重0.3，条件数权重0.2
+  double confidence = 0.5 * position_confidence + 0.3 * orientation_confidence + 0.2 * condition_penalty;
+  
+  return std::max(0.0, std::min(1.0, confidence));
+}
+
+/**
  * @brief 发布姿态估计结果
  * @param pose 估计的姿态
  * @param stamp 时间戳
+ * @param confidence 估计置信度 [0.0, 1.0]
  */
 void MagPoseEstimatorNode::publishPose(const geometry_msgs::Pose &pose,
-                                        const ros::Time &stamp) {
+                                        const ros::Time &stamp,
+                                        double confidence) {
   mag_core_msgs::MagnetPose msg;
   msg.header.stamp = stamp;
   msg.header.frame_id = output_frame_;
   msg.position = pose.position;
   msg.orientation = pose.orientation;
   msg.magnetic_strength = estimator_->getMagneticStrength();
+  msg.confidence = confidence;
   pose_pub_.publish(msg);
 
   if (enable_tf_) {

@@ -151,4 +151,29 @@ geometry_msgs::Pose EKFEstimator::getPose() const {
   return pose;
 }
 
+/**
+ * @brief 获取估计的协方差矩阵
+ * @param covariance_out 输出的协方差矩阵（6x6，位置3维+姿态3维）
+ * @return 是否成功获取协方差矩阵
+ */
+bool EKFEstimator::getCovariance(Eigen::Matrix<double, 6, 6> &covariance_out) const {
+  if (!initialized_) {
+    return false;
+  }
+  
+  covariance_out.setZero();
+  
+  // 提取位置协方差 [0:3, 0:3]
+  covariance_out.block<3, 3>(0, 0) = covariance_.block<3, 3>(0, 0);
+  
+  // 将四元数协方差转换为方向向量协方差
+  // 四元数协方差在 [3:7, 3:7]，需要转换为3维方向向量协方差
+  // 简化方法：使用四元数前3个分量的协方差（x, y, z）作为方向向量协方差的近似
+  // 注意：这不是完全准确的，但对于置信度计算足够
+  Eigen::Matrix3d quat_cov = covariance_.block<3, 3>(3, 3);
+  covariance_out.block<3, 3>(3, 3) = quat_cov;
+  
+  return true;
+}
+
 }  // 命名空间 mag_pose_estimator

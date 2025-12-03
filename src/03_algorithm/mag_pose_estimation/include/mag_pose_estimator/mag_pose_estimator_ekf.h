@@ -15,6 +15,7 @@ public:
   void initialize() override;
   void update(const sensor_msgs::MagneticField &mag) override;
   geometry_msgs::Pose getPose() const override;
+  bool getCovariance(Eigen::Matrix<double, 6, 6> &covariance_out) const override;
   std::string name() const override { return "ekf"; }
 
 private:

@@ -1,6 +1,7 @@
 #include "mag_pose_estimator/mag_pose_estimator_optimization.h"
 
 #include <ceres/ceres.h>
+#include <ceres/covariance.h>
 #include <Eigen/Geometry>
 #include <algorithm>
 #include <cmath>
@@ -185,6 +186,10 @@ void OptimizerEstimator::resetState() {
   last_pose_.orientation.x = 0.0;
   last_pose_.orientation.y = 0.0;
   last_pose_.orientation.z = 0.0;
+  
+  // 初始化协方差矩阵（单位矩阵表示不确定）
+  covariance_.setIdentity();
+  has_covariance_ = false;
 }
 
 void OptimizerEstimator::reset() {
@@ -546,6 +551,11 @@ bool OptimizerEstimator::estimateFromBatch(const std::vector<OptimizerMeasuremen
   pose_out = buildPoseFromDirection(magnet_direction_, position_);
   last_pose_ = pose_out;
 
+  // 计算协方差矩阵（仅在优化成功时）
+  if (optimization_success) {
+    computeCovariance(problem, position, direction);
+  }
+
   // 记录优化信息
   if (summary.termination_type == ceres::CONVERGENCE || summary.termination_type == ceres::USER_SUCCESS) {
     ROS_DEBUG_THROTTLE(1.0, "[mag_pose_estimator] 优化成功收敛，迭代次数: %d，初始误差: %.9f，最终误差: %.9f，平均残差: %.9f mT，改善: %.2f%%",
@@ -553,6 +563,71 @@ bool OptimizerEstimator::estimateFromBatch(const std::vector<OptimizerMeasuremen
                       (initial_error - final_error) / initial_error * 100.0);
   }
 
+  return true;
+}
+
+/**
+ * @brief 计算协方差矩阵
+ * @param problem Ceres优化问题
+ * @param position 优化后的位置参数
+ * @param direction 优化后的方向参数
+ */
+void OptimizerEstimator::computeCovariance(ceres::Problem &problem,
+                                           const double *position,
+                                           const double *direction) {
+  try {
+    ceres::Covariance::Options cov_options;
+    cov_options.algorithm_type = ceres::CovarianceAlgorithmType::SPARSE_QR;
+    ceres::Covariance covariance(cov_options);
+
+    // 定义协方差块（位置和方向）
+    std::vector<std::pair<const double*, const double*>> covariance_blocks;
+    covariance_blocks.push_back({position, position});
+    covariance_blocks.push_back({direction, direction});
+    covariance_blocks.push_back({position, direction});
+    covariance_blocks.push_back({direction, position});
+
+    if (!covariance.Compute(covariance_blocks, &problem)) {
+      ROS_WARN_THROTTLE(1.0, "[mag_pose_estimator] 协方差矩阵计算失败");
+      covariance_.setIdentity();
+      has_covariance_ = false;
+      return;
+    }
+
+    // 提取位置协方差 [3x3]
+    Eigen::Matrix3d position_cov;
+    covariance.GetCovarianceBlock(position, position, position_cov.data());
+    covariance_.block<3, 3>(0, 0) = position_cov;
+
+    // 提取方向协方差 [3x3]
+    Eigen::Matrix3d direction_cov;
+    covariance.GetCovarianceBlock(direction, direction, direction_cov.data());
+    covariance_.block<3, 3>(3, 3) = direction_cov;
+
+    // 提取位置-方向互协方差
+    Eigen::Matrix3d position_direction_cov;
+    covariance.GetCovarianceBlock(position, direction, position_direction_cov.data());
+    covariance_.block<3, 3>(0, 3) = position_direction_cov;
+    covariance_.block<3, 3>(3, 0) = position_direction_cov.transpose();
+
+    has_covariance_ = true;
+  } catch (const std::exception &e) {
+    ROS_WARN_THROTTLE(1.0, "[mag_pose_estimator] 协方差矩阵计算异常: %s", e.what());
+    covariance_.setIdentity();
+    has_covariance_ = false;
+  }
+}
+
+/**
+ * @brief 获取估计的协方差矩阵
+ * @param covariance_out 输出的协方差矩阵（6x6，位置3维+姿态3维）
+ * @return 是否成功获取协方差矩阵
+ */
+bool OptimizerEstimator::getCovariance(Eigen::Matrix<double, 6, 6> &covariance_out) const {
+  if (!has_covariance_) {
+    return false;
+  }
+  covariance_out = covariance_;
   return true;
 }
 

@@ -146,6 +146,7 @@ private:
     geometry_msgs::Pose current_magnet_pose_; ///< 当前磁铁位姿
     ros::Time last_magnet_pose_time_;        ///< 上次收到磁铁位姿的时间
     bool has_magnet_pose_;                   ///< 是否已收到磁铁位姿
+    double current_magnet_confidence_;       ///< 当前磁铁位姿估计置信度 [0.0, 1.0]
     
     std::vector<Eigen::Vector3d> last_field_strengths_;  ///< 上次的磁场强度数据
     
