@@ -44,11 +44,30 @@ struct OptimizerParameters {
 };
 
 /**
+ * @brief 窗口优化器参数配置结构体
+ */
+struct WindowOptimizerParameters {
+  int window_size;  ///< 滑动窗口长度 L
+  // 注意：dt 不再从配置读取，而是从传感器消息的时间戳动态计算
+  double m0;  ///< 磁偶极矩模长 (Am²)
+  double mu0;  ///< 真空磁导率 (默认 4π × 10⁻⁷ H/m)
+  double sigma_meas;  ///< 测量噪声标准差
+  double sigma_proc_p;  ///< 位置过程噪声标准差
+  double sigma_proc_v;  ///< 速度过程噪声标准差
+  double sigma_proc_u;  ///< 磁化方向过程噪声标准差
+  double sigma_unit;  ///< 单位向量约束残差标准差
+  int max_iters;  ///< 最大迭代次数
+  double lambda_init;  ///< LM 初始阻尼参数
+  bool verbose;  ///< 是否输出调试信息
+};
+
+/**
  * @brief 估计器配置结构体
  */
 struct EstimatorConfig {
   EKFParameters ekf;  ///< EKF 估计器参数
   OptimizerParameters optimizer;  ///< 优化器参数
+  WindowOptimizerParameters window_optimizer;  ///< 窗口优化器参数
 };
 
 /**

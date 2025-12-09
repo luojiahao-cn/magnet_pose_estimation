@@ -47,3 +47,16 @@ config:
       linear_solver: DENSE_QR
       max_acceptable_residual: 1.0  # 可接受的最大平均残差 (mT)，超过此值即使优化收敛也认为失败
 
+    window_optimizer:
+      window_size: 10  # 滑动窗口长度 L
+      dt: 0.01  # 采样周期（秒）
+      m0: 10  # 磁偶极矩模长 (Am²)
+      mu0: 1.2566370614e-6  # 真空磁导率 (4π × 10⁻⁷ H/m)，可选，有默认值
+      sigma_meas: 0.001  # 测量噪声标准差 (1e-3)
+      sigma_proc_p: 0.01  # 位置过程噪声标准差 (1e-2)
+      sigma_proc_v: 0.01  # 速度过程噪声标准差 (1e-2)
+      sigma_proc_u: 0.01  # 磁化方向过程噪声标准差 (1e-2)
+      sigma_unit: 0.01  # 单位向量约束残差标准差 (1e-2)
+      max_iters: 20  # 最大迭代次数
+      lambda_init: 0.001  # LM 初始阻尼参数 (1e-3)
+      verbose: false  # 是否输出调试信息，可选，默认 false

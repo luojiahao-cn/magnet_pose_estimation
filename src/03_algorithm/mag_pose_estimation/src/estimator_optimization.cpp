@@ -1,4 +1,4 @@
-#include "mag_pose_estimator/mag_pose_estimator_optimization.h"
+#include "mag_pose_estimator/estimator_optimization.h"
 
 #include <ceres/ceres.h>
 #include <ceres/covariance.h>

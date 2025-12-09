@@ -21,15 +21,17 @@
 ```
 include/mag_pose_estimator/
 ├── estimator_base.h              # 估计器基类和配置结构体
-├── mag_pose_estimator_ekf.h      # EKF 估计器
-├── mag_pose_estimator_optimization.h  # 优化器估计器
+├── estimator_ekf.h               # EKF 估计器
+├── estimator_optimization.h      # 优化器估计器
+├── estimator_window_optimizer.h  # 窗口优化器估计器
 ├── mag_preprocessor.h            # 磁场数据预处理器
 ├── mag_pose_estimator_node.h     # ROS 节点主类
 └── magnetic_field_model.h        # 磁偶极子模型和解析雅可比
 
 src/
-├── mag_pose_estimator_ekf.cpp
-├── mag_pose_estimator_optimization.cpp
+├── estimator_ekf.cpp
+├── estimator_optimization.cpp
+├── estimator_window_optimizer.cpp
 ├── mag_preprocessor.cpp
 └── mag_pose_estimator_node.cpp
 

@@ -362,14 +362,12 @@ bool ArmNode::handleExecuteCartesianPath(mag_device_arm::ExecuteCartesianPath::R
 
     // 设置默认步长（如果未指定）
     const double step_size = req.step_size > 0.0 ? req.step_size : 0.01;
-    const double jump_threshold = req.jump_threshold >= 0.0 ? req.jump_threshold : 0.0;
 
     // 计算笛卡尔路径
     moveit_msgs::RobotTrajectory trajectory;
     double fraction = group->computeCartesianPath(
         req.waypoints,
         step_size,
-        jump_threshold,
         trajectory
     );
 

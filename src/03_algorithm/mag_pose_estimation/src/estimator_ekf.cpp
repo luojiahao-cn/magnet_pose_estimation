@@ -1,4 +1,4 @@
-#include "mag_pose_estimator/mag_pose_estimator_ekf.h"
+#include "mag_pose_estimator/estimator_ekf.h"
 
 #include <Eigen/Geometry>
 #include <ros/ros.h>

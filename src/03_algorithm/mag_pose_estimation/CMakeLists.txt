@@ -35,9 +35,10 @@ include_directories(
 )
 
 add_library(mag_pose_estimator_core
-  src/mag_pose_estimator_ekf.cpp
-  src/mag_pose_estimator_optimization.cpp
+  src/estimator_ekf.cpp
+  src/estimator_optimization.cpp
   src/mag_preprocessor.cpp
+  src/estimator_window_optimizer.cpp
 )
 
 add_executable(mag_pose_estimator_node

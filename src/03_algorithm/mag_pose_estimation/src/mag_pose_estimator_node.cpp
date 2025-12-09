@@ -6,6 +6,7 @@
 // 项目头文件
 #include "mag_pose_estimator/mag_pose_estimator_node.h"
 #include "mag_pose_estimator/mag_preprocessor.h"
+#include "mag_pose_estimator/estimator_window_optimizer.h"
 
 // 标准库
 #include <algorithm>
@@ -109,6 +110,20 @@ void MagPoseEstimatorNode::loadParameters() {
   optimizer_params_.linear_solver = cfg.linear_solver;
   optimizer_params_.max_acceptable_residual = cfg.max_acceptable_residual;
 
+  // 窗口优化器参数
+  window_optimizer_params_.window_size = cfg.window_size;
+  window_optimizer_params_.dt = cfg.dt;
+  window_optimizer_params_.m0 = cfg.m0;
+  window_optimizer_params_.mu0 = cfg.mu0;
+  window_optimizer_params_.sigma_meas = cfg.sigma_meas;
+  window_optimizer_params_.sigma_proc_p = cfg.sigma_proc_p;
+  window_optimizer_params_.sigma_proc_v = cfg.sigma_proc_v;
+  window_optimizer_params_.sigma_proc_u = cfg.sigma_proc_u;
+  window_optimizer_params_.sigma_unit = cfg.sigma_unit;
+  window_optimizer_params_.max_iters = cfg.max_iters;
+  window_optimizer_params_.lambda_init = cfg.lambda_init;
+  window_optimizer_params_.verbose = cfg.verbose;
+
   // 配置预处理器
   preprocessor_.configure(cfg);
 }
@@ -139,6 +154,7 @@ EstimatorConfig MagPoseEstimatorNode::buildConfigFromParameters() const {
   EstimatorConfig cfg;
   cfg.ekf = ekf_params_;
   cfg.optimizer = optimizer_params_;
+  cfg.window_optimizer = window_optimizer_params_;
   return cfg;
 }
 
@@ -241,8 +257,44 @@ MagPoseEstimatorConfig MagPoseEstimatorNode::loadMagPoseEstimatorConfig(
         optimizer, "linear_solver", optimizer_ctx);
     cfg.max_acceptable_residual = xml::optionalNumberField(
         optimizer, "max_acceptable_residual", optimizer_ctx, 1.0);  // 默认值 1.0 mT
+  } else if (lower_type == "window_optimizer") {
+    const auto window_opt_ctx = xml::makeContext(context, "params/window_optimizer");
+    const auto &window_optimizer = xml::requireStructField(
+        xml::requireStructField(node, "params", context), "window_optimizer", context);
+    cfg.window_size = static_cast<int>(xml::readNumber(
+        xml::requireMember(window_optimizer, "window_size", window_opt_ctx),
+        window_opt_ctx + "/window_size"));
+    // 注意：dt 不再从配置读取，而是从传感器消息的时间戳动态计算
+    cfg.m0 = xml::readNumber(
+        xml::requireMember(window_optimizer, "m0", window_opt_ctx),
+        window_opt_ctx + "/m0");
+    cfg.mu0 = xml::optionalNumberField(
+        window_optimizer, "mu0", window_opt_ctx, 4.0 * M_PI * 1e-7);
+    cfg.sigma_meas = xml::readNumber(
+        xml::requireMember(window_optimizer, "sigma_meas", window_opt_ctx),
+        window_opt_ctx + "/sigma_meas");
+    cfg.sigma_proc_p = xml::readNumber(
+        xml::requireMember(window_optimizer, "sigma_proc_p", window_opt_ctx),
+        window_opt_ctx + "/sigma_proc_p");
+    cfg.sigma_proc_v = xml::readNumber(
+        xml::requireMember(window_optimizer, "sigma_proc_v", window_opt_ctx),
+        window_opt_ctx + "/sigma_proc_v");
+    cfg.sigma_proc_u = xml::readNumber(
+        xml::requireMember(window_optimizer, "sigma_proc_u", window_opt_ctx),
+        window_opt_ctx + "/sigma_proc_u");
+    cfg.sigma_unit = xml::readNumber(
+        xml::requireMember(window_optimizer, "sigma_unit", window_opt_ctx),
+        window_opt_ctx + "/sigma_unit");
+    cfg.max_iters = static_cast<int>(xml::readNumber(
+        xml::requireMember(window_optimizer, "max_iters", window_opt_ctx),
+        window_opt_ctx + "/max_iters"));
+    cfg.lambda_init = xml::readNumber(
+        xml::requireMember(window_optimizer, "lambda_init", window_opt_ctx),
+        window_opt_ctx + "/lambda_init");
+    cfg.verbose = xml::optionalBoolField(
+        window_optimizer, "verbose", window_opt_ctx, false);
   } else {
-    throw std::runtime_error("未知的估计器类型: " + cfg.estimator_type + "，支持的类型: ekf, optimizer");
+    throw std::runtime_error("未知的估计器类型: " + cfg.estimator_type + "，支持的类型: ekf, optimizer, window_optimizer");
   }
 
   // 解析预处理器参数
@@ -504,6 +556,9 @@ std::unique_ptr<EstimatorBase> MagPoseEstimatorNode::createEstimator(
   }
   if (lower == "optimizer") {
     return std::make_unique<OptimizerEstimator>();
+  }
+  if (lower == "window_optimizer") {
+    return std::make_unique<WindowOptimizerEstimator>();
   }
 
   ROS_WARN("[mag_pose_estimator] 未知估计器类型 '%s'，默认使用 EKF", type.c_str());

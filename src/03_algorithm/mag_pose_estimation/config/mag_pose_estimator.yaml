@@ -54,3 +54,15 @@ config:
       minimizer_progress: false  # 是否显示优化器进度信息
       linear_solver: DENSE_QR  # 线性求解器类型
       max_acceptable_residual: 1.0  # 可接受的最大平均残差 (mT)，超过此值即使优化收敛也认为失败
+
+    window_optimizer:
+      window_size: 10
+      dt: 0.01
+      m0: 1.0
+      mu0: 4.0 * M_PI * 1e-7
+      sigma_meas: 1e-3
+      lambda_init: 1.0
+      lambda_max: 1e6
+      lambda_min: 1e-6
+      lambda_factor: 2.0
+      lambda_epsilon: 1e-6

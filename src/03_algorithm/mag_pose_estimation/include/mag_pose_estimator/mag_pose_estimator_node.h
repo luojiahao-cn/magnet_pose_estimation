@@ -16,9 +16,10 @@
 #include <vector>
 
 #include "mag_pose_estimator/estimator_base.h"
-#include "mag_pose_estimator/mag_pose_estimator_ekf.h"
+#include "mag_pose_estimator/estimator_ekf.h"
 #include "mag_pose_estimator/mag_preprocessor.h"
-#include "mag_pose_estimator/mag_pose_estimator_optimization.h"
+#include "mag_pose_estimator/estimator_optimization.h"
+#include "mag_pose_estimator/estimator_window_optimizer.h"
 
 namespace mag_pose_estimator {
 
@@ -58,6 +59,18 @@ struct MagPoseEstimatorConfig {
   bool minimizer_progress;  ///< 是否输出优化进度（optimizer）
   std::string linear_solver;  ///< 线性求解器类型（optimizer）
   double max_acceptable_residual;  ///< 可接受的最大平均残差 (mT)，超过此值即使优化收敛也认为失败（optimizer）
+  int window_size;  ///< 滑动窗口长度 L（window_optimizer）
+  double dt;  ///< 采样周期（秒，window_optimizer）
+  double m0;  ///< 磁偶极矩模长 (Am²，window_optimizer)
+  double mu0;  ///< 真空磁导率（window_optimizer）
+  double sigma_meas;  ///< 测量噪声标准差（window_optimizer）
+  double sigma_proc_p;  ///< 位置过程噪声标准差（window_optimizer）
+  double sigma_proc_v;  ///< 速度过程噪声标准差（window_optimizer）
+  double sigma_proc_u;  ///< 磁化方向过程噪声标准差（window_optimizer）
+  double sigma_unit;  ///< 单位向量约束残差标准差（window_optimizer）
+  int max_iters;  ///< 最大迭代次数（window_optimizer）
+  double lambda_init;  ///< LM 初始阻尼参数（window_optimizer）
+  bool verbose;  ///< 是否输出调试信息（window_optimizer）
 };
 
 /**
@@ -189,6 +202,7 @@ private:
 
   EKFParameters ekf_params_;  ///< EKF 估计器参数
   OptimizerParameters optimizer_params_;  ///< 优化器参数
+  WindowOptimizerParameters window_optimizer_params_;  ///< 窗口优化器参数
 
   double tf_timeout_;  ///< TF 查询超时时间
 
