@@ -28,6 +28,7 @@
 #include <stdexcept>
 #include <cstdio>
 #include <sys/stat.h>
+#include <cctype>
 
 #include <filesystem>
 #include <map>
@@ -39,10 +40,12 @@
 #include <mag_device_arm/ExecuteNamedTarget.h>
 #include <mag_device_arm/ExecuteCartesianPath.h>
 #include <ros/package.h>
+#include <ros/console.h>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/exceptions.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <xmlrpcpp/XmlRpcValue.h>
+#include <cstdlib>
 
 namespace {
 
@@ -67,6 +70,8 @@ namespace mag_arm_scan {
  */
 ScanControllerNode::ScanControllerNode(ros::NodeHandle &nh, ros::NodeHandle &pnh)
 		: nh_(nh), pnh_(pnh), tf_listener_(tf_buffer_) {
+	// 设置日志级别
+	setLogLevel();
 	// 加载基本参数
 	loadParams();
 	// 加载传感器阵列配置
@@ -81,23 +86,7 @@ ScanControllerNode::ScanControllerNode(ros::NodeHandle &nh, ros::NodeHandle &pnh
 	}
 
 	// 初始化 mag_device_arm 服务客户端
-	pnh_.param("arm_name", arm_name_, std::string("arm1"));
-	std::string arm_service_ns = "/mag_device_arm";
-	arm_set_pose_client_ = nh_.serviceClient<mag_device_arm::SetEndEffectorPose>(arm_service_ns + "/set_end_effector_pose");
-	arm_execute_named_client_ = nh_.serviceClient<mag_device_arm::ExecuteNamedTarget>(arm_service_ns + "/execute_named_target");
-	arm_cartesian_path_client_ = nh_.serviceClient<mag_device_arm::ExecuteCartesianPath>(arm_service_ns + "/execute_cartesian_path");
-	
-	// 等待服务可用
-	ROS_INFO("[scan_controller] waiting for mag_device_arm services...");
-	if (!arm_set_pose_client_.waitForExistence(ros::Duration(10.0))) {
-		ROS_WARN("[scan_controller] mag_device_arm services not available, will retry on use");
-	}
-	if (!arm_execute_named_client_.waitForExistence(ros::Duration(10.0))) {
-		ROS_WARN("[scan_controller] mag_device_arm execute_named_target service not available");
-	}
-	if (!arm_cartesian_path_client_.waitForExistence(ros::Duration(10.0))) {
-		ROS_WARN("[scan_controller] mag_device_arm execute_cartesian_path service not available");
-	}
+	initializeArmServices();
 
 	start_scan_srv_ = pnh_.advertiseService("start_scan", &ScanControllerNode::startScan, this);
 	mag_data_sub_ = nh_.subscribe(mag_topic_, 100, &ScanControllerNode::magDataCallback, this);
@@ -106,12 +95,41 @@ ScanControllerNode::ScanControllerNode(ros::NodeHandle &nh, ros::NodeHandle &pnh
 	scan_complete_pub_ = nh_.advertise<std_msgs::String>("/scan_complete", 1);
 	if (visualization_enabled_) {
 		marker_pub_ = nh_.advertise<visualization_msgs::MarkerArray>(visualization_topic_, 10);
+		ROS_INFO_STREAM("[scan_controller] Visualization enabled, publishing to topic: " << visualization_topic_);
+	} else {
+		ROS_WARN_STREAM("[scan_controller] Visualization is DISABLED in config");
 	}
 
 	if (!use_test_points_) {
 		ROS_INFO_STREAM("[scan_controller] initialized with " << scan_points_.size()
 					<< " scan points");
 	}
+}
+
+/**
+ * @brief 设置 ROS 日志级别
+ */
+void ScanControllerNode::setLogLevel() {
+	std::string log_level_str = "INFO";
+	pnh_.param("logging_level", log_level_str, log_level_str);
+	
+	// 转换为大写
+	std::transform(log_level_str.begin(), log_level_str.end(), log_level_str.begin(), ::toupper);
+	
+	ros::console::Level level = ros::console::levels::Info;
+	if (log_level_str == "DEBUG") {
+		level = ros::console::levels::Debug;
+	} else if (log_level_str == "INFO") {
+		level = ros::console::levels::Info;
+	} else if (log_level_str == "WARN") {
+		level = ros::console::levels::Warn;
+	} else if (log_level_str == "ERROR") {
+		level = ros::console::levels::Error;
+	} else if (log_level_str == "FATAL") {
+		level = ros::console::levels::Fatal;
+	}
+	
+	ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, level);
 }
 
 /**
@@ -124,32 +142,43 @@ ScanControllerNode::ScanControllerNode(ros::NodeHandle &nh, ros::NodeHandle &pnh
  * - 可视化参数：箭头样式、颜色映射等
  */
 void ScanControllerNode::loadParams() {
-	// Lambda 函数：要求参数必须存在，否则抛出异常
-	auto require = [&](const std::string &key, auto &var) {
-		if (!pnh_.getParam(key, var)) throw std::runtime_error(std::string("缺少参数: ~") + key);
+	// 从 config 根节点加载配置（符合 CONFIG_STYLE.md 规范）
+	// Lambda 函数：从 config 结构体中读取参数
+	auto require = [&](const std::string &section, const std::string &key, auto &var) {
+		std::string full_key = "config/" + section + "/" + key;
+		if (!pnh_.getParam(full_key, var)) {
+			throw std::runtime_error(std::string("缺少参数: ~") + full_key);
+		}
 	};
 	// Lambda 函数：要求三维向量参数必须存在且长度为 3
-	auto requireVec3 = [&](const std::string &key, std::vector<double> &out) {
-		if (!pnh_.getParam(key, out) || out.size() != 3U) throw std::runtime_error(std::string("缺少或非法参数: ~") + key + "[3]");
+	auto requireVec3 = [&](const std::string &section, const std::string &key, std::vector<double> &out) {
+		std::string full_key = "config/" + section + "/" + key;
+		if (!pnh_.getParam(full_key, out) || out.size() != 3U) {
+			throw std::runtime_error(std::string("缺少或非法参数: ~") + full_key + "[3]");
+		}
 	};
 
-	// 基本参数：参考坐标系、姿态、自动启动等
-	require("frame_id", frame_id_);  // 数据统一到的世界坐标系
-	require("yaw", yaw_);  // 扫描姿态的偏航角（弧度）
-	require("pitch", pitch_);  // 扫描姿态的俯仰角（弧度）
-	require("autostart", autostart_);  // 是否启动后自动开始扫描
-	require("mag_topic", mag_topic_);  // 传感器数据话题
-	require("wait_time", wait_time_);  // 移动到目标后的等待时间（秒）
-	require("max_stable_wait_time", max_stable_wait_time_);  // 最大稳定等待时间（秒）
-	require("output_base_dir", output_base_dir_);  // 输出数据的基础目录
+	// 从 config.frames 读取坐标系参数
+	require("frames", "reference_frame", frame_id_);
+	require("frames", "end_effector_link", end_effector_link_);
 
-	// 扫描体积参数：定义三维扫描区域
-	requireVec3("volume_min", volume_min_);  // 扫描体积的最小边界 [x, y, z]（米）
-	requireVec3("volume_max", volume_max_);  // 扫描体积的最大边界 [x, y, z]（米）
-	requireVec3("step", step_);  // 扫描步长 [dx, dy, dz]（米）
+	// 从 config.topics 读取话题参数
+	require("topics", "mag_field", mag_topic_);
 
-	for (std::size_t i = 0; i < step_.size(); ++i) {
-		if (step_[i] <= 0.0) {
+	// 从 config.params 读取功能参数
+	require("params", "autostart", autostart_);
+	require("params", "wait_time", wait_time_);
+	require("params", "max_stable_wait_time", max_stable_wait_time_);
+	require("params", "output_base_dir", output_base_dir_);
+	require("params", "roll", roll_);
+	require("params", "pitch", pitch_);
+	require("params", "yaw", yaw_);
+	requireVec3("params", "volume_min", volume_min_);
+	requireVec3("params", "volume_max", volume_max_);
+	requireVec3("params", "step", step_);
+
+	for (double s : step_) {
+		if (s <= 0.0) {
 			throw std::runtime_error("~step 必须为正数");
 		}
 	}
@@ -158,41 +187,28 @@ void ScanControllerNode::loadParams() {
 	output_base_dir_ = resolveRelativePath(output_base_dir_);
 	createTimestampDirectory();
 
-	// 传感器检测参数：期望的传感器数量（例如 25），以及在自动检测时等待的最长时间
-	pnh_.param("required_num_sensors", required_num_sensors_, 0);  // 0 表示不强制检测
-	pnh_.param("sensor_detect_time", sensor_detect_time_, 5.0);  // 传感器检测超时时间（秒）
-
-	// 采样参数：每个传感器在每个扫描点采集的帧数
-	pnh_.param("frames_per_sensor", frames_per_sensor_, 10);
-	if (frames_per_sensor_ < 1) {
-		frames_per_sensor_ = 1;
-	}
-	// 达到采样要求的最大等待时间
-	pnh_.param("max_sample_wait_time", max_sample_wait_time_, 5.0);
-	if (max_sample_wait_time_ < 0.1) {
-		max_sample_wait_time_ = 0.1;
-	}
-	// 每个传感器缓冲区的最大样本数（设置为 frames_per_sensor 的 3 倍）
-	max_samples_per_sensor_ = static_cast<std::size_t>(frames_per_sensor_) * 3U;
-	if (max_samples_per_sensor_ < static_cast<std::size_t>(frames_per_sensor_)) {
-		max_samples_per_sensor_ = static_cast<std::size_t>(frames_per_sensor_);
-	}
+	// 从 config.params 读取传感器检测和采样参数
+	pnh_.param("config/params/required_num_sensors", required_num_sensors_, 0);  // 0 表示不强制检测
+	pnh_.param("config/params/sensor_detect_time", sensor_detect_time_, 5.0);  // 传感器检测超时时间（秒）
+	pnh_.param("config/params/frames_per_sensor", frames_per_sensor_, 10);
+	frames_per_sensor_ = std::max(1, frames_per_sensor_);
+	pnh_.param("config/params/max_sample_wait_time", max_sample_wait_time_, 5.0);
+	max_sample_wait_time_ = std::max(0.1, max_sample_wait_time_);
+	max_samples_per_sensor_ = std::max(static_cast<std::size_t>(frames_per_sensor_), 
+	                                   static_cast<std::size_t>(frames_per_sensor_) * 3U);
 	
-	// 机械臂运动参数：速度和加速度缩放因子
-	pnh_.param("max_velocity_scaling", max_velocity_scaling_, 0.2);
+	// 从 config.motion 读取机械臂运动参数
+	pnh_.param("config/motion/max_velocity_scaling", max_velocity_scaling_, 0.2);
 	max_velocity_scaling_ = std::clamp(max_velocity_scaling_, 0.01, 1.0);
-	pnh_.param("max_acceleration_scaling", max_acceleration_scaling_, 0.1);
+	pnh_.param("config/motion/max_acceleration_scaling", max_acceleration_scaling_, 0.1);
 	max_acceleration_scaling_ = std::clamp(max_acceleration_scaling_, 0.01, 1.0);
-	pnh_.param("ready_target_name", ready_target_name_, std::string("ready"));  // 就绪姿态的名称
-	pnh_.param("end_effector_link", end_effector_link_, std::string("bracket_tcp_link"));  // 末端执行器 link 名称
-	pnh_.param("cartesian_path_threshold", cartesian_path_threshold_, 0.1);  // 距离阈值（米），小于此值使用笛卡尔路径
-	if (cartesian_path_threshold_ < 0.0) {
-		cartesian_path_threshold_ = 0.0;  // 确保非负
-	}
+	pnh_.param("config/motion/ready_target_name", ready_target_name_, std::string("ready"));
+	pnh_.param("config/motion/cartesian_path_threshold", cartesian_path_threshold_, 0.1);
+	cartesian_path_threshold_ = std::max(0.0, cartesian_path_threshold_);
 
 
-	// 可视化参数：从 ~visualization 命名空间加载
-	ros::NodeHandle viz_nh(pnh_, "visualization");
+	// 从 config.visualization 读取可视化参数
+	ros::NodeHandle viz_nh(pnh_, "config/visualization");
 	viz_nh.param("enabled", visualization_enabled_, false);  // 是否启用可视化
 	viz_nh.param("topic", visualization_topic_, std::string("mag_field_vectors"));  // 可视化话题名称
 	viz_nh.param("arrow_length", arrow_length_, 0.05);  // 箭头长度缩放因子
@@ -204,10 +220,9 @@ void ScanControllerNode::loadParams() {
 	viz_nh.param("alpha", visualization_alpha_, 1.0);  // 可视化透明度
 	viz_nh.param("use_tf_sensor_pose", use_tf_sensor_pose_, true);  // 是否使用 TF 查询传感器位置
 	viz_nh.param("sensor_frame_prefix", sensor_frame_prefix_, std::string("sensor_"));  // 传感器坐标系前缀
-	viz_nh.param("tf_lookup_timeout", tf_lookup_timeout_, 0.05);  // TF 查询超时时间（秒）
-	if (tf_lookup_timeout_ < 0.0) {
-		tf_lookup_timeout_ = 0.0;
-	}
+	viz_nh.param("tf_lookup_timeout", tf_lookup_timeout_, 0.05);
+	tf_lookup_timeout_ = std::max(0.0, tf_lookup_timeout_);
+	
 	// 参数范围检查和限制
 	visualization_alpha_ = std::clamp(visualization_alpha_, 0.0, 1.0);
 	arrow_length_ = std::max(arrow_length_, 1e-4);
@@ -224,7 +239,7 @@ void ScanControllerNode::loadParams() {
 			} else if (v.size() == 4U) {
 				out.r = v[0]; out.g = v[1]; out.b = v[2]; out.a = v[3];
 			} else {
-				throw std::runtime_error(std::string("非法参数: ~visualization/") + key + " [3|4]");
+				throw std::runtime_error(std::string("非法参数: ~config/visualization/") + key + " [3|4]");
 			}
 		}
 	};
@@ -243,7 +258,7 @@ void ScanControllerNode::loadParams() {
  */
 void ScanControllerNode::loadTestPoints() {
 	XmlRpc::XmlRpcValue xml_points;
-	if (!pnh_.getParam("test_points", xml_points)) {
+	if (!pnh_.getParam("config/overrides/test_points", xml_points)) {
 		// 未配置测试点，使用网格扫描
 		use_test_points_ = false;
 		test_points_.clear();
@@ -251,7 +266,7 @@ void ScanControllerNode::loadTestPoints() {
 	}
 
 	if (xml_points.getType() != XmlRpc::XmlRpcValue::TypeArray || xml_points.size() == 0) {
-		ROS_WARN("[scan_controller] ~test_points must be an array of poses");
+		ROS_WARN_STREAM("[scan_controller] ~config/overrides/test_points must be an array of poses");
 		use_test_points_ = false;
 		test_points_.clear();
 		return;
@@ -288,19 +303,19 @@ void ScanControllerNode::loadTestPoints() {
 		for (int i = 0; i < xml_points.size(); ++i) {
 			XmlRpc::XmlRpcValue &entry = xml_points[i];
 			if (entry.getType() != XmlRpc::XmlRpcValue::TypeArray || entry.size() != 6) {
-				ROS_WARN("[scan_controller] each ~test_points entry must be an array with 6 elements (x y z roll pitch yaw)");
+				ROS_WARN_STREAM("[scan_controller] each ~config/overrides/test_points entry must be an array with 6 elements (x y z roll pitch yaw)");
 				test_points_.clear();
 				use_test_points_ = false;
 				return;
 			}
 			double values[6];
 			for (int j = 0; j < 6; ++j) {
-				if (!getNumeric(entry[j], values[j])) {
-					ROS_WARN("[scan_controller] ~test_points values must be numeric");
-					test_points_.clear();
-					use_test_points_ = false;
-					return;
-				}
+			if (!getNumeric(entry[j], values[j])) {
+				ROS_WARN_STREAM("[scan_controller] ~config/overrides/test_points values must be numeric");
+				test_points_.clear();
+				use_test_points_ = false;
+				return;
+			}
 			}
 			appendPose(values[0], values[1], values[2], values[3], values[4], values[5]);
 		}
@@ -311,7 +326,7 @@ void ScanControllerNode::loadTestPoints() {
 		for (int i = 0; i < xml_points.size(); ++i) {
 			double value = 0.0;
 			if (!getNumeric(xml_points[i], value)) {
-				ROS_WARN("[scan_controller] ~test_points values must be numeric");
+				ROS_WARN_STREAM("[scan_controller] ~config/overrides/test_points values must be numeric");
 				test_points_.clear();
 				use_test_points_ = false;
 				return;
@@ -320,7 +335,7 @@ void ScanControllerNode::loadTestPoints() {
 		}
 
 		if (flat.size() % 6 != 0 || flat.empty()) {
-			ROS_WARN("[scan_controller] ~test_points must contain multiples of 6 values (x y z roll pitch yaw)");
+			ROS_WARN_STREAM("[scan_controller] ~config/overrides/test_points must contain multiples of 6 values (x y z roll pitch yaw)");
 			test_points_.clear();
 			use_test_points_ = false;
 			return;
@@ -347,16 +362,15 @@ void ScanControllerNode::loadTestPoints() {
  * 生成规则：
  * - 在 volume_min 到 volume_max 的范围内
  * - 按照 step 指定的步长生成网格点
- * - 所有点的姿态使用配置的 yaw 和 pitch（roll 固定为 0）
+ * - 所有点的姿态使用配置的 roll、pitch 和 yaw
  * - 生成后优化扫描顺序以减少机械臂运动距离
  */
 void ScanControllerNode::generateScanPoints() {
 	scan_points_.clear();
 
-	// 设置扫描姿态：roll=0，使用配置的 pitch 和 yaw
-	const double roll = 0.0;
+	// 设置扫描姿态：使用配置的 roll、pitch 和 yaw
 	tf2::Quaternion q;
-	q.setRPY(roll, pitch_, yaw_);
+	q.setRPY(roll_, pitch_, yaw_);
 	const geometry_msgs::Quaternion orientation = tf2::toMsg(q);
 
 	// 生成三维网格点：遍历 x, y, z 三个维度
@@ -442,98 +456,153 @@ double ScanControllerNode::poseDistance(const geometry_msgs::Pose &p1, const geo
 }
 
 /**
+ * @brief 初始化机械臂服务客户端
+ */
+void ScanControllerNode::initializeArmServices() {
+	pnh_.param("arm_name", arm_name_, std::string("arm1"));
+	const std::string arm_service_ns = "/mag_device_arm";
+	
+	arm_set_pose_client_ = nh_.serviceClient<mag_device_arm::SetEndEffectorPose>(
+		arm_service_ns + "/set_end_effector_pose");
+	arm_execute_named_client_ = nh_.serviceClient<mag_device_arm::ExecuteNamedTarget>(
+		arm_service_ns + "/execute_named_target");
+	arm_cartesian_path_client_ = nh_.serviceClient<mag_device_arm::ExecuteCartesianPath>(
+		arm_service_ns + "/execute_cartesian_path");
+	
+	ROS_INFO_STREAM("[scan_controller] waiting for mag_device_arm services...");
+	const ros::Duration timeout(10.0);
+	
+	if (!arm_set_pose_client_.waitForExistence(timeout)) {
+		ROS_WARN_STREAM("[scan_controller] mag_device_arm services not available, will retry on use");
+	}
+	if (!arm_execute_named_client_.waitForExistence(timeout)) {
+		ROS_WARN_STREAM("[scan_controller] mag_device_arm execute_named_target service not available");
+	}
+	if (!arm_cartesian_path_client_.waitForExistence(timeout)) {
+		ROS_WARN_STREAM("[scan_controller] mag_device_arm execute_cartesian_path service not available");
+	}
+}
+
+/**
+ * @brief 获取当前末端执行器位姿
+ * @param pose 输出当前位姿
+ * @return 成功返回 true，失败返回 false
+ */
+bool ScanControllerNode::getCurrentEndEffectorPose(geometry_msgs::Pose &pose) {
+	if (end_effector_link_.empty() || frame_id_.empty()) {
+		return false;
+	}
+	
+	try {
+		const geometry_msgs::TransformStamped transform = tf_buffer_.lookupTransform(
+			frame_id_, end_effector_link_, ros::Time(0), ros::Duration(0.5));
+		pose.position.x = transform.transform.translation.x;
+		pose.position.y = transform.transform.translation.y;
+		pose.position.z = transform.transform.translation.z;
+		pose.orientation = transform.transform.rotation;
+		return true;
+	} catch (const tf2::TransformException &ex) {
+		ROS_DEBUG_STREAM("[scan_controller] Failed to get current pose via TF: " << ex.what());
+		return false;
+	}
+}
+
+/**
+ * @brief 尝试使用笛卡尔路径规划移动到目标位姿
+ * @param target_pose 目标位姿
+ * @return 成功返回 true，失败返回 false
+ */
+bool ScanControllerNode::tryCartesianPath(const geometry_msgs::Pose &target_pose) {
+	if (!arm_cartesian_path_client_.exists() || cartesian_path_threshold_ <= 0.0) {
+		return false;
+	}
+	
+	geometry_msgs::Pose current_pose;
+	if (!getCurrentEndEffectorPose(current_pose)) {
+		return false;
+	}
+	
+	const double distance = poseDistance(current_pose, target_pose);
+	if (distance >= cartesian_path_threshold_) {
+		return false;
+	}
+	
+	ROS_DEBUG_STREAM("[scan_controller] Distance " << distance << " m < threshold " 
+	                 << cartesian_path_threshold_ << " m, using Cartesian path planning");
+	
+	mag_device_arm::ExecuteCartesianPath srv;
+	srv.request.arm = arm_name_;
+	srv.request.waypoints.push_back(target_pose);
+	srv.request.step_size = 0.01;
+	srv.request.jump_threshold = 0.0;
+	srv.request.velocity_scaling = max_velocity_scaling_;
+	srv.request.acceleration_scaling = max_acceleration_scaling_;
+	srv.request.execute = true;
+	
+	if (!arm_cartesian_path_client_.call(srv)) {
+		ROS_WARN_STREAM("[scan_controller] Cartesian path planning service call failed");
+		return false;
+	}
+	
+	if (srv.response.success) {
+		ROS_DEBUG_STREAM("[scan_controller] Cartesian path planning succeeded (fraction: " 
+		                 << srv.response.fraction * 100.0 << "%)");
+		return true;
+	}
+	
+	ROS_WARN_STREAM("[scan_controller] Cartesian path planning failed: " << srv.response.message 
+	                << " (fraction: " << srv.response.fraction * 100.0 << "%)");
+	return false;
+}
+
+/**
+ * @brief 使用关节空间规划移动到目标位姿
+ * @param target_pose 目标位姿
+ * @return 成功返回 true，失败返回 false
+ */
+bool ScanControllerNode::tryJointSpacePlanning(const geometry_msgs::Pose &target_pose) {
+	if (!arm_set_pose_client_.exists()) {
+		ROS_ERROR("[scan_controller] mag_device_arm service not available");
+		return false;
+	}
+	
+	mag_device_arm::SetEndEffectorPose srv;
+	srv.request.arm = arm_name_;
+	srv.request.target = target_pose;
+	srv.request.velocity_scaling = max_velocity_scaling_;
+	srv.request.acceleration_scaling = max_acceleration_scaling_;
+	srv.request.execute = true;
+	
+	if (!arm_set_pose_client_.call(srv)) {
+		ROS_ERROR("[scan_controller] failed to call set_end_effector_pose service");
+		return false;
+	}
+	
+	if (!srv.response.success) {
+		ROS_WARN_STREAM("[scan_controller] set_end_effector_pose failed: " << srv.response.message);
+		return false;
+	}
+	
+	return true;
+}
+
+/**
  * @brief 使用 mag_device_arm 服务控制机械臂移动到指定位姿
  * @param pose 目标位姿（在 frame_id 坐标系下）
  * @return 成功返回 true，失败返回 false
  * 
  * 智能选择规划方式：
- * - 如果当前位置和目标位置距离很近（小于 cartesian_path_threshold_），使用笛卡尔路径规划
- * - 否则使用关节空间规划（set_end_effector_pose）
- * 
- * 这样可以避免近距离移动时出现大角度旋转的问题
+ * - 优先尝试笛卡尔路径规划（如果距离小于阈值）
+ * - 失败或条件不满足时回退到关节空间规划
  */
 bool ScanControllerNode::moveToPose(const geometry_msgs::Pose &pose) {
-	// 尝试获取当前末端执行器位姿，用于判断是否使用笛卡尔路径
-	geometry_msgs::Pose current_pose;
-	bool has_current_pose = false;
-	
-	if (!end_effector_link_.empty() && !frame_id_.empty() && cartesian_path_threshold_ > 0.0) {
-		try {
-			// 查询当前末端执行器位姿
-			geometry_msgs::TransformStamped transform = tf_buffer_.lookupTransform(
-				frame_id_, end_effector_link_, ros::Time(0), ros::Duration(0.5));
-			current_pose.position.x = transform.transform.translation.x;
-			current_pose.position.y = transform.transform.translation.y;
-			current_pose.position.z = transform.transform.translation.z;
-			current_pose.orientation = transform.transform.rotation;
-			has_current_pose = true;
-		} catch (const tf2::TransformException &ex) {
-			// TF 查询失败，使用默认的关节空间规划
-			ROS_DEBUG("[scan_controller] Failed to get current pose via TF: %s, using joint space planning", ex.what());
-		}
+	// 优先尝试笛卡尔路径规划
+	if (tryCartesianPath(pose)) {
+		return true;
 	}
 	
-	// 如果获取到当前位姿，计算距离并决定使用哪种规划方式
-	if (has_current_pose) {
-		const double distance = poseDistance(current_pose, pose);
-		if (distance < cartesian_path_threshold_ && arm_cartesian_path_client_.exists()) {
-			// 使用笛卡尔路径规划（直线移动，避免大角度旋转）
-			ROS_DEBUG("[scan_controller] Distance %.4f m < threshold %.4f m, using Cartesian path planning", 
-			          distance, cartesian_path_threshold_);
-			
-			mag_device_arm::ExecuteCartesianPath cartesian_srv;
-			cartesian_srv.request.arm = arm_name_;
-			// 笛卡尔路径需要从当前位置到目标位置的路径点
-			// computeCartesianPath 会自动从当前状态开始，所以只需要目标点
-			cartesian_srv.request.waypoints.push_back(pose);
-			cartesian_srv.request.step_size = 0.01;  // 默认步长（米）
-			cartesian_srv.request.jump_threshold = 0.0;  // 禁用跳跃检测
-			cartesian_srv.request.velocity_scaling = max_velocity_scaling_;
-			cartesian_srv.request.acceleration_scaling = max_acceleration_scaling_;
-			cartesian_srv.request.execute = true;
-			
-			if (!arm_cartesian_path_client_.call(cartesian_srv)) {
-				ROS_WARN("[scan_controller] Cartesian path planning service call failed, falling back to joint space planning");
-				// 笛卡尔路径失败，回退到关节空间规划
-			} else if (cartesian_srv.response.success) {
-				ROS_DEBUG("[scan_controller] Cartesian path planning succeeded (fraction: %.2f%%)", 
-				         cartesian_srv.response.fraction * 100.0);
-				return true;  // 笛卡尔路径成功
-			} else {
-				ROS_WARN("[scan_controller] Cartesian path planning failed: %s (fraction: %.2f%%), falling back to joint space planning", 
-				         cartesian_srv.response.message.c_str(), cartesian_srv.response.fraction * 100.0);
-				// 笛卡尔路径失败，回退到关节空间规划
-			}
-		}
-	}
-	
-	// 使用关节空间规划（默认方式）
-	if (!arm_set_pose_client_.exists()) {
-		ROS_ERROR("[scan_controller] mag_device_arm service not available");
-		return false;
-	}
-
-	// 构造服务请求
-	mag_device_arm::SetEndEffectorPose srv;
-	srv.request.arm = arm_name_;  // 机械臂名称
-	srv.request.target = pose;  // 目标位姿
-	srv.request.velocity_scaling = max_velocity_scaling_;  // 速度缩放因子
-	srv.request.acceleration_scaling = max_acceleration_scaling_;  // 加速度缩放因子
-	srv.request.execute = true;  // 执行运动
-
-	// 调用服务
-	if (!arm_set_pose_client_.call(srv)) {
-		ROS_ERROR("[scan_controller] failed to call set_end_effector_pose service");
-		return false;
-	}
-
-	// 检查执行结果
-	if (!srv.response.success) {
-		ROS_WARN("[scan_controller] set_end_effector_pose failed: %s", srv.response.message.c_str());
-		return false;
-	}
-
-	return true;
+	// 回退到关节空间规划
+	return tryJointSpacePlanning(pose);
 }
 
 /**
@@ -543,7 +612,7 @@ bool ScanControllerNode::moveToPose(const geometry_msgs::Pose &pose) {
  * 就绪姿态通常是一个安全的中间位置，用于扫描开始前和结束后的位置
  */
 bool ScanControllerNode::moveToReadyPose() {
-	ROS_INFO("[scan_controller] moving to ready position using named target");
+	ROS_INFO_STREAM("[scan_controller] moving to ready position using named target");
 
 	if (!arm_execute_named_client_.exists()) {
 		ROS_ERROR("[scan_controller] mag_device_arm execute_named_target service not available");
@@ -566,7 +635,7 @@ bool ScanControllerNode::moveToReadyPose() {
 
 	// 检查执行结果
 	if (!srv.response.success) {
-		ROS_WARN("[scan_controller] execute_named_target failed: %s", srv.response.message.c_str());
+		ROS_WARN_STREAM("[scan_controller] execute_named_target failed: " << srv.response.message);
 		return false;
 	}
 
@@ -594,7 +663,7 @@ void ScanControllerNode::collectDataAtPoint(const geometry_msgs::Pose &pose) {
 	at_pos_msg.data = false;
 	at_position_pub_.publish(at_pos_msg);
 
-	ROS_INFO_STREAM("[scan_controller] moving to position: x=" << pose.position.x
+	ROS_DEBUG_STREAM("[scan_controller] moving to position: x=" << pose.position.x
 									<< ", y=" << pose.position.y << ", z=" << pose.position.z);
 
 	// 控制机械臂移动到目标位姿
@@ -644,25 +713,26 @@ void ScanControllerNode::collectDataAtPoint(const geometry_msgs::Pose &pose) {
 	}
 
 	if (collected_samples_.empty()) {
-		ROS_WARN("[scan_controller] no magnetometer data collected at this point");
+		ROS_WARN_STREAM("[scan_controller] no magnetometer data collected at this point");
 		return;
 	}
 
 	if (!full_requirement_met) {
 		if (num_sensors_ > 0) {
-			ROS_WARN("[scan_controller] collected partial dataset: %zu sensors captured, expected %d",
-			         captured_sensor_count, num_sensors_);
+			ROS_WARN_STREAM("[scan_controller] collected partial dataset: " << captured_sensor_count 
+			                << " sensors captured, expected " << num_sensors_);
 		} else {
-			ROS_WARN("[scan_controller] collected partial dataset (sensor count unknown)");
+			ROS_WARN_STREAM("[scan_controller] collected partial dataset (sensor count unknown)");
 		}
 	}
 
 	const std::size_t sample_count = collected_samples_.size();
 	if (full_requirement_met) {
-		ROS_INFO("[scan_controller] collected %zu samples across %zu sensors", sample_count,
-		         expected_sensor_ids_.empty() ? sensor_samples_buffer_.size() : expected_sensor_ids_.size());
+		ROS_INFO_STREAM("[scan_controller] collected " << sample_count << " samples across " 
+		                << (expected_sensor_ids_.empty() ? sensor_samples_buffer_.size() : expected_sensor_ids_.size()) 
+		                << " sensors");
 	} else {
-		ROS_INFO("[scan_controller] proceeding with %zu sampled frames", sample_count);
+		ROS_INFO_STREAM("[scan_controller] proceeding with " << sample_count << " sampled frames");
 	}
 
 	std::ofstream file(output_file_, std::ios::app);
@@ -687,7 +757,7 @@ void ScanControllerNode::collectDataAtPoint(const geometry_msgs::Pose &pose) {
 		const mag_core_description::SensorEntry *sensor_entry = sensor_array_loaded_ ? sensor_array_.findSensor(static_cast<int>(data.sensor_id)) : nullptr;
 		if (!sensor_entry)
 		{
-			ROS_WARN_THROTTLE(5.0, "Unknown sensor ID: %d", data.sensor_id);
+			ROS_WARN_STREAM_THROTTLE(5.0, "[scan_controller] Unknown sensor ID: " << data.sensor_id);
 			continue;
 		}
 		// 获取传感器在阵列坐标系中的位姿
@@ -703,52 +773,43 @@ void ScanControllerNode::collectDataAtPoint(const geometry_msgs::Pose &pose) {
 				tf2::doTransform(pose_w, pose_w, transform);
 				did_tf = true;
 			} catch (const std::exception &e) {
-				ROS_WARN_THROTTLE(5.0, "TF to '%s' failed: %s; using source frame.", frame_id_.c_str(), e.what());
+				ROS_WARN_STREAM_THROTTLE(5.0, "[scan_controller] TF to '" << frame_id_ 
+				                          << "' failed: " << e.what() << "; using source frame.");
 				did_tf = false;
 			}
 		}
 
-		// 获取磁场向量（在传感器坐标系中）
-		double bx = data.mag_x;
-		double by = data.mag_y;
-		double bz = data.mag_z;
-
-		// 如果需要，将磁场向量也转换到目标坐标系
+		// 获取磁场向量并转换到目标坐标系
+		geometry_msgs::Vector3Stamped mag_vec;
+		mag_vec.header = data.header;
+		mag_vec.vector.x = data.mag_x;
+		mag_vec.vector.y = data.mag_y;
+		mag_vec.vector.z = data.mag_z;
+		
 		if (did_tf) {
 			try {
-				geometry_msgs::Vector3Stamped vin;
-				geometry_msgs::Vector3Stamped vout;
-				vin.header = data.header;
-				vin.vector.x = bx;
-				vin.vector.y = by;
-				vin.vector.z = bz;
-				tf2::doTransform(vin, vout, transform);
-				bx = vout.vector.x;
-				by = vout.vector.y;
-				bz = vout.vector.z;
+				geometry_msgs::Vector3Stamped mag_vec_out;
+				tf2::doTransform(mag_vec, mag_vec_out, transform);
+				mag_vec = mag_vec_out;
 			} catch (const std::exception &e) {
-				ROS_WARN_THROTTLE(5.0, "Failed to transform magnetic field vector: %s", e.what());
+				ROS_WARN_STREAM_THROTTLE(5.0, "[scan_controller] Failed to transform magnetic field vector: " << e.what());
 			}
 		}
-
-		// 提取传感器位姿信息用于记录
-		const geometry_msgs::Point record_point = pose_w.position;
-		const geometry_msgs::Quaternion record_ori = pose_w.orientation;
 		
-		// 写入 CSV 文件：时间戳、磁场向量、传感器位姿、传感器 ID、坐标系
-		// 格式：timestamp,mag_x,mag_y,mag_z,pos_x,pos_y,pos_z,ori_x,ori_y,ori_z,ori_w,sensor_id,frame_id
-		file << data.header.stamp.toSec() << ',' << bx << ',' << by << ',' << bz << ',' << record_point.x << ','
-		     << record_point.y << ',' << record_point.z << ',' << record_ori.x << ',' << record_ori.y << ','
-		     << record_ori.z << ',' << record_ori.w << ',' << data.sensor_id << ',' << data.header.frame_id << '\n';
+		// 写入 CSV 文件
+		file << data.header.stamp.toSec() << ',' << mag_vec.vector.x << ',' << mag_vec.vector.y << ',' << mag_vec.vector.z << ','
+		     << pose_w.position.x << ',' << pose_w.position.y << ',' << pose_w.position.z << ','
+		     << pose_w.orientation.x << ',' << pose_w.orientation.y << ',' << pose_w.orientation.z << ',' << pose_w.orientation.w << ','
+		     << data.sensor_id << ',' << data.header.frame_id << '\n';
 
 		// 累加磁场向量用于计算平均值（用于可视化）
 		auto &acc = averaged_data[data.sensor_id];
 		if (acc.count == 0U) {
-			acc.fallback_position = record_point;  // 保存第一个位置作为备用
+			acc.fallback_position = pose_w.position;
 		}
-		acc.sum_x += bx;
-		acc.sum_y += by;
-		acc.sum_z += bz;
+		acc.sum_x += mag_vec.vector.x;
+		acc.sum_y += mag_vec.vector.y;
+		acc.sum_z += mag_vec.vector.z;
 		acc.count += 1U;
 	}
 	// 确保数据已写入磁盘，降低崩溃丢失风险
@@ -756,16 +817,29 @@ void ScanControllerNode::collectDataAtPoint(const geometry_msgs::Pose &pose) {
 	file.close();
 
 	// 如果启用可视化，发布磁场向量箭头标记
-	if (visualization_enabled_ && marker_pub_) {
+	if (!visualization_enabled_) {
+		ROS_DEBUG_STREAM("[scan_controller] Visualization is disabled, skipping marker publication");
+	} else if (!marker_pub_) {
+		ROS_WARN_STREAM("[scan_controller] Visualization enabled but marker_pub_ is null!");
+	} else {
+		ROS_INFO_STREAM("[scan_controller] Preparing visualization for " << averaged_data.size() << " sensors");
 		visualization_msgs::MarkerArray markers;
 		markers.markers.reserve(averaged_data.size());
 		const ros::Time now = ros::Time::now();
+		
+		int skipped_count = 0;
+		int skipped_no_data = 0;
+		int skipped_no_magnitude = 0;
+		int skipped_no_frame = 0;
+		int created_count = 0;
 		
 		// 为每个传感器创建可视化箭头
 		for (const auto &entry : averaged_data) {
 			const std::uint32_t sensor_id = entry.first;
 			const AggregatedSensorAccumulator &acc = entry.second;
 			if (acc.count == 0U) {
+				skipped_count++;
+				skipped_no_data++;
 				continue;
 			}
 			
@@ -777,7 +851,9 @@ void ScanControllerNode::collectDataAtPoint(const geometry_msgs::Pose &pose) {
 			}
 
 			if (frame_id_.empty()) {
-				ROS_WARN_THROTTLE(5.0, "[scan_controller] Missing frame_id for visualization");
+				ROS_WARN_STREAM_THROTTLE(5.0, "[scan_controller] Missing frame_id for visualization");
+				skipped_count++;
+				skipped_no_frame++;
 				continue;
 			}
 
@@ -788,6 +864,9 @@ void ScanControllerNode::collectDataAtPoint(const geometry_msgs::Pose &pose) {
 			avg_vector.z = acc.sum_z / static_cast<double>(acc.count);
 			double magnitude = std::sqrt(avg_vector.x * avg_vector.x + avg_vector.y * avg_vector.y + avg_vector.z * avg_vector.z);
 			if (magnitude < kEpsilon) {
+				skipped_count++;
+				skipped_no_magnitude++;
+				ROS_DEBUG_STREAM("[scan_controller] Skipping sensor " << sensor_id << " due to small magnitude: " << magnitude);
 				continue;  // 磁场强度太小，跳过可视化
 			}
 
@@ -826,10 +905,18 @@ void ScanControllerNode::collectDataAtPoint(const geometry_msgs::Pose &pose) {
 			marker.color.a = static_cast<float>(std::clamp(color.a, 0.0, 1.0));
 			marker.lifetime = ros::Duration(0.0);  // 永久显示（0 表示不自动删除）
 			markers.markers.push_back(marker);
+			created_count++;
 		}
 
 		if (!markers.markers.empty()) {
+			ROS_INFO_STREAM("[scan_controller] Publishing " << markers.markers.size() << " visualization markers (created=" << created_count 
+			                << ", skipped_total=" << skipped_count << ", no_data=" << skipped_no_data 
+			                << ", no_magnitude=" << skipped_no_magnitude << ", no_frame=" << skipped_no_frame << ")");
 			marker_pub_.publish(markers);
+		} else {
+			ROS_WARN_STREAM("[scan_controller] No markers to publish! (averaged_data.size()=" << averaged_data.size() 
+			                << ", skipped_total=" << skipped_count << ", no_data=" << skipped_no_data 
+			                << ", no_magnitude=" << skipped_no_magnitude << ", no_frame=" << skipped_no_frame << ")");
 		}
 	}
 }
@@ -900,7 +987,7 @@ bool ScanControllerNode::startScan(std_srvs::Trigger::Request &req, std_srvs::Tr
 	if (clear_client.exists()) {
 		std_srvs::Trigger clear_req;
 		if (clear_client.call(clear_req)) {
-			ROS_INFO("[scan_controller] cleared field map aggregator");
+			ROS_INFO_STREAM("[scan_controller] cleared field map aggregator");
 		}
 	}
 
@@ -934,7 +1021,7 @@ bool ScanControllerNode::startScan(std_srvs::Trigger::Request &req, std_srvs::Tr
 	at_position_pub_.publish(at_pos_msg);
 
 	if (!moveToReadyPose()) {
-		ROS_WARN("[scan_controller] failed to return to ready pose after scan");
+		ROS_WARN_STREAM("[scan_controller] failed to return to ready pose after scan");
 	}
 
 	finalizeScan();
@@ -1017,7 +1104,7 @@ void ScanControllerNode::loadSensorConfig() {
 	}
 	catch (const std::exception &e)
 	{
-		ROS_WARN("[scan_controller] 读取 array 配置失败: %s", e.what());
+		ROS_WARN_STREAM("[scan_controller] 读取 array 配置失败: " << e.what());
 		// 尝试使用备用参数
 		int fallback_count = 0;
 		if (pnh_.getParam("array/expected_sensor_count", fallback_count) && fallback_count > 0)
@@ -1028,10 +1115,9 @@ void ScanControllerNode::loadSensorConfig() {
 
 	// 如果无法确定传感器数量，将使用 best-effort 模式
 	if (num_sensors_ <= 0) {
-		ROS_WARN("[scan_controller] sensor count unavailable, sampling will be best-effort");
+		ROS_WARN_STREAM("[scan_controller] sensor count unavailable, sampling will be best-effort");
 	} else {
-		ROS_INFO("[scan_controller] expecting %d sensors with %d frames each", num_sensors_,
-		         frames_per_sensor_);
+		ROS_INFO_STREAM("[scan_controller] expecting " << num_sensors_ << " sensors with " << frames_per_sensor_ << " frames each");
 	}
 }
 
@@ -1045,30 +1131,29 @@ void ScanControllerNode::loadSensorConfig() {
  */
 bool ScanControllerNode::hasEnoughSamplesLocked() const {
 	if (num_sensors_ <= 0) {
-		return false;  // 传感器数量未知，无法判断
+		return false;
 	}
 
-	// 如果配置了期望传感器 ID 列表，检查每个传感器
+	const auto check_sensor = [this](std::uint32_t sensor_id, const std::deque<mag_core_msgs::MagSensorData> &samples) {
+		return static_cast<int>(samples.size()) >= frames_per_sensor_;
+	};
+
 	if (!expected_sensor_ids_.empty()) {
 		for (int sensor_id : expected_sensor_ids_) {
 			auto it = sensor_samples_buffer_.find(static_cast<std::uint32_t>(sensor_id));
-			if (it == sensor_samples_buffer_.end()) {
-				return false;  // 该传感器还没有数据
-			}
-			if (static_cast<int>(it->second.size()) < frames_per_sensor_) {
-				return false;  // 该传感器样本数不足
+			if (it == sensor_samples_buffer_.end() || !check_sensor(it->first, it->second)) {
+				return false;
 			}
 		}
 		return true;
 	}
 
-	// 如果未配置期望传感器 ID 列表，检查缓冲区中的传感器数量和每个传感器的样本数
 	if (static_cast<int>(sensor_samples_buffer_.size()) < num_sensors_) {
-		return false;  // 传感器数量不足
+		return false;
 	}
 	for (const auto &entry : sensor_samples_buffer_) {
-		if (static_cast<int>(entry.second.size()) < frames_per_sensor_) {
-			return false;  // 某个传感器样本数不足
+		if (!check_sensor(entry.first, entry.second)) {
+			return false;
 		}
 	}
 	return true;
@@ -1093,48 +1178,39 @@ void ScanControllerNode::extractSamplesLocked(std::vector<mag_core_msgs::MagSens
 
 	// Lambda 函数：从队列中提取样本
 	auto append_from_queue = [&](const std::deque<mag_core_msgs::MagSensorData> &queue) -> std::size_t {
-		const std::size_t target = static_cast<std::size_t>(frames_per_sensor_);  // 目标样本数
-		const std::size_t available = queue.size();  // 可用样本数
-		// best_effort 模式：提取所有可用样本；否则：提取 min(可用, 目标) 个
+		const std::size_t target = static_cast<std::size_t>(frames_per_sensor_);
+		const std::size_t available = queue.size();
 		const std::size_t count = best_effort ? available : std::min(available, target);
 		if (count == 0) {
 			return 0U;
 		}
-		// 从队列末尾开始提取（最新样本）
 		const std::size_t start_index = available > count ? available - count : 0U;
-		for (std::size_t i = start_index; i < available; ++i) {
-			out.push_back(queue[i]);
-		}
+		out.insert(out.end(), queue.begin() + start_index, queue.end());
 		return count;
 	};
 
+	// 提取样本
 	if (!expected_sensor_ids_.empty()) {
 		for (int sensor_id : expected_sensor_ids_) {
 			auto it = sensor_samples_buffer_.find(static_cast<std::uint32_t>(sensor_id));
 			if (it == sensor_samples_buffer_.end()) {
-				if (!best_effort) {
-					return;
-				}
+				if (!best_effort) return;
 				continue;
 			}
-			const std::size_t c = append_from_queue(it->second);
-			per_sensor_counts[static_cast<std::uint32_t>(sensor_id)] = c;
+			per_sensor_counts[static_cast<std::uint32_t>(sensor_id)] = append_from_queue(it->second);
 		}
-		// 日志每个传感器提取的帧数
-		std::size_t total = 0;
-		for (const auto &p : per_sensor_counts) total += p.second;
-		ROS_INFO_STREAM("[scan_controller] extracted samples (expected list): total=" << total << ", sensors=" << per_sensor_counts.size());
-		return;
+	} else {
+		for (const auto &entry : sensor_samples_buffer_) {
+			per_sensor_counts[entry.first] = append_from_queue(entry.second);
+		}
 	}
 
-	for (const auto &entry : sensor_samples_buffer_) {
-		const std::size_t c = append_from_queue(entry.second);
-		per_sensor_counts[entry.first] = c;
-	}
-
+	// 统计并输出日志
 	std::size_t total = 0;
 	for (const auto &p : per_sensor_counts) total += p.second;
-	ROS_INFO_STREAM("[scan_controller] extracted samples: total=" << total << ", sensors=" << per_sensor_counts.size());
+	const std::string mode = expected_sensor_ids_.empty() ? "" : " (expected list)";
+	ROS_INFO_STREAM("[scan_controller] extracted samples" << mode << ": total=" << total 
+	                << ", sensors=" << per_sensor_counts.size());
 }
 
 /**
@@ -1202,7 +1278,7 @@ bool ScanControllerNode::lookupSensorPosition(std::uint32_t sensor_id, geometry_
 		out_position.z = transform.transform.translation.z;
 		return true;
 	} catch (const tf2::TransformException &ex) {
-		ROS_WARN_THROTTLE(5.0, "[scan_controller] TF lookup for sensor %u failed: %s", sensor_id, ex.what());
+		ROS_WARN_STREAM_THROTTLE(5.0, "[scan_controller] TF lookup for sensor " << sensor_id << " failed: " << ex.what());
 		return false;
 	}
 }
@@ -1222,14 +1298,14 @@ void ScanControllerNode::run() {
 
 	// 如果配置了自动启动，等待服务就绪后自动开始扫描
 	if (autostart_) {
-		ROS_INFO("[scan_controller] waiting for mag_device_arm services to become ready...");
+		ROS_INFO_STREAM("[scan_controller] waiting for mag_device_arm services to become ready...");
 		// 等待服务可用
 		if (!arm_set_pose_client_.waitForExistence(ros::Duration(10.0))) {
 			ROS_ERROR("[scan_controller] mag_device_arm services not available for autostart");
 			return;
 		}
 		
-		ROS_INFO("[scan_controller] Services ready. Waiting additional stabilization time...");
+		ROS_INFO_STREAM("[scan_controller] Services ready. Waiting additional stabilization time...");
 		ros::Duration(3.0).sleep();  // 额外等待 3 秒确保系统稳定
 
 		// 调用开始扫描服务
@@ -1256,23 +1332,20 @@ void ScanControllerNode::run() {
  */
 std::string ScanControllerNode::resolveRelativePath(const std::string &path) {
 	if (path.empty() || path.front() == '/') {
-		return path;  // 已经是绝对路径或空路径
+		return path;
 	}
 
 	try {
-		// 获取当前包路径，从中提取工作空间根目录
-		const std::string current_package_path = ros::package::getPath("mag_arm_scan");
-		const std::size_t src_pos = current_package_path.find("/src/");
+		const std::string package_path = ros::package::getPath("mag_arm_scan");
+		const std::size_t src_pos = package_path.find("/src/");
 		if (src_pos != std::string::npos) {
-			const std::string workspace_root = current_package_path.substr(0, src_pos);
-			return workspace_root + '/' + path;
+			return package_path.substr(0, src_pos) + '/' + path;
 		}
-		ROS_WARN("[scan_controller] could not determine workspace root, using original path");
-		return path;
+		ROS_WARN_STREAM("[scan_controller] could not determine workspace root, using original path");
 	} catch (const std::exception &e) {
 		ROS_ERROR_STREAM("[scan_controller] failed to get package path: " << e.what());
-		return path;
 	}
+	return path;
 }
 
 /**
@@ -1284,42 +1357,36 @@ std::string ScanControllerNode::resolveRelativePath(const std::string &path) {
  * - 设置输出文件路径：<timestamp_dir>/scan_data.csv
  */
 void ScanControllerNode::createTimestampDirectory() {
-	// 获取当前时间
-	const std::time_t now = std::time(nullptr);
+	// 生成时间戳
+	std::time_t now = std::time(nullptr);
 	std::tm tm_buffer{};
-	std::tm *tm_ptr = std::localtime(&now);
-	if (tm_ptr != nullptr) {
+	if (std::tm *tm_ptr = std::localtime(&now)) {
 		tm_buffer = *tm_ptr;
 	}
-
-	// 格式化时间戳：YYYYMMDD_HHMM
+	
 	char timestamp[20] = {0};
 	if (std::strftime(timestamp, sizeof(timestamp), "%Y%m%d_%H%M", &tm_buffer) == 0) {
-		ROS_WARN("[scan_controller] failed to format timestamp, using default");
 		std::snprintf(timestamp, sizeof(timestamp), "default");
+		ROS_WARN_STREAM("[scan_controller] failed to format timestamp, using default");
 	}
 
 	// 创建时间戳目录
 	std::string timestamp_dir = output_base_dir_ + "/scan_" + timestamp;
+	bool created = false;
+	
 	try {
-		// 尝试使用 C++17 filesystem API
-		if (std::filesystem::create_directories(timestamp_dir)) {
-			ROS_INFO_STREAM("[scan_controller] created timestamp directory: " << timestamp_dir);
-		} else {
-			ROS_INFO_STREAM("[scan_controller] timestamp directory already exists or no action needed: " << timestamp_dir);
-		}
+		created = std::filesystem::create_directories(timestamp_dir);
 	} catch (const std::exception &e) {
-		// 如果 filesystem API 失败，回退到 mkdir
-		ROS_WARN_STREAM("[scan_controller] failed to create directory using filesystem: " << timestamp_dir
-										<< ", error: " << e.what() << ". Falling back to mkdir.");
-		if (mkdir(timestamp_dir.c_str(), 0755) == 0) {
-			ROS_INFO_STREAM("[scan_controller] created timestamp directory (mkdir fallback): " << timestamp_dir);
-		} else if (errno == EEXIST) {
-			ROS_INFO_STREAM("[scan_controller] timestamp directory already exists (mkdir fallback): " << timestamp_dir);
+		ROS_WARN_STREAM("[scan_controller] filesystem API failed: " << e.what() << ", using mkdir");
+		if (mkdir(timestamp_dir.c_str(), 0755) == 0 || errno == EEXIST) {
+			created = true;
 		} else {
-			ROS_WARN_STREAM("[scan_controller] failed to create directory (mkdir fallback): " << timestamp_dir
-											<< " (errno: " << errno << ")");
+			ROS_WARN_STREAM("[scan_controller] mkdir failed (errno: " << errno << ")");
 		}
+	}
+	
+	if (created) {
+		ROS_INFO_STREAM("[scan_controller] timestamp directory: " << timestamp_dir);
 	}
 
 	// 设置输出文件路径
@@ -1355,7 +1422,7 @@ void ScanControllerNode::finalizeScan() {
 		sensor_samples_buffer_.clear();
 	}
 	collected_samples_.clear();
-	ROS_INFO("[scan_controller] cleared collected data buffer");
+	ROS_INFO_STREAM("[scan_controller] cleared collected data buffer");
 }
 
 }  // namespace mag_arm_scan
@@ -1372,11 +1439,32 @@ void ScanControllerNode::finalizeScan() {
  * - 运行节点主循环
  */
 int main(int argc, char **argv) {
+	setlocale(LC_ALL, "zh_CN.UTF-8");
 	ros::init(argc, argv, "scan_controller_node");
-	ros::NodeHandle nh;  // 全局节点句柄
-	ros::NodeHandle pnh("~");  // 私有节点句柄
+	
+	// 根据环境变量设置日志级别
+	if (const char* min_severity = std::getenv("ROSCONSOLE_MIN_SEVERITY")) {
+		const std::string level_str(min_severity);
+		ros::console::Level level = ros::console::levels::Info;
+		
+		if (level_str == "DEBUG") {
+			level = ros::console::levels::Debug;
+		} else if (level_str == "INFO") {
+			level = ros::console::levels::Info;
+		} else if (level_str == "WARN") {
+			level = ros::console::levels::Warn;
+		} else if (level_str == "ERROR") {
+			level = ros::console::levels::Error;
+		} else if (level_str == "FATAL") {
+			level = ros::console::levels::Fatal;
+		}
+		
+		ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, level);
+	}
+	
+	ros::NodeHandle nh;
+	ros::NodeHandle pnh("~");
 
-	// 创建并运行扫描控制节点
 	mag_arm_scan::ScanControllerNode node(nh, pnh);
 	node.run();
 

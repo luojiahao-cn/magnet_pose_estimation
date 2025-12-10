@@ -39,6 +39,8 @@ namespace mag_pose_estimator {
  */
 MagPoseEstimatorNode::MagPoseEstimatorNode(ros::NodeHandle nh, ros::NodeHandle pnh)
     : nh_(std::move(nh)), pnh_(std::move(pnh)) {
+  // 设置日志级别
+  setLogLevel();
   loadParameters();
   initializeEstimator();
 
@@ -48,6 +50,32 @@ MagPoseEstimatorNode::MagPoseEstimatorNode(ros::NodeHandle nh, ros::NodeHandle p
     mag_sub_ = nh_.subscribe(mag_topic_, 25, &MagPoseEstimatorNode::magCallback, this);
   }
   pose_pub_ = nh_.advertise<mag_core_msgs::MagnetPose>(pose_topic_, 10);
+}
+
+/**
+ * @brief 设置 ROS 日志级别
+ */
+void MagPoseEstimatorNode::setLogLevel() {
+  std::string log_level_str = "INFO";
+  pnh_.param("logging_level", log_level_str, log_level_str);
+  
+  // 转换为大写
+  std::transform(log_level_str.begin(), log_level_str.end(), log_level_str.begin(), ::toupper);
+  
+  ros::console::Level level = ros::console::levels::Info;
+  if (log_level_str == "DEBUG") {
+    level = ros::console::levels::Debug;
+  } else if (log_level_str == "INFO") {
+    level = ros::console::levels::Info;
+  } else if (log_level_str == "WARN") {
+    level = ros::console::levels::Warn;
+  } else if (log_level_str == "ERROR") {
+    level = ros::console::levels::Error;
+  } else if (log_level_str == "FATAL") {
+    level = ros::console::levels::Fatal;
+  }
+  
+  ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, level);
 }
 
 /**
@@ -84,7 +112,7 @@ void MagPoseEstimatorNode::loadParameters() {
   config_items.emplace_back("数据话题", !batch_topic_.empty() ? batch_topic_ : mag_topic_);
   config_items.emplace_back("结果话题", pose_topic_);
   
-  ROS_INFO("[mag_pose_estimator] %s", logger::formatConfig(config_items).c_str());
+  ROS_INFO_STREAM("[mag_pose_estimator] " << logger::formatConfig(config_items));
 
   // EKF 参数
   ekf_params_.world_field = cfg.world_field;
@@ -142,7 +170,7 @@ void MagPoseEstimatorNode::initializeEstimator() {
   namespace logger = mag_core_utils::logger;
   std::vector<std::pair<std::string, std::string>> init_items;
   init_items.emplace_back("估计器类型", estimator_type_);
-  ROS_INFO("[mag_pose_estimator] %s", logger::formatInit(init_items).c_str());
+  ROS_INFO_STREAM("[mag_pose_estimator] " << logger::formatInit(init_items));
 }
 
 /**
@@ -325,7 +353,7 @@ MagPoseEstimatorConfig MagPoseEstimatorNode::loadMagPoseEstimatorConfig(
 void MagPoseEstimatorNode::batchCallback(
     const mag_core_msgs::MagSensorBatchConstPtr &msg) {
   if (msg->measurements.empty()) {
-    ROS_DEBUG_THROTTLE(2.0, "[mag_pose_estimator] 批量数据为空");
+    ROS_DEBUG_STREAM_THROTTLE(2.0, "[mag_pose_estimator] 批量数据为空");
     return;
   }
 
@@ -353,11 +381,12 @@ void MagPoseEstimatorNode::batchCallback(
   
   if (success) {
     double avg_residual = std::sqrt(error / (processed_measurements.size() * 3));
-    ROS_INFO_THROTTLE(1.0, "[mag_pose_estimator] 姿态估计成功，总误差: %.9f，平均残差: %.9f mT，传感器数: %zu，置信度: %.3f",
-                      error, avg_residual, processed_measurements.size(), confidence);
+    ROS_INFO_STREAM_THROTTLE(1.0, "[mag_pose_estimator] 姿态估计成功，总误差: " << error 
+                             << "，平均残差: " << avg_residual << " mT，传感器数: " 
+                             << processed_measurements.size() << "，置信度: " << confidence);
   } else {
-    ROS_WARN_THROTTLE(1.0, "[mag_pose_estimator] 姿态估计失败，传感器数量: %zu，置信度: %.3f", 
-                      processed_measurements.size(), confidence);
+    ROS_WARN_STREAM_THROTTLE(1.0, "[mag_pose_estimator] 姿态估计失败，传感器数量: " 
+                              << processed_measurements.size() << "，置信度: " << confidence);
   }
 }
 
@@ -533,8 +562,8 @@ bool MagPoseEstimatorNode::querySensorTransform(const std::string &frame_id,
         transform.transform.translation.z);
     return true;
   } catch (const tf2::TransformException &ex) {
-    ROS_WARN_THROTTLE(1.0, "[mag_pose_estimator] TF 查询失败 (%s -> %s): %s",
-                      frame_id.c_str(), output_frame_.c_str(), ex.what());
+    ROS_WARN_STREAM_THROTTLE(1.0, "[mag_pose_estimator] TF 查询失败 (" << frame_id 
+                             << " -> " << output_frame_ << "): " << ex.what());
     return false;
   }
 }
@@ -561,7 +590,7 @@ std::unique_ptr<EstimatorBase> MagPoseEstimatorNode::createEstimator(
     return std::make_unique<OptimizerEstimator>();  // 临时回退到 optimizer
   }
 
-  ROS_WARN("[mag_pose_estimator] 未知估计器类型 '%s'，默认使用 EKF", type.c_str());
+  ROS_WARN_STREAM("[mag_pose_estimator] 未知估计器类型 '" << type << "'，默认使用 EKF");
   return std::make_unique<EKFEstimator>();
 }
 

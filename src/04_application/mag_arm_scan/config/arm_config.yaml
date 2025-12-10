@@ -1,5 +1,7 @@
-# 机械臂配置
-# 用于机械臂扫描场景的机械臂配置
+# 机械臂配置 - 最大展开模式
+# 用于机械臂扫描场景的机械臂配置，启用最大展开优化
+# 日志级别：DEBUG, INFO, WARN, ERROR, FATAL（默认 INFO）
+logging_level: INFO
 config:
   arms:
     - name: arm1
@@ -13,10 +15,37 @@ config:
       goal_position_tolerance: 0.005
       goal_orientation_tolerance: 0.01
       default_named_target: ready
+      
+      # 启用最大展开优化：使机械臂倾向于展开姿态，避免折叠
+      # 同时启用加权最短行程准则：在避免碰撞的前提下，选择关节移动量最小的解
+      prefer_extended_config: true
+      
+      # 关节权重（可选）：用于加权最短行程准则的关节移动代价权重
+      # 权重越大，表示该关节移动的代价越高（应该少移动）
+      # 权重越小，表示该关节移动的代价越低（可以多移动）
+      # 
+      # 默认策略（如果未配置）：
+      #   - 前3个大关节（基座、肩部、肘部）：权重 3.0（少移动）
+      #   - 后3个小关节（腕部）：权重 0.5（多移动）
+      # 
+      # 遵循"多移动小关节，少移动大关节"的原则
+      # 
+      # 注意：关节名称需要根据实际URDF调整，可通过以下命令查看：
+      #   rostopic echo /joint_states
+      #   或查看MoveIt配置中的关节名称
+      # 
+      # 示例配置（FR5V6 机械臂）：
+      joint_weights:
+        frrobot_j1: 5.0   # 基座旋转关节（大关节），权重高，少移动
+        frrobot_j2: 3.0   # 肩部关节（大关节），权重高，少移动
+        frrobot_j3: 3.0   # 肘部关节（大关节），权重高，少移动
+        frrobot_j4: 2.0   # 腕部关节1（小关节），权重低，多移动
+        frrobot_j5: 1.0   # 腕部关节2（小关节），权重低，多移动
+        frrobot_j6: 0.5   # 腕部关节3（小关节），权重低，多移动
+      
       named_targets:
         - name: ready
           target: ready
         - name: up
           target: up
-
 

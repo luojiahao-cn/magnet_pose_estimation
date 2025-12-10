@@ -216,8 +216,9 @@ bool OptimizerEstimator::processBatch(
   }
 
   if (measurements.size() < static_cast<size_t>(config_.optimizer.min_sensors)) {
-    ROS_WARN_THROTTLE(2.0, "[mag_pose_estimator] 传感器数量不足 (当前: %zu, 需要: %zu)",
-                      measurements.size(), static_cast<size_t>(config_.optimizer.min_sensors));
+    ROS_WARN_STREAM_THROTTLE(2.0, "[mag_pose_estimator] 传感器数量不足 (当前: " 
+                              << measurements.size() << ", 需要: " 
+                              << static_cast<size_t>(config_.optimizer.min_sensors) << ")");
     // 返回上一次的估计结果，避免未初始化的四元数
     pose_out = last_pose_;
     if (error_out) {
@@ -249,8 +250,9 @@ bool OptimizerEstimator::processBatch(
   }
 
   if (batch.size() < static_cast<size_t>(config_.optimizer.min_sensors)) {
-    ROS_WARN_THROTTLE(2.0, "[mag_pose_estimator] TF 查询后传感器数量不足 (当前: %zu, 需要: %zu)",
-                      batch.size(), static_cast<size_t>(config_.optimizer.min_sensors));
+    ROS_WARN_STREAM_THROTTLE(2.0, "[mag_pose_estimator] TF 查询后传感器数量不足 (当前: " 
+                              << batch.size() << ", 需要: " 
+                              << static_cast<size_t>(config_.optimizer.min_sensors) << ")");
     // 返回上一次的估计结果，避免未初始化的四元数
     pose_out = last_pose_;
     if (error_out) {
@@ -306,7 +308,7 @@ bool OptimizerEstimator::estimateFromBatch(const std::vector<OptimizerMeasuremen
                                           geometry_msgs::Pose &pose_out,
                                           double *error_out) {
   if (batch.empty()) {
-    ROS_WARN_THROTTLE(1.0, "[mag_pose_estimator] 批量数据为空，无法估计");
+    ROS_WARN_STREAM_THROTTLE(1.0, "[mag_pose_estimator] 批量数据为空，无法估计");
     // 返回上一次的估计结果，避免未初始化的四元数
     pose_out = last_pose_;
     if (error_out) {
@@ -325,8 +327,10 @@ bool OptimizerEstimator::estimateFromBatch(const std::vector<OptimizerMeasuremen
   double direction[3] = {magnet_direction_.x(), magnet_direction_.y(), magnet_direction_.z()};
   double strength = magnet_strength_;
   
-  ROS_DEBUG_THROTTLE(2.0, "[mag_pose_estimator] 使用上一次优化结果作为初始值: 位置=[%.3f, %.3f, %.3f], 方向=[%.3f, %.3f, %.3f], 强度=%.2f",
-                     position[0], position[1], position[2], direction[0], direction[1], direction[2], strength);
+  ROS_DEBUG_STREAM_THROTTLE(2.0, "[mag_pose_estimator] 使用上一次优化结果作为初始值: 位置=[" 
+                            << position[0] << ", " << position[1] << ", " << position[2] 
+                            << "], 方向=[" << direction[0] << ", " << direction[1] << ", " << direction[2] 
+                            << "], 强度=" << strength);
   
   // 归一化方向向量
   double dir_norm = std::sqrt(direction[0] * direction[0] + direction[1] * direction[1] + direction[2] * direction[2]);
@@ -364,7 +368,7 @@ bool OptimizerEstimator::estimateFromBatch(const std::vector<OptimizerMeasuremen
   }
   
   if (has_invalid) {
-    ROS_WARN_THROTTLE(1.0, "[mag_pose_estimator] 初始值无效，重置为配置默认值");
+    ROS_WARN_STREAM_THROTTLE(1.0, "[mag_pose_estimator] 初始值无效，重置为配置默认值");
     position[0] = config_.optimizer.initial_position.x();
     position[1] = config_.optimizer.initial_position.y();
     position[2] = config_.optimizer.initial_position.z();
@@ -387,7 +391,7 @@ bool OptimizerEstimator::estimateFromBatch(const std::vector<OptimizerMeasuremen
   // 验证批量数据
   for (const auto &meas : batch) {
     if (!meas.sensor_position.allFinite() || !meas.magnetic_field.allFinite()) {
-      ROS_WARN_THROTTLE(1.0, "[mag_pose_estimator] 测量数据包含无效值");
+      ROS_WARN_STREAM_THROTTLE(1.0, "[mag_pose_estimator] 测量数据包含无效值");
       // 返回上一次的估计结果，避免未初始化的四元数
       pose_out = last_pose_;
       if (error_out) {
@@ -457,20 +461,22 @@ bool OptimizerEstimator::estimateFromBatch(const std::vector<OptimizerMeasuremen
       if (error_reduction > 0.1 && final_error < initial_error * 0.9) {
         // 误差有明显改善（至少10%），认为优化有效
         optimization_success = true;
-        ROS_WARN_THROTTLE(1.0, "[mag_pose_estimator] 优化未完全收敛但误差已改善，迭代次数: %d，初始误差: %.9f，最终误差: %.9f，改善: %.2f%%",
-                         summary.num_successful_steps, initial_error, final_error, error_reduction * 100.0);
+        ROS_WARN_STREAM_THROTTLE(1.0, "[mag_pose_estimator] 优化未完全收敛但误差已改善，迭代次数: " 
+                                 << summary.num_successful_steps << "，初始误差: " << initial_error 
+                                 << "，最终误差: " << final_error << "，改善: " << error_reduction * 100.0 << "%");
       } else {
-        ROS_WARN_THROTTLE(1.0, "[mag_pose_estimator] 优化未收敛且改善不足，迭代次数: %d，初始误差: %.9f，最终误差: %.9f，改善: %.2f%%",
-                         summary.num_successful_steps, initial_error, final_error, error_reduction * 100.0);
+        ROS_WARN_STREAM_THROTTLE(1.0, "[mag_pose_estimator] 优化未收敛且改善不足，迭代次数: " 
+                                 << summary.num_successful_steps << "，初始误差: " << initial_error 
+                                 << "，最终误差: " << final_error << "，改善: " << error_reduction * 100.0 << "%");
       }
     } else {
       // 初始误差过小，无法判断改善情况
-      ROS_WARN_THROTTLE(1.0, "[mag_pose_estimator] 优化未收敛，初始误差过小 (%.9e)，无法判断改善情况",
-                       initial_error);
+      ROS_WARN_STREAM_THROTTLE(1.0, "[mag_pose_estimator] 优化未收敛，初始误差过小 (" 
+                               << std::scientific << initial_error << ")，无法判断改善情况");
     }
   } else if (summary.termination_type == ceres::FAILURE) {
-    ROS_WARN_THROTTLE(1.0, "[mag_pose_estimator] 优化失败: %s，初始误差: %.9f", 
-                     summary.BriefReport().c_str(), initial_error);
+    ROS_WARN_STREAM_THROTTLE(1.0, "[mag_pose_estimator] 优化失败: " << summary.BriefReport() 
+                             << "，初始误差: " << initial_error);
   }
   
   // 如果优化失败，检查是否应该使用备份状态或更新状态
@@ -491,14 +497,16 @@ bool OptimizerEstimator::estimateFromBatch(const std::vector<OptimizerMeasuremen
       if (error_out) {
         *error_out = final_error;
       }
-      ROS_WARN_THROTTLE(1.0, "[mag_pose_estimator] 优化未收敛但误差已改善，更新状态供下次使用，平均残差: %.9f -> %.9f mT，初始误差: %.9f，最终误差: %.9f",
-                        avg_initial_residual, avg_final_residual, initial_error, final_error);
+      ROS_WARN_STREAM_THROTTLE(1.0, "[mag_pose_estimator] 优化未收敛但误差已改善，更新状态供下次使用，平均残差: " 
+                                << avg_initial_residual << " -> " << avg_final_residual 
+                                << " mT，初始误差: " << initial_error << "，最终误差: " << final_error);
       return false;  // 虽然误差改善了，但未收敛，仍返回 false
     }
     
     // 否则使用备份状态（优化前的状态）
-    ROS_WARN_THROTTLE(1.0, "[mag_pose_estimator] 优化未收敛且误差未改善，使用备份状态，平均残差: %.9f mT，初始误差: %.9f，最终误差: %.9f",
-                      avg_final_residual, initial_error, final_error);
+    ROS_WARN_STREAM_THROTTLE(1.0, "[mag_pose_estimator] 优化未收敛且误差未改善，使用备份状态，平均残差: " 
+                              << avg_final_residual << " mT，初始误差: " << initial_error 
+                              << "，最终误差: " << final_error);
     position_ = backup_position;
     magnet_direction_ = backup_direction;
     magnet_strength_ = backup_strength;
@@ -518,8 +526,10 @@ bool OptimizerEstimator::estimateFromBatch(const std::vector<OptimizerMeasuremen
     // 误差过大，即使优化收敛也认为失败
     // 使用备份状态（上一次的优化结果），不重置为配置初始值
     // 因为实际应用中不知道磁铁的真实位置
-    ROS_WARN_THROTTLE(1.0, "[mag_pose_estimator] 优化收敛但误差过大，平均残差: %.9f mT (阈值: %.9f mT)，使用备份状态，初始误差: %.9f，最终误差: %.9f",
-                      avg_final_residual, max_acceptable_residual, initial_error, final_error);
+    ROS_WARN_STREAM_THROTTLE(1.0, "[mag_pose_estimator] 优化收敛但误差过大，平均残差: " 
+                              << avg_final_residual << " mT (阈值: " << max_acceptable_residual 
+                              << " mT)，使用备份状态，初始误差: " << initial_error 
+                              << "，最终误差: " << final_error);
     position_ = backup_position;
     magnet_direction_ = backup_direction;
     magnet_strength_ = backup_strength;
@@ -543,9 +553,10 @@ bool OptimizerEstimator::estimateFromBatch(const std::vector<OptimizerMeasuremen
     magnet_strength_ = strength;
   }
   
-  ROS_DEBUG_THROTTLE(2.0, "[mag_pose_estimator] 优化成功，更新状态供下次使用: 位置=[%.3f, %.3f, %.3f], 方向=[%.3f, %.3f, %.3f], 强度=%.2f",
-                     position_.x(), position_.y(), position_.z(), 
-                     magnet_direction_.x(), magnet_direction_.y(), magnet_direction_.z(), magnet_strength_);
+  ROS_DEBUG_STREAM_THROTTLE(2.0, "[mag_pose_estimator] 优化成功，更新状态供下次使用: 位置=[" 
+                            << position_.x() << ", " << position_.y() << ", " << position_.z() 
+                            << "], 方向=[" << magnet_direction_.x() << ", " << magnet_direction_.y() 
+                            << ", " << magnet_direction_.z() << "], 强度=" << magnet_strength_);
 
   // 构造输出姿态
   pose_out = buildPoseFromDirection(magnet_direction_, position_);
@@ -558,9 +569,10 @@ bool OptimizerEstimator::estimateFromBatch(const std::vector<OptimizerMeasuremen
 
   // 记录优化信息
   if (summary.termination_type == ceres::CONVERGENCE || summary.termination_type == ceres::USER_SUCCESS) {
-    ROS_DEBUG_THROTTLE(1.0, "[mag_pose_estimator] 优化成功收敛，迭代次数: %d，初始误差: %.9f，最终误差: %.9f，平均残差: %.9f mT，改善: %.2f%%",
-                      summary.num_successful_steps, initial_error, final_error, avg_final_residual,
-                      (initial_error - final_error) / initial_error * 100.0);
+    ROS_DEBUG_STREAM_THROTTLE(1.0, "[mag_pose_estimator] 优化成功收敛，迭代次数: " 
+                              << summary.num_successful_steps << "，初始误差: " << initial_error 
+                              << "，最终误差: " << final_error << "，平均残差: " << avg_final_residual 
+                              << " mT，改善: " << (initial_error - final_error) / initial_error * 100.0 << "%");
   }
 
   return true;
@@ -588,7 +600,7 @@ void OptimizerEstimator::computeCovariance(ceres::Problem &problem,
     covariance_blocks.push_back({direction, position});
 
     if (!covariance.Compute(covariance_blocks, &problem)) {
-      ROS_WARN_THROTTLE(1.0, "[mag_pose_estimator] 协方差矩阵计算失败");
+      ROS_WARN_STREAM_THROTTLE(1.0, "[mag_pose_estimator] 协方差矩阵计算失败");
       covariance_.setIdentity();
       has_covariance_ = false;
       return;
@@ -612,7 +624,7 @@ void OptimizerEstimator::computeCovariance(ceres::Problem &problem,
 
     has_covariance_ = true;
   } catch (const std::exception &e) {
-    ROS_WARN_THROTTLE(1.0, "[mag_pose_estimator] 协方差矩阵计算异常: %s", e.what());
+    ROS_WARN_STREAM_THROTTLE(1.0, "[mag_pose_estimator] 协方差矩阵计算异常: " << e.what());
     covariance_.setIdentity();
     has_covariance_ = false;
   }

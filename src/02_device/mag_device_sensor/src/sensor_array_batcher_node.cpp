@@ -4,6 +4,8 @@
 #include <mag_core_utils/logger_utils.hpp>
 
 #include <ros/ros.h>
+#include <ros/console.h>
+#include <algorithm>
 
 namespace mag_device_sensor
 {
@@ -12,6 +14,8 @@ SensorArrayBatcherNode::SensorArrayBatcherNode(ros::NodeHandle nh, ros::NodeHand
     : nh_(std::move(nh))
     , pnh_(std::move(pnh))
 {
+    // 设置日志级别
+    setLogLevel();
     loadParameters();
     setupSubscribers();
     setupPublishers();
@@ -21,7 +25,31 @@ SensorArrayBatcherNode::SensorArrayBatcherNode(ros::NodeHandle nh, ros::NodeHand
     std::vector<std::pair<std::string, std::string>> init_items;
     init_items.emplace_back("已订阅话题", input_topic_);
     init_items.emplace_back("已发布话题", output_topic_);
-    ROS_INFO("[sensor_array_batcher] %s", logger::formatInit(init_items).c_str());
+    ROS_INFO_STREAM("[sensor_array_batcher] " << logger::formatInit(init_items));
+}
+
+void SensorArrayBatcherNode::setLogLevel()
+{
+    std::string log_level_str = "INFO";
+    pnh_.param("logging_level", log_level_str, log_level_str);
+    
+    // 转换为大写
+    std::transform(log_level_str.begin(), log_level_str.end(), log_level_str.begin(), ::toupper);
+    
+    ros::console::Level level = ros::console::levels::Info;
+    if (log_level_str == "DEBUG") {
+        level = ros::console::levels::Debug;
+    } else if (log_level_str == "INFO") {
+        level = ros::console::levels::Info;
+    } else if (log_level_str == "WARN") {
+        level = ros::console::levels::Warn;
+    } else if (log_level_str == "ERROR") {
+        level = ros::console::levels::Error;
+    } else if (log_level_str == "FATAL") {
+        level = ros::console::levels::Fatal;
+    }
+    
+    ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, level);
 }
 
 void SensorArrayBatcherNode::loadParameters()
@@ -86,10 +114,10 @@ void SensorArrayBatcherNode::loadParameters()
         config_items.emplace_back("传感器数量", "未设置（将收集到任何数据就发布，不推荐）");
     }
 
-    ROS_INFO("[sensor_array_batcher] %s", logger::formatConfig(config_items).c_str());
+    ROS_INFO_STREAM("[sensor_array_batcher] " << logger::formatConfig(config_items));
     
     if (total_sensors_ == 0 && min_sensors_ == 0) {
-        ROS_WARN("[sensor_array_batcher] 未设置 total_sensors 或 min_sensors，将收集到任何数据就发布（不推荐）");
+        ROS_WARN_STREAM("[sensor_array_batcher] 未设置 total_sensors 或 min_sensors，将收集到任何数据就发布（不推荐）");
     }
 }
 
@@ -148,7 +176,7 @@ void SensorArrayBatcherNode::sensorCallback(const mag_core_msgs::MagSensorDataCo
     // 在锁外发布（避免在锁内进行网络操作）
     if (should_publish) {
         batch_pub_.publish(batch_msg);
-        ROS_DEBUG("[sensor_array_batcher] ✓ 发布批量数据: %zu 个传感器", batch_msg.measurements.size());
+        ROS_DEBUG_STREAM("[sensor_array_batcher] ✓ 发布批量数据: " << batch_msg.measurements.size() << " 个传感器");
     }
 }
 
@@ -164,7 +192,7 @@ bool SensorArrayBatcherNode::publishBatch()
     // 检查数据是否超时
     ros::Time now = ros::Time::now();
     if ((now - last_update_time_).toSec() > timeout_seconds_) {
-        ROS_WARN_THROTTLE(2.0, "[sensor_array_batcher] ✗ 传感器数据超时，清空缓存");
+        ROS_WARN_STREAM_THROTTLE(2.0, "[sensor_array_batcher] ✗ 传感器数据超时，清空缓存");
         sensor_cache_.clear();
         return false;
     }
@@ -194,15 +222,15 @@ bool SensorArrayBatcherNode::publishBatch()
     
     // 检查传感器数量
     if (target_sensors > 0 && batch_msg.measurements.size() < target_sensors) {
-        ROS_DEBUG_THROTTLE(1.0, "[sensor_array_batcher] 传感器数量不足 (当前: %zu, 需要: %zu)，跳过发布",
-                          batch_msg.measurements.size(), target_sensors);
+        ROS_DEBUG_STREAM_THROTTLE(1.0, "[sensor_array_batcher] 传感器数量不足 (当前: " 
+                                  << batch_msg.measurements.size() << ", 需要: " << target_sensors << ")，跳过发布");
         return false;
     }
 
     // 发布批量数据
     if (!batch_msg.measurements.empty()) {
         batch_pub_.publish(batch_msg);
-        ROS_DEBUG("[sensor_array_batcher] ✓ 发布批量数据: %zu 个传感器", batch_msg.measurements.size());
+        ROS_DEBUG_STREAM("[sensor_array_batcher] ✓ 发布批量数据: " << batch_msg.measurements.size() << " 个传感器");
         return true;
     }
     
@@ -211,7 +239,7 @@ bool SensorArrayBatcherNode::publishBatch()
 
 void SensorArrayBatcherNode::start()
 {
-    ROS_INFO("[sensor_array_batcher] 节点已启动，等待传感器数据...");
+    ROS_INFO_STREAM("[sensor_array_batcher] 节点已启动，等待传感器数据...");
     ros::spin();
 }
 

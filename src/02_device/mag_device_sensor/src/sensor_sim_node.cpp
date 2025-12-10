@@ -125,11 +125,9 @@ void SensorSimNode::onSimulationTimer(const ros::TimerEvent &)
         const ros::Duration time_since_start = ros::Time::now() - start_time_;
         if (time_since_start.toSec() > 3.0)
         {
-            ROS_WARN_THROTTLE(2.0,
-                              "[mag_device_sensor_sim] ✗ 无法查询磁铁 TF (%s -> %s): %s",
-                              simulation_.magnet_parent_frame.c_str(),
-                              simulation_.magnet_child_frame.c_str(),
-                              ex.what());
+            ROS_WARN_STREAM_THROTTLE(2.0, "[mag_device_sensor_sim] ✗ 无法查询磁铁 TF (" 
+                                     << simulation_.magnet_parent_frame << " -> " 
+                                     << simulation_.magnet_child_frame << "): " << ex.what());
         }
         return;
     }
@@ -169,7 +167,7 @@ Eigen::Vector3d SensorSimNode::sampleNoise()
     }
     else
     {
-        ROS_WARN_ONCE("[mag_device_sensor_sim] ✗ 未识别的噪声类型 '%s'，将忽略噪声", noise_.type.c_str());
+        ROS_WARN_STREAM_ONCE("[mag_device_sensor_sim] ✗ 未识别的噪声类型 '" << noise_.type << "'，将忽略噪声");
     }
     return noise;
 }
@@ -180,7 +178,7 @@ void SensorSimNode::publishReadings(const geometry_msgs::TransformStamped &magne
     const auto &sensors = array_.sensors();
     if (sensors.empty())
     {
-        ROS_WARN_THROTTLE(5.0, "[mag_device_sensor_sim] ✗ 无可用传感器描述，跳过发布");
+        ROS_WARN_STREAM_THROTTLE(5.0, "[mag_device_sensor_sim] ✗ 无可用传感器描述，跳过发布");
         return;
     }
 
@@ -198,9 +196,9 @@ void SensorSimNode::publishReadings(const geometry_msgs::TransformStamped &magne
         const ros::Duration time_since_start = ros::Time::now() - start_time_;
         if (time_since_start.toSec() > 3.0)
         {
-            ROS_WARN_THROTTLE(2.0,
-                              "[mag_device_sensor_sim] ✗ 无法查询传感器阵列 TF (%s -> %s)，使用配置中的静态位姿: %s",
-                              array_.parentFrame().c_str(), array_.arrayFrame().c_str(), ex.what());
+            ROS_WARN_STREAM_THROTTLE(2.0, "[mag_device_sensor_sim] ✗ 无法查询传感器阵列 TF (" 
+                                     << array_.parentFrame() << " -> " << array_.arrayFrame() 
+                                     << ")，使用配置中的静态位姿: " << ex.what());
         }
         tf2::fromMsg(array_.arrayPose(), parent_array);
     }
@@ -218,9 +216,8 @@ void SensorSimNode::publishReadings(const geometry_msgs::TransformStamped &magne
         }
         catch (const tf2::TransformException &ex)
         {
-            ROS_WARN_THROTTLE(2.0,
-                              "[mag_device_sensor_sim] ✗ 无法查询 world -> %s 的 TF，磁场计算可能不正确: %s",
-                              array_.parentFrame().c_str(), ex.what());
+            ROS_WARN_STREAM_THROTTLE(2.0, "[mag_device_sensor_sim] ✗ 无法查询 world -> " 
+                                     << array_.parentFrame() << " 的 TF，磁场计算可能不正确: " << ex.what());
             need_array_transform = false;
         }
     }
@@ -238,9 +235,8 @@ void SensorSimNode::publishReadings(const geometry_msgs::TransformStamped &magne
         }
         catch (const tf2::TransformException &ex)
         {
-            ROS_WARN_THROTTLE(2.0,
-                              "[mag_device_sensor_sim] ✗ 无法查询 world -> %s 的 TF，磁场计算可能不正确: %s",
-                              simulation_.magnet_parent_frame.c_str(), ex.what());
+            ROS_WARN_STREAM_THROTTLE(2.0, "[mag_device_sensor_sim] ✗ 无法查询 world -> " 
+                                     << simulation_.magnet_parent_frame << " 的 TF，磁场计算可能不正确: " << ex.what());
             need_magnet_transform = false;
         }
     }

@@ -11,6 +11,10 @@
   
   <!-- 启动跟踪控制节点 -->
   <node name="tracking_control_node" pkg="mag_tracking_control" type="tracking_control_node" output="screen">
+    <!-- 方式1：通过环境变量设置日志级别（全局，优先级较低） -->
+    <!-- <env name="ROSCONSOLE_MIN_SEVERITY" value="DEBUG"/> -->
+    <!-- 方式2：通过rosparam设置日志级别（节点级别，优先级更高，会覆盖YAML配置） -->
+    <!-- <rosparam param="logging_level">DEBUG</rosparam> -->
   </node>
 </launch>
 

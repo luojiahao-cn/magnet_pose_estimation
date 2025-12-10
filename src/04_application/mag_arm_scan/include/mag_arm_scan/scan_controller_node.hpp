@@ -30,10 +30,15 @@ public:
   void run();
 
 private:
+  void setLogLevel();
   void loadParams();
   void generateScanPoints();
   void optimizeScanOrder();
   void loadSensorConfig();
+  void initializeArmServices();
+  bool getCurrentEndEffectorPose(geometry_msgs::Pose &pose);
+  bool tryCartesianPath(const geometry_msgs::Pose &target_pose);
+  bool tryJointSpacePlanning(const geometry_msgs::Pose &target_pose);
   static double poseDistance(const geometry_msgs::Pose &p1, const geometry_msgs::Pose &p2);
 
   bool moveToPose(const geometry_msgs::Pose &pose);
@@ -93,8 +98,9 @@ private:
   std::vector<int> expected_sensor_ids_;
 
   std::string frame_id_;
-  double yaw_{0.0};
-  double pitch_{0.0};
+  double roll_{0.0};   // 扫描姿态的滚转角（弧度）
+  double pitch_{0.0}; // 扫描姿态的俯仰角（弧度）
+  double yaw_{0.0};   // 扫描姿态的偏航角（弧度）
   bool autostart_{false};
   std::string mag_topic_;
   double wait_time_{0.0};

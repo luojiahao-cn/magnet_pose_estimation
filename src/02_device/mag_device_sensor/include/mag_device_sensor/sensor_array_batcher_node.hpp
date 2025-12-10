@@ -35,6 +35,11 @@ public:
 
 private:
     /**
+     * @brief 设置 ROS 日志级别
+     */
+    void setLogLevel();
+
+    /**
      * @brief 加载配置参数
      */
     void loadParameters();

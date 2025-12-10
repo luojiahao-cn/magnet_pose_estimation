@@ -58,6 +58,7 @@ public:
     void start();
 
 private:
+    void setLogLevel();
     void setupPublishers();
     void openSerial();
 

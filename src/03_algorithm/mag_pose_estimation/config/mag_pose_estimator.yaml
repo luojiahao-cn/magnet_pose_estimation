@@ -1,5 +1,7 @@
 # 磁铁姿态估计器节点配置文件
 # 该文件定义了磁铁姿态估计算法的所有配置参数
+# 日志级别：DEBUG, INFO, WARN, ERROR, FATAL（默认 INFO）
+logging_level: INFO
 config:
   # 坐标系配置
   frames:

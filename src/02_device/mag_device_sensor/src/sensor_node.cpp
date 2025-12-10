@@ -2,6 +2,7 @@
 
 #include <ros/console.h>
 
+#include <algorithm>
 #include <cctype>
 #include <sstream>
 #include <stdexcept>
@@ -27,6 +28,8 @@ SensorNode::SensorNode(ros::NodeHandle nh,
       driver_config_(std::move(driver_config)),
       topic_config_(std::move(topic_config))
 {
+    // 设置日志级别
+    setLogLevel();
     if (driver_config_.raw_max <= 0.0)
     {
         driver_config_.raw_max = kDefaultRawMax;
@@ -68,6 +71,30 @@ void SensorNode::start()
             tf_publisher_->publishStatic();
         }
     }
+}
+
+void SensorNode::setLogLevel()
+{
+    std::string log_level_str = "INFO";
+    pnh_.param("logging_level", log_level_str, log_level_str);
+    
+    // 转换为大写
+    std::transform(log_level_str.begin(), log_level_str.end(), log_level_str.begin(), ::toupper);
+    
+    ros::console::Level level = ros::console::levels::Info;
+    if (log_level_str == "DEBUG") {
+        level = ros::console::levels::Debug;
+    } else if (log_level_str == "INFO") {
+        level = ros::console::levels::Info;
+    } else if (log_level_str == "WARN") {
+        level = ros::console::levels::Warn;
+    } else if (log_level_str == "ERROR") {
+        level = ros::console::levels::Error;
+    } else if (log_level_str == "FATAL") {
+        level = ros::console::levels::Fatal;
+    }
+    
+    ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, level);
 }
 
 void SensorNode::setupPublishers()
@@ -163,7 +190,7 @@ void SensorNode::publishMeasurement(int id, double x_raw, double y_raw, double z
     const auto *sensor = array_.findSensor(id);
     if (!sensor)
     {
-        ROS_WARN_THROTTLE(2.0, "[mag_device_sensor] 未知传感器 id=%d，已忽略", id);
+        ROS_WARN_STREAM_THROTTLE(2.0, "[mag_device_sensor] 未知传感器 id=" << id << "，已忽略");
         return;
     }
 
@@ -212,13 +239,13 @@ void SensorNode::runLoop()
                 }
                 else
                 {
-                    ROS_WARN_THROTTLE(5.0, "[mag_device_sensor] 串口数据格式不匹配: %s", line.c_str());
+                    ROS_WARN_STREAM_THROTTLE(5.0, "[mag_device_sensor] 串口数据格式不匹配: " << line);
                 }
             }
         }
         catch (const std::exception &e)
         {
-            ROS_WARN_THROTTLE(2.0, "[mag_device_sensor] 读取串口失败: %s", e.what());
+            ROS_WARN_STREAM_THROTTLE(2.0, "[mag_device_sensor] 读取串口失败: " << e.what());
         }
 
         if (driver_config_.freq_stat_period > 0.0)
@@ -228,10 +255,8 @@ void SensorNode::runLoop()
             if (elapsed >= driver_config_.freq_stat_period)
             {
                 double hz = message_counter_ / elapsed;
-                ROS_INFO("[mag_device_sensor] 发布频率 %.2f Hz (窗口 %.1fs 内 %llu 条)",
-                         hz,
-                         elapsed,
-                         static_cast<unsigned long long>(message_counter_));
+                ROS_INFO_STREAM("[mag_device_sensor] 发布频率 " << hz << " Hz (窗口 " << elapsed 
+                                << "s 内 " << static_cast<unsigned long long>(message_counter_) << " 条)");
                 message_counter_ = 0;
                 freq_window_start_ = now;
             }

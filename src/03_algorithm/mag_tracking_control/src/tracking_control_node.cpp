@@ -8,6 +8,7 @@
 #include <ros/console.h>
 #include <locale.h>
 #include <rosparam_shortcuts/rosparam_shortcuts.h>
+#include <algorithm>
 
 namespace mag_tracking_control {
 
@@ -21,6 +22,8 @@ TrackingControlNode::TrackingControlNode(ros::NodeHandle nh, ros::NodeHandle pnh
     , is_executing_trajectory_(false)
     , should_stop_thread_(false)
 {
+    // 设置日志级别
+    setLogLevel();
     loadParameters();
     
     // 创建策略实例
@@ -62,11 +65,11 @@ TrackingControlNode::TrackingControlNode(ros::NodeHandle nh, ros::NodeHandle pnh
     } else {
         // 服务暂时不可用，记录状态并继续等待（不阻塞）
         init_items.emplace_back("机械臂服务", config_.arm_service_name + " (等待中...)");
-        ROS_INFO("[tracking_control] 等待机械臂服务: %s", config_.arm_service_name.c_str());
+        ROS_INFO_STREAM("[tracking_control] 等待机械臂服务: " << config_.arm_service_name);
         // 在后台等待服务可用（不阻塞构造函数）
         std::thread([this, name = config_.arm_service_name]() {
             arm_service_client_.waitForExistence();
-            ROS_INFO("[tracking_control] 机械臂服务已可用: %s", name.c_str());
+            ROS_INFO_STREAM("[tracking_control] 机械臂服务已可用: " << name);
         }).detach();
     }
     
@@ -85,11 +88,11 @@ TrackingControlNode::TrackingControlNode(ros::NodeHandle nh, ros::NodeHandle pnh
         } else {
             // 服务暂时不可用，记录状态并继续等待（不阻塞）
             init_items.emplace_back("笛卡尔路径服务", cartesian_path_service_name_ + " (等待中...)");
-            ROS_INFO("[tracking_control] 等待笛卡尔路径服务: %s", cartesian_path_service_name_.c_str());
+            ROS_INFO_STREAM("[tracking_control] 等待笛卡尔路径服务: " << cartesian_path_service_name_);
             // 在后台等待服务可用（不阻塞构造函数）
             std::thread([this, name = cartesian_path_service_name_]() {
                 cartesian_path_client_.waitForExistence();
-                ROS_INFO("[tracking_control] 笛卡尔路径服务已可用: %s", name.c_str());
+                ROS_INFO_STREAM("[tracking_control] 笛卡尔路径服务已可用: " << name);
             }).detach();
             init_items.emplace_back("连续轨迹模式", "已启用（通过服务接口）");
         }
@@ -111,7 +114,7 @@ TrackingControlNode::TrackingControlNode(ros::NodeHandle nh, ros::NodeHandle pnh
     }
     
     // 统一输出初始化信息（在所有服务检查完成后）
-    ROS_INFO("[tracking_control] %s", logger::formatInit(init_items).c_str());
+    ROS_INFO_STREAM("[tracking_control] " << logger::formatInit(init_items));
 }
 
 TrackingControlNode::~TrackingControlNode() {
@@ -122,6 +125,29 @@ TrackingControlNode::~TrackingControlNode() {
             trajectory_execution_thread_.join();
         }
     }
+}
+
+void TrackingControlNode::setLogLevel() {
+    std::string log_level_str = "INFO";
+    pnh_.param("logging_level", log_level_str, log_level_str);
+    
+    // 转换为大写
+    std::transform(log_level_str.begin(), log_level_str.end(), log_level_str.begin(), ::toupper);
+    
+    ros::console::Level level = ros::console::levels::Info;
+    if (log_level_str == "DEBUG") {
+        level = ros::console::levels::Debug;
+    } else if (log_level_str == "INFO") {
+        level = ros::console::levels::Info;
+    } else if (log_level_str == "WARN") {
+        level = ros::console::levels::Warn;
+    } else if (log_level_str == "ERROR") {
+        level = ros::console::levels::Error;
+    } else if (log_level_str == "FATAL") {
+        level = ros::console::levels::Fatal;
+    }
+    
+    ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, level);
 }
 
 void TrackingControlNode::loadParameters() {
@@ -149,7 +175,7 @@ void TrackingControlNode::loadParameters() {
         config_items.emplace_back("轨迹缓冲大小", std::to_string(config_.trajectory_buffer_size));
     }
     
-    ROS_INFO("[tracking_control] %s", logger::formatConfig(config_items).c_str());
+    ROS_INFO_STREAM("[tracking_control] " << logger::formatConfig(config_items));
 }
 
 std::unique_ptr<TrackingControlStrategyBase> TrackingControlNode::createStrategy(const std::string &type) {
@@ -184,29 +210,29 @@ void TrackingControlNode::magnetPoseCallback(const mag_core_msgs::MagnetPose::Co
 void TrackingControlNode::controlLoop(const ros::TimerEvent &/*event*/) {
     // 检查是否收到磁铁位姿
     if (!has_magnet_pose_) {
-        ROS_WARN_THROTTLE(2.0, "[tracking_control] 尚未收到磁铁位姿");
+        ROS_WARN_STREAM_THROTTLE(2.0, "[tracking_control] 尚未收到磁铁位姿");
         return;
     }
     
     // 检查磁铁位姿是否过期
     double time_since_last = (ros::Time::now() - last_magnet_pose_time_).toSec();
     if (time_since_last > 1.0) {
-        ROS_WARN_THROTTLE(2.0, "[tracking_control] 磁铁位姿已过期 (%.2f 秒)", time_since_last);
+        ROS_WARN_STREAM_THROTTLE(2.0, "[tracking_control] 磁铁位姿已过期 (" << time_since_last << " 秒)");
         return;
     }
     
     // 检查位姿估计置信度
     const double min_confidence_threshold = 0.3;  // 最小置信度阈值
     if (current_magnet_confidence_ < min_confidence_threshold) {
-        ROS_WARN_THROTTLE(2.0, "[tracking_control] 位姿估计置信度过低 (%.3f < %.3f)，暂停控制", 
-                          current_magnet_confidence_, min_confidence_threshold);
+        ROS_WARN_STREAM_THROTTLE(2.0, "[tracking_control] 位姿估计置信度过低 (" 
+                                 << current_magnet_confidence_ << " < " << min_confidence_threshold << ")，暂停控制");
         return;
     }
     
     // 如果置信度较低但未低于阈值，发出警告但继续控制
     if (current_magnet_confidence_ < 0.5) {
-        ROS_WARN_THROTTLE(1.0, "[tracking_control] 位姿估计置信度较低 (%.3f)，控制精度可能受影响", 
-                          current_magnet_confidence_);
+        ROS_WARN_STREAM_THROTTLE(1.0, "[tracking_control] 位姿估计置信度较低 (" 
+                                << current_magnet_confidence_ << ")，控制精度可能受影响");
     }
     
     // 检查策略是否需要更新
@@ -217,7 +243,7 @@ void TrackingControlNode::controlLoop(const ros::TimerEvent &/*event*/) {
     // 获取当前传感器位姿
     geometry_msgs::Pose current_sensor_pose;
     if (!getCurrentSensorPose(current_sensor_pose)) {
-        ROS_WARN_THROTTLE(2.0, "[tracking_control] 无法获取当前传感器位姿");
+        ROS_WARN_STREAM_THROTTLE(2.0, "[tracking_control] 无法获取当前传感器位姿");
         return;
     }
     
@@ -231,12 +257,12 @@ void TrackingControlNode::controlLoop(const ros::TimerEvent &/*event*/) {
     // 计算目标位姿
     TrackingControlOutput output;
     if (!strategy_->computeTargetPose(input, output)) {
-        ROS_WARN("[tracking_control] 策略计算失败: %s", output.message.c_str());
+        ROS_WARN_STREAM("[tracking_control] 策略计算失败: " << output.message);
         return;
     }
     
     if (!output.is_valid) {
-        ROS_WARN("[tracking_control] 目标位姿无效: %s", output.message.c_str());
+        ROS_WARN_STREAM("[tracking_control] 目标位姿无效: " << output.message);
         return;
     }
     
@@ -255,7 +281,7 @@ void TrackingControlNode::controlLoop(const ros::TimerEvent &/*event*/) {
         } else {
             // 旧模式：直接执行
             if (executePose(output.target_pose)) {
-                ROS_DEBUG("[tracking_control] 成功执行目标位姿，质量评分: %.3f", output.quality_score);
+                ROS_DEBUG_STREAM("[tracking_control] 成功执行目标位姿，质量评分: " << output.quality_score);
             }
         }
     }
@@ -277,7 +303,7 @@ bool TrackingControlNode::getCurrentSensorPose(geometry_msgs::Pose &pose) {
         
         return true;
     } catch (const tf2::TransformException &ex) {
-        ROS_DEBUG_THROTTLE(1.0, "[tracking_control] TF查询失败: %s", ex.what());
+        ROS_DEBUG_STREAM_THROTTLE(1.0, "[tracking_control] TF查询失败: " << ex.what());
         return false;
     }
 }
@@ -298,11 +324,11 @@ bool TrackingControlNode::executePose(const geometry_msgs::Pose &target_pose) {
         if (srv.response.success) {
             return true;
         } else {
-            ROS_WARN_THROTTLE(1.0, "[tracking_control] 机械臂执行失败: %s", srv.response.message.c_str());
+            ROS_WARN_STREAM_THROTTLE(1.0, "[tracking_control] 机械臂执行失败: " << srv.response.message);
             return false;
         }
     } else {
-        ROS_WARN_THROTTLE(1.0, "[tracking_control] 调用机械臂服务失败");
+        ROS_WARN_STREAM_THROTTLE(1.0, "[tracking_control] 调用机械臂服务失败");
         return false;
     }
 }
@@ -312,7 +338,7 @@ void TrackingControlNode::addToTrajectoryBuffer(const geometry_msgs::Pose &targe
     
     // 限制缓冲大小，避免内存无限增长
     if (trajectory_buffer_.size() >= config_.trajectory_buffer_size * 2) {
-        ROS_WARN_THROTTLE(1.0, "[tracking_control] 轨迹缓冲已满，丢弃最旧的点");
+        ROS_WARN_STREAM_THROTTLE(1.0, "[tracking_control] 轨迹缓冲已满，丢弃最旧的点");
         trajectory_buffer_.pop();
     }
     
@@ -359,14 +385,14 @@ void TrackingControlNode::executeContinuousTrajectory() {
     
     if (cartesian_path_client_.call(srv)) {
         if (srv.response.success) {
-            ROS_DEBUG("[tracking_control] 成功执行连续轨迹，包含 %zu 个点，完成度: %.2f%%", 
-                     waypoints.size(), srv.response.fraction * 100.0);
+            ROS_DEBUG_STREAM("[tracking_control] 成功执行连续轨迹，包含 " << waypoints.size() 
+                            << " 个点，完成度: " << srv.response.fraction * 100.0 << "%");
         } else {
-            ROS_WARN("[tracking_control] 笛卡尔路径执行失败: %s (完成度: %.2f%%)", 
-                    srv.response.message.c_str(), srv.response.fraction * 100.0);
+            ROS_WARN_STREAM("[tracking_control] 笛卡尔路径执行失败: " << srv.response.message 
+                           << " (完成度: " << srv.response.fraction * 100.0 << "%)");
         }
     } else {
-        ROS_WARN_THROTTLE(1.0, "[tracking_control] 调用笛卡尔路径服务失败");
+        ROS_WARN_STREAM_THROTTLE(1.0, "[tracking_control] 调用笛卡尔路径服务失败");
     }
     
     is_executing_trajectory_.store(false);
@@ -384,7 +410,7 @@ void TrackingControlNode::trajectoryExecutionThread() {
 }
 
 void TrackingControlNode::run() {
-    ROS_INFO("[tracking_control] 节点已启动，开始控制循环");
+    ROS_INFO_STREAM("[tracking_control] 节点已启动，开始控制循环");
     ros::spin();
     // 析构函数会处理线程清理
 }

@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <locale>
 #include <memory>
 #include <mutex>
@@ -22,6 +23,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <ros/console.h>
 
 namespace mag_device_arm
 {
@@ -66,6 +68,19 @@ ArmConfig parseArmConfig(const XmlRpc::XmlRpcValue &arm_node,
     cfg.position_tolerance = xml::optionalNumberField(node, "goal_position_tolerance", context, cfg.position_tolerance);
     cfg.orientation_tolerance = xml::optionalNumberField(node, "goal_orientation_tolerance", context, cfg.orientation_tolerance);
     cfg.default_named_target = xml::optionalStringField(node, "default_named_target", context, cfg.default_named_target);
+    cfg.prefer_extended_config = xml::optionalBoolField(node, "prefer_extended_config", context, cfg.prefer_extended_config);
+    
+    // 加载关节权重配置（可选）
+    if (xml::hasMember(node, "joint_weights"))
+    {
+        const auto &weights = xml::requireStructField(node, "joint_weights", context);
+        for (const auto &entry : weights)
+        {
+            const std::string joint_name = entry.first;
+            const auto joint_ctx = xml::makeContext(context, "joint_weights." + joint_name);
+            cfg.joint_weights[joint_name] = xml::readNumber(entry.second, joint_ctx);
+        }
+    }
 
     if (xml::hasMember(node, "base_tf"))
     {
@@ -88,7 +103,7 @@ ArmConfig parseArmConfig(const XmlRpc::XmlRpcValue &arm_node,
     if (xml::hasMember(node, "named_targets"))
     {
         const auto &named_targets = xml::requireArrayField(node, "named_targets", context);
-        for (int i = 0; i < named_targets.size(); ++i)
+        for (size_t i = 0; i < static_cast<size_t>(named_targets.size()); ++i)
         {
             const auto idx_ctx = xml::makeContext(context, "named_targets[" + std::to_string(i) + "]");
             const auto &entry = xml::asStruct(named_targets[i], idx_ctx);
@@ -102,8 +117,6 @@ ArmConfig parseArmConfig(const XmlRpc::XmlRpcValue &arm_node,
 }
 
 } // namespace
-
-using moveit::planning_interface::MoveGroupInterface;
 
 std::vector<ArmConfig> loadArmConfigs(const XmlRpc::XmlRpcValue &root,
                                       const std::string &context)
@@ -138,38 +151,73 @@ std::vector<ArmConfig> loadArmConfigs(const XmlRpc::XmlRpcValue &root,
 ArmNode::ArmNode(ros::NodeHandle nh,
                  ros::NodeHandle pnh,
                  std::vector<ArmConfig> arm_configs)
-    : nh_(nh), pnh_(pnh)
+    : nh_(nh), pnh_(pnh), verbose_logging_(false)
 {
-    // 初始化机械臂配置
-    for (size_t i = 0; i < arm_configs.size(); ++i)
+    // 设置日志级别
+    setLogLevel();
+    // 读取日志级别参数
+    pnh_.param("verbose_logging", verbose_logging_, false);
+    
+    for (auto &config : arm_configs)
     {
-        const std::string& key = arm_configs[i].name;
+        const std::string &key = config.name;
         if (arms_.find(key) != arms_.end())
         {
             throw std::runtime_error("重复的机械臂名称: " + key);
         }
-        // 使用 piecewise_construct 直接构造，避免复制不可复制的成员
         arms_.emplace(std::piecewise_construct,
                       std::forward_as_tuple(key),
                       std::forward_as_tuple());
-        arms_[key].config = std::move(arm_configs[i]);
+        arms_[key].config = std::move(config);
     }
+}
+
+void ArmNode::setLogLevel()
+{
+    std::string log_level_str = "INFO";
+    pnh_.param("logging_level", log_level_str, log_level_str);
+    
+    // 转换为大写
+    std::transform(log_level_str.begin(), log_level_str.end(), log_level_str.begin(), ::toupper);
+    
+    ros::console::Level level = ros::console::levels::Info;
+    if (log_level_str == "DEBUG") {
+        level = ros::console::levels::Debug;
+    } else if (log_level_str == "INFO") {
+        level = ros::console::levels::Info;
+    } else if (log_level_str == "WARN") {
+        level = ros::console::levels::Warn;
+    } else if (log_level_str == "ERROR") {
+        level = ros::console::levels::Error;
+    } else if (log_level_str == "FATAL") {
+        level = ros::console::levels::Fatal;
+    }
+    
+    ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, level);
 }
 
 void ArmNode::start()
 {
     // 初始化 MoveGroupInterface 并按需发布静态 TF
     std::vector<geometry_msgs::TransformStamped> static_transforms;
+    const auto stamp = ros::Time::now();
 
     for (auto &kv : arms_)
     {
         ArmHandle &handle = kv.second;
         try
         {
-            handle.move_group = std::make_unique<MoveGroupInterface>(handle.config.group_name);
+            handle.move_group = std::make_unique<moveit::planning_interface::MoveGroupInterface>(handle.config.group_name);
+            if (verbose_logging_)
+            {
+                ROS_DEBUG_STREAM("[mag_device_arm] 初始化机械臂: " << handle.config.name 
+                                 << " (group: " << handle.config.group_name << ")");
+            }
         }
         catch (const std::exception &e)
         {
+            ROS_ERROR("[mag_device_arm] MoveGroupInterface 初始化失败 (%s): %s", 
+                     handle.config.group_name.c_str(), e.what());
             throw std::runtime_error("MoveGroupInterface 初始化失败 (" + handle.config.group_name + "): " + e.what());
         }
 
@@ -183,10 +231,14 @@ void ArmNode::start()
         group.setMaxVelocityScalingFactor(handle.config.default_velocity);
         group.setMaxAccelerationScalingFactor(handle.config.default_acceleration);
 
-        const auto stamp = ros::Time::now();
         if (handle.config.base_tf.enabled)
         {
             static_transforms.push_back(makeTransform(handle.config.base_tf, stamp));
+            if (verbose_logging_)
+            {
+                ROS_DEBUG_STREAM("[mag_device_arm] 配置静态 TF: " << handle.config.base_tf.parent_frame 
+                                 << " -> " << handle.config.base_tf.child_frame);
+            }
         }
     }
 
@@ -200,16 +252,20 @@ void ArmNode::start()
     execute_cartesian_path_srv_ = pnh_.advertiseService("execute_cartesian_path", &ArmNode::handleExecuteCartesianPath, this);
 
     ROS_INFO_STREAM("[mag_device_arm] 已初始化 " << arms_.size() << " 个机械臂接口");
+    if (verbose_logging_)
+    {
+        ROS_INFO_STREAM("[mag_device_arm] 详细日志已启用");
+    }
 }
 
 bool ArmNode::handleSetPose(mag_device_arm::SetEndEffectorPose::Request &req,
                             mag_device_arm::SetEndEffectorPose::Response &res)
 {
-    // 使用 MoveIt 规划并可选执行末端位姿的直达运动
     std::string error;
     auto *group = getMoveGroup(req.arm, error);
     if (!group)
     {
+        ROS_ERROR("[mag_device_arm] set_end_effector_pose 失败: %s", error.c_str());
         res.success = false;
         res.message = error;
         return true;
@@ -218,53 +274,55 @@ bool ArmNode::handleSetPose(mag_device_arm::SetEndEffectorPose::Request &req,
     ArmHandle &handle = arms_.at(req.arm);
     std::lock_guard<std::mutex> lock(handle.mutex);
 
-    group->setStartStateToCurrentState();
-    group->setPoseReferenceFrame(handle.config.reference_frame);
-    group->setEndEffectorLink(handle.config.end_effector_link);
+    configureMoveGroup(group, handle, req.velocity_scaling, req.acceleration_scaling);
 
-    const double vel = req.velocity_scaling > 0.0 ? req.velocity_scaling : handle.config.default_velocity;
-    const double acc = req.acceleration_scaling > 0.0 ? req.acceleration_scaling : handle.config.default_acceleration;
-    group->setMaxVelocityScalingFactor(vel);
-    group->setMaxAccelerationScalingFactor(acc);
-
-    group->setPoseTarget(req.target, handle.config.end_effector_link);
-
-    MoveGroupInterface::Plan plan;
-    auto plan_result = group->plan(plan);
-    if (plan_result != moveit::planning_interface::MoveItErrorCode::SUCCESS)
+    // 尝试使用最优逆解选择（如果配置了优化选项）
+    bool use_optimal_ik = !handle.config.joint_weights.empty() || handle.config.prefer_extended_config;
+    if (use_optimal_ik)
     {
-        res.success = false;
-        res.message = "规划失败，MoveIt 错误码=" + std::to_string(plan_result.val);
-        group->clearPoseTargets();
-        return true;
+        if (selectOptimalIKSolution(group, handle.config, req.target, handle.config.end_effector_link))
+        {
+            if (verbose_logging_)
+            {
+                ROS_DEBUG_STREAM("[mag_device_arm] 使用加权最短行程准则选择了最优逆解");
+            }
+        }
+        else
+        {
+            ROS_WARN_STREAM("[mag_device_arm] 最优逆解选择失败，回退到位姿目标");
+            group->setPoseTarget(req.target, handle.config.end_effector_link);
+        }
+    }
+    else
+    {
+        group->setPoseTarget(req.target, handle.config.end_effector_link);
     }
 
-    if (req.execute)
+    moveit::planning_interface::MoveGroupInterface::Plan plan;
+    if (!planAndExecute(group, plan, req.execute, res.message))
     {
-        auto exec_result = group->execute(plan);
-        if (exec_result != moveit::planning_interface::MoveItErrorCode::SUCCESS)
-        {
-            res.success = false;
-            res.message = "执行失败，MoveIt 错误码=" + std::to_string(exec_result.val);
-            group->clearPoseTargets();
-            return true;
-        }
+        ROS_ERROR("[mag_device_arm] set_end_effector_pose 失败 (%s): %s", req.arm.c_str(), res.message.c_str());
+        res.success = false;
+        return true;
     }
 
     res.success = true;
     res.message = req.execute ? "规划并执行成功" : "规划成功";
-    group->clearPoseTargets();
+    if (verbose_logging_)
+    {
+        ROS_INFO_STREAM("[mag_device_arm] set_end_effector_pose 成功 (" << req.arm << "): " << res.message);
+    }
     return true;
 }
 
 bool ArmNode::handleExecuteNamedTarget(mag_device_arm::ExecuteNamedTarget::Request &req,
                                        mag_device_arm::ExecuteNamedTarget::Response &res)
 {
-    // 将自定义别名映射到 MoveIt 的 named target 并执行
     std::string error;
     auto *group = getMoveGroup(req.arm, error);
     if (!group)
     {
+        ROS_ERROR("[mag_device_arm] execute_named_target 失败: %s", error.c_str());
         res.success = false;
         res.message = error;
         return true;
@@ -274,66 +332,50 @@ bool ArmNode::handleExecuteNamedTarget(mag_device_arm::ExecuteNamedTarget::Reque
     auto it = handle.config.named_targets.find(req.target);
     if (it == handle.config.named_targets.end())
     {
+        ROS_WARN_STREAM("[mag_device_arm] 未知的 named target: " << req.target << " (arm: " << req.arm << ")");
         res.success = false;
         res.message = "未知的 named target: " + req.target;
         return true;
     }
 
     std::lock_guard<std::mutex> lock(handle.mutex);
-
-    group->setStartStateToCurrentState();
-    group->setPoseReferenceFrame(handle.config.reference_frame);
-    group->setEndEffectorLink(handle.config.end_effector_link);
-
-    const double vel = req.velocity_scaling > 0.0 ? req.velocity_scaling : handle.config.default_velocity;
-    const double acc = req.acceleration_scaling > 0.0 ? req.acceleration_scaling : handle.config.default_acceleration;
-    group->setMaxVelocityScalingFactor(vel);
-    group->setMaxAccelerationScalingFactor(acc);
+    configureMoveGroup(group, handle, req.velocity_scaling, req.acceleration_scaling);
 
     const std::string &target = it->second;
     if (!group->setNamedTarget(target))
     {
+        ROS_ERROR("[mag_device_arm] MoveIt 无法识别 named target: %s (arm: %s)", target.c_str(), req.arm.c_str());
         res.success = false;
         res.message = "MoveIt 无法识别 named target: " + target;
         return true;
     }
 
-    MoveGroupInterface::Plan plan;
-    auto plan_result = group->plan(plan);
-    if (plan_result != moveit::planning_interface::MoveItErrorCode::SUCCESS)
+    moveit::planning_interface::MoveGroupInterface::Plan plan;
+    if (!planAndExecute(group, plan, req.execute, res.message))
     {
+        ROS_ERROR("[mag_device_arm] execute_named_target 失败 (%s, target: %s): %s", 
+                 req.arm.c_str(), req.target.c_str(), res.message.c_str());
         res.success = false;
-        res.message = "规划失败，MoveIt 错误码=" + std::to_string(plan_result.val);
-        group->clearPoseTargets();
         return true;
-    }
-
-    if (req.execute)
-    {
-        auto exec_result = group->execute(plan);
-        if (exec_result != moveit::planning_interface::MoveItErrorCode::SUCCESS)
-        {
-            res.success = false;
-            res.message = "执行失败，MoveIt 错误码=" + std::to_string(exec_result.val);
-            group->clearPoseTargets();
-            return true;
-        }
     }
 
     res.success = true;
     res.message = req.execute ? "规划并执行成功" : "规划成功";
-    group->clearPoseTargets();
+    if (verbose_logging_)
+    {
+        ROS_INFO_STREAM("[mag_device_arm] execute_named_target 成功 (" << req.arm << ", target: " << req.target << ")");
+    }
     return true;
 }
 
 bool ArmNode::handleExecuteCartesianPath(mag_device_arm::ExecuteCartesianPath::Request &req,
                                          mag_device_arm::ExecuteCartesianPath::Response &res)
 {
-    // 使用 MoveIt 的 computeCartesianPath 规划并可选执行连续轨迹
     std::string error;
     auto *group = getMoveGroup(req.arm, error);
     if (!group)
     {
+        ROS_ERROR("[mag_device_arm] execute_cartesian_path 失败: %s", error.c_str());
         res.success = false;
         res.message = error;
         res.fraction = 0.0;
@@ -342,6 +384,7 @@ bool ArmNode::handleExecuteCartesianPath(mag_device_arm::ExecuteCartesianPath::R
 
     if (req.waypoints.empty())
     {
+        ROS_WARN_STREAM("[mag_device_arm] 路径点序列为空 (arm: " << req.arm << ")");
         res.success = false;
         res.message = "路径点序列为空";
         res.fraction = 0.0;
@@ -350,26 +393,30 @@ bool ArmNode::handleExecuteCartesianPath(mag_device_arm::ExecuteCartesianPath::R
 
     ArmHandle &handle = arms_.at(req.arm);
     std::lock_guard<std::mutex> lock(handle.mutex);
+    configureMoveGroup(group, handle, req.velocity_scaling, req.acceleration_scaling);
 
-    group->setStartStateToCurrentState();
-    group->setPoseReferenceFrame(handle.config.reference_frame);
-    group->setEndEffectorLink(handle.config.end_effector_link);
-
-    const double vel = req.velocity_scaling > 0.0 ? req.velocity_scaling : handle.config.default_velocity;
-    const double acc = req.acceleration_scaling > 0.0 ? req.acceleration_scaling : handle.config.default_acceleration;
-    group->setMaxVelocityScalingFactor(vel);
-    group->setMaxAccelerationScalingFactor(acc);
-
-    // 设置默认步长（如果未指定）
     const double step_size = req.step_size > 0.0 ? req.step_size : 0.01;
+
+    // 检查目标位姿是否可达（用于诊断）
+    moveit::core::RobotStatePtr current_state = group->getCurrentState();
+    const moveit::core::JointModelGroup *joint_model_group = 
+        current_state->getJointModelGroup(handle.config.group_name);
+    
+    bool target_reachable = false;
+    if (joint_model_group)
+    {
+        moveit::core::RobotState test_state(*current_state);
+        target_reachable = test_state.setFromIK(joint_model_group, req.waypoints.back(), 
+                                                 handle.config.end_effector_link, 0.1);
+        if (!target_reachable && verbose_logging_)
+        {
+            ROS_DEBUG_STREAM("[mag_device_arm] 目标位姿不可达（无法求解逆运动学）");
+        }
+    }
 
     // 计算笛卡尔路径
     moveit_msgs::RobotTrajectory trajectory;
-    double fraction = group->computeCartesianPath(
-        req.waypoints,
-        step_size,
-        trajectory
-    );
+    double fraction = group->computeCartesianPath(req.waypoints, step_size, trajectory);
 
     res.fraction = fraction;
     res.trajectory = trajectory;
@@ -377,7 +424,21 @@ bool ArmNode::handleExecuteCartesianPath(mag_device_arm::ExecuteCartesianPath::R
     if (fraction < 0.5)
     {
         res.success = false;
-        res.message = "笛卡尔路径规划失败，完成度: " + std::to_string(fraction * 100.0) + "%";
+        std::string error_msg = "笛卡尔路径规划失败，完成度: " + std::to_string(fraction * 100.0) + "%";
+        
+        if (fraction == 0.0)
+        {
+            error_msg += target_reachable 
+                ? " (路径中间点逆解求解失败，可能原因：碰撞、关节限制或步长过大)"
+                : " (目标位姿不可达)";
+        }
+        else
+        {
+            error_msg += " (部分路径可达，但未达到目标)";
+        }
+        
+        ROS_ERROR("[mag_device_arm] execute_cartesian_path 失败 (%s): %s", req.arm.c_str(), error_msg.c_str());
+        res.message = error_msg;
         return true;
     }
 
@@ -388,6 +449,7 @@ bool ArmNode::handleExecuteCartesianPath(mag_device_arm::ExecuteCartesianPath::R
         auto exec_result = group->execute(plan);
         if (exec_result != moveit::planning_interface::MoveItErrorCode::SUCCESS)
         {
+            ROS_ERROR("[mag_device_arm] 轨迹执行失败 (%s)，MoveIt 错误码=%d", req.arm.c_str(), exec_result.val);
             res.success = false;
             res.message = "轨迹执行失败，MoveIt 错误码=" + std::to_string(exec_result.val);
             return true;
@@ -396,13 +458,66 @@ bool ArmNode::handleExecuteCartesianPath(mag_device_arm::ExecuteCartesianPath::R
 
     res.success = true;
     res.message = req.execute ? "笛卡尔路径规划并执行成功" : "笛卡尔路径规划成功";
+    if (verbose_logging_)
+    {
+        ROS_INFO_STREAM("[mag_device_arm] execute_cartesian_path 成功 (" << req.arm 
+                        << ", 路径点: " << req.waypoints.size() << ", 完成度: " << fraction * 100.0 << "%)");
+    }
+    return true;
+}
+
+void ArmNode::configureMoveGroup(moveit::planning_interface::MoveGroupInterface *group, 
+                                 const ArmHandle &handle,
+                                 double velocity_scaling, double acceleration_scaling)
+{
+    group->setStartStateToCurrentState();
+    group->setPoseReferenceFrame(handle.config.reference_frame);
+    group->setEndEffectorLink(handle.config.end_effector_link);
+    
+    const double vel = velocity_scaling > 0.0 ? velocity_scaling : handle.config.default_velocity;
+    const double acc = acceleration_scaling > 0.0 ? acceleration_scaling : handle.config.default_acceleration;
+    group->setMaxVelocityScalingFactor(vel);
+    group->setMaxAccelerationScalingFactor(acc);
+}
+
+bool ArmNode::planAndExecute(moveit::planning_interface::MoveGroupInterface *group, 
+                             moveit::planning_interface::MoveGroupInterface::Plan &plan,
+                             bool execute, std::string &error_msg)
+{
+    auto plan_result = group->plan(plan);
+    if (plan_result != moveit::planning_interface::MoveItErrorCode::SUCCESS)
+    {
+        error_msg = "规划失败，MoveIt 错误码=" + std::to_string(plan_result.val);
+        if (verbose_logging_)
+        {
+            ROS_DEBUG_STREAM("[mag_device_arm] 规划失败: " << error_msg);
+        }
+        group->clearPoseTargets();
+        return false;
+    }
+
+    if (execute)
+    {
+        auto exec_result = group->execute(plan);
+        if (exec_result != moveit::planning_interface::MoveItErrorCode::SUCCESS)
+        {
+            error_msg = "执行失败，MoveIt 错误码=" + std::to_string(exec_result.val);
+            if (verbose_logging_)
+            {
+                ROS_DEBUG_STREAM("[mag_device_arm] 执行失败: " << error_msg);
+            }
+            group->clearPoseTargets();
+            return false;
+        }
+    }
+
+    group->clearPoseTargets();
     return true;
 }
 
 moveit::planning_interface::MoveGroupInterface *ArmNode::getMoveGroup(const std::string &arm_name,
                                                                        std::string &error_message)
 {
-    // 根据名称检索 MoveGroupInterface，未初始化时返回错误
     auto it = arms_.find(arm_name);
     if (it == arms_.end())
     {
@@ -429,6 +544,149 @@ geometry_msgs::TransformStamped ArmNode::makeTransform(const BaseTransformConfig
     tf.transform.translation.z = cfg.pose.position.z;
     tf.transform.rotation = cfg.pose.orientation;
     return tf;
+}
+
+double ArmNode::getJointWeight(const ArmConfig &config, const std::string &joint_name, size_t joint_index)
+{
+    // 如果配置了该关节的权重，使用配置值
+    auto it = config.joint_weights.find(joint_name);
+    if (it != config.joint_weights.end())
+    {
+        return it->second;
+    }
+    
+    // 默认策略：前3个大关节权重高（少移动），后续关节权重低（多移动）
+    return (joint_index < 3) ? 3.0 : 0.5;
+}
+
+bool ArmNode::selectOptimalIKSolution(moveit::planning_interface::MoveGroupInterface *group,
+                                       const ArmConfig &config,
+                                       const geometry_msgs::Pose &target_pose,
+                                       const std::string &end_effector_link)
+{
+    moveit::core::RobotStatePtr current_state = group->getCurrentState();
+    const moveit::core::JointModelGroup *joint_model_group = 
+        current_state->getJointModelGroup(config.group_name);
+    
+    if (!joint_model_group)
+    {
+        if (verbose_logging_)
+        {
+            ROS_WARN_STREAM("[mag_device_arm] 无法获取关节模型组: " << config.group_name);
+        }
+        return false;
+    }
+
+    const std::vector<std::string> &joint_names = joint_model_group->getJointModelNames();
+    std::vector<double> current_joint_values;
+    current_state->copyJointGroupPositions(joint_model_group, current_joint_values);
+
+    // 收集多个逆解候选
+    std::vector<moveit::core::RobotStatePtr> candidate_states;
+    const int max_attempts = 10;
+    const double duplicate_threshold = 0.01;
+    
+    for (int attempt = 0; attempt < max_attempts; ++attempt)
+    {
+        moveit::core::RobotStatePtr seed_state(new moveit::core::RobotState(*current_state));
+        if (attempt > 0)
+        {
+            seed_state->setToRandomPositions(joint_model_group);
+        }
+        
+        if (!seed_state->setFromIK(joint_model_group, target_pose, end_effector_link, 0.1))
+        {
+            continue;
+        }
+        
+        // 检查是否重复
+        std::vector<double> candidate_values;
+        seed_state->copyJointGroupPositions(joint_model_group, candidate_values);
+        
+        bool is_duplicate = false;
+        for (const auto &existing_state : candidate_states)
+        {
+            std::vector<double> existing_values;
+            existing_state->copyJointGroupPositions(joint_model_group, existing_values);
+            
+            double diff_sq_sum = 0.0;
+            for (size_t i = 0; i < candidate_values.size(); ++i)
+            {
+                double diff = candidate_values[i] - existing_values[i];
+                diff_sq_sum += diff * diff;
+            }
+            
+            if (std::sqrt(diff_sq_sum) < duplicate_threshold)
+            {
+                is_duplicate = true;
+                break;
+            }
+        }
+        
+        if (!is_duplicate)
+        {
+            candidate_states.push_back(seed_state);
+        }
+    }
+
+    if (candidate_states.empty())
+    {
+        if (verbose_logging_)
+        {
+            ROS_DEBUG_STREAM("[mag_device_arm] 无法找到有效的逆运动学解");
+        }
+        return false;
+    }
+
+    // 计算每个候选解的加权成本
+    std::vector<double> candidate_costs;
+    for (const auto &candidate_state : candidate_states)
+    {
+        std::vector<double> candidate_values;
+        candidate_state->copyJointGroupPositions(joint_model_group, candidate_values);
+        
+        double weighted_cost = 0.0;
+        for (size_t i = 0; i < joint_names.size(); ++i)
+        {
+            double joint_diff = candidate_values[i] - current_joint_values[i];
+            
+            // 处理角度环绕
+            const moveit::core::JointModel *joint_model = 
+                current_state->getJointModel(joint_names[i]);
+            if (joint_model && joint_model->getType() == moveit::core::JointModel::REVOLUTE)
+            {
+                while (joint_diff > M_PI) joint_diff -= 2.0 * M_PI;
+                while (joint_diff < -M_PI) joint_diff += 2.0 * M_PI;
+            }
+            
+            double weight = getJointWeight(config, joint_names[i], i);
+            weighted_cost += weight * joint_diff * joint_diff;
+        }
+        
+        candidate_costs.push_back(weighted_cost);
+    }
+
+    // 选择成本最小的解
+    size_t best_index = 0;
+    for (size_t i = 1; i < candidate_costs.size(); ++i)
+    {
+        if (candidate_costs[i] < candidate_costs[best_index])
+        {
+            best_index = i;
+        }
+    }
+
+    std::vector<double> best_joint_values;
+    candidate_states[best_index]->copyJointGroupPositions(joint_model_group, best_joint_values);
+    group->setJointValueTarget(best_joint_values);
+
+    if (verbose_logging_)
+    {
+        ROS_DEBUG_STREAM("[mag_device_arm] 从 " << candidate_states.size() 
+                         << " 个候选解中选择最优解（加权成本: " << candidate_costs[best_index] << "）");
+    }
+
+    return true;
 }
 
 } // namespace mag_device_arm

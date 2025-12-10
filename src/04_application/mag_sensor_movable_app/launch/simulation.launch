@@ -38,7 +38,10 @@
 
   <!-- 姿态估计节点：估计磁体姿态 -->
   <node pkg="mag_pose_estimator" type="mag_pose_estimator_node" name="mag_pose_estimator" output="screen">
+    <!-- 方式1：通过环境变量设置日志级别（全局，优先级较低） -->
     <env name="ROSCONSOLE_MIN_SEVERITY" value="DEBUG"/>
+    <!-- 方式2：通过rosparam设置日志级别（节点级别，优先级更高，会覆盖YAML配置） -->
+    <!-- <rosparam param="logging_level">INFO</rosparam> -->
     <rosparam command="load" file="$(arg estimator_config)"/>
   </node>
 

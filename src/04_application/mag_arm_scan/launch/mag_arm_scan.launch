@@ -3,6 +3,13 @@
     <arg name="use_gazebo" default="true" />
     <!-- 参数：MoveIt日志输出位置，默认为log，可选screen -->
     <arg name="move_group_output" default="log"/>
+    <!-- 参数：日志级别，可选值：DEBUG, INFO, WARN, ERROR, FATAL -->
+    <!-- DEBUG: 显示所有日志（最详细） -->
+    <!-- INFO: 显示INFO及以上级别（默认） -->
+    <!-- WARN: 只显示警告和错误 -->
+    <!-- ERROR: 只显示错误 -->
+    <!-- FATAL: 只显示致命错误 -->
+    <arg name="log_level" default="DEBUG" />
 
     <!-- 工具名称 -->
     <arg name="tool_name" default="magnetic_sensor_bracket" />
@@ -43,7 +50,7 @@
     <!-- 磁铁节点（仅在 Gazebo 模式下启动）：生成磁铁 TF 和真值数据 -->
     <group if="$(arg use_gazebo)">
         <node pkg="mag_device_magnet" type="magnet_main" name="mag_device_magnet" output="screen">
-            <rosparam file="$(find mag_device_magnet)/config/static.yaml" command="load" />
+            <rosparam file="$(find mag_arm_scan)/config/magnet_config.yaml" command="load" />
         </node>
     </group>
 
@@ -71,17 +78,35 @@
     <!-- 注意：scan_controller_node 订阅的是单个传感器数据（MagSensorData），不是批量数据 -->
     <group if="$(arg use_gazebo)">
         <node pkg="mag_arm_scan" type="scan_controller_node" name="scan_controller" output="screen">
+            <!-- 方式1：通过环境变量设置日志级别（全局，优先级较低） -->
+            <env name="ROSCONSOLE_MIN_SEVERITY" value="$(arg log_level)"/>
+            <!-- 方式2：通过rosparam设置日志级别（节点级别，优先级更高，会覆盖YAML配置） -->
+            <rosparam param="logging_level">$(arg log_level)</rosparam>
             <rosparam file="$(find mag_arm_scan)/config/sensor_array.yaml" command="load" />
             <rosparam file="$(find mag_arm_scan)/config/scan_controller_node.yaml" command="load" />
             <!-- 覆盖传感器数据话题：使用传感器仿真节点发布的话题 -->
-            <rosparam param="mag_topic">/magnetic/sensor/field</rosparam>
+            <rosparam param="config/topics/mag_field">/magnetic/sensor/field</rosparam>
         </node>
     </group>
     <group unless="$(arg use_gazebo)">
         <node pkg="mag_arm_scan" type="scan_controller_node" name="scan_controller" output="screen">
+            <!-- 方式1：通过环境变量设置日志级别（全局，优先级较低） -->
+            <env name="ROSCONSOLE_MIN_SEVERITY" value="$(arg log_level)"/>
+            <!-- 方式2：通过rosparam设置日志级别（节点级别，优先级更高，会覆盖YAML配置） -->
+            <rosparam param="logging_level">$(arg log_level)</rosparam>
             <rosparam file="$(find mag_arm_scan)/config/sensor_array.yaml" command="load" />
             <rosparam file="$(find mag_arm_scan)/config/scan_controller_node.yaml" command="load" />
         </node>
     </group>
+
+    <!-- 传感器阵列实时可视化节点：实时显示传感器磁场数据 -->
+    <node pkg="mag_viz" type="sensor_array_viz_node" name="sensor_array_viz" output="screen">
+        <rosparam file="$(find mag_arm_scan)/config/sensor_array.yaml" command="load" ns="array" />
+        <rosparam file="$(find mag_viz)/config/sensor_array_viz.yaml" command="load" />
+        <!-- 覆盖测量话题：使用传感器数据话题 -->
+        <rosparam param="config/topics/measurement">/magnetic/sensor/field</rosparam>
+        <!-- 设置固定坐标系为 world -->
+        <rosparam param="config/frames/fixed_frame">world</rosparam>
+    </node>
 
 </launch>

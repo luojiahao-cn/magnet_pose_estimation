@@ -1,3 +1,5 @@
+# 日志级别：DEBUG, INFO, WARN, ERROR, FATAL（默认 INFO）
+logging_level: INFO
 config:
   topics:
     raw: /magnetic/sensor/raw

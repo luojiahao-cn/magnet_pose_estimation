@@ -12,6 +12,8 @@
 #include <tf2_ros/static_transform_broadcaster.h>
 
 #include <moveit/move_group_interface/move_group_interface.h>
+#include <moveit/robot_state/robot_state.h>
+#include <moveit/robot_state/conversions.h>
 
 #include <memory>
 #include <mutex>
@@ -47,6 +49,11 @@ struct ArmConfig
     BaseTransformConfig base_tf;
     std::unordered_map<std::string, std::string> named_targets;
     std::string default_named_target;
+    // 优化目标配置：是否偏好展开姿态（避免折叠）
+    bool prefer_extended_config = false;
+    // 关节权重：用于优化时优先选择展开的关节配置
+    // 如果为空，则使用默认权重；否则按关节名称设置权重
+    std::unordered_map<std::string, double> joint_weights;
 };
 
 struct ArmHandle
@@ -69,6 +76,7 @@ public:
     void start();
 
 private:
+    void setLogLevel();
     bool handleSetPose(mag_device_arm::SetEndEffectorPose::Request &req,
                        mag_device_arm::SetEndEffectorPose::Response &res);
 
@@ -80,6 +88,26 @@ private:
 
     moveit::planning_interface::MoveGroupInterface *getMoveGroup(const std::string &arm_name,
                                                                   std::string &error_message);
+
+    // 配置 MoveGroup 的基础设置
+    void configureMoveGroup(moveit::planning_interface::MoveGroupInterface *group, 
+                           const ArmHandle &handle,
+                           double velocity_scaling, double acceleration_scaling);
+
+    // 执行规划并可选执行
+    bool planAndExecute(moveit::planning_interface::MoveGroupInterface *group, 
+                       moveit::planning_interface::MoveGroupInterface::Plan &plan,
+                       bool execute, std::string &error_msg);
+
+    // 基于加权最短行程选择最优逆解
+    // 返回 true 如果成功找到并设置了最优关节目标，false 否则
+    bool selectOptimalIKSolution(moveit::planning_interface::MoveGroupInterface *group,
+                                  const ArmConfig &config,
+                                  const geometry_msgs::Pose &target_pose,
+                                  const std::string &end_effector_link);
+
+    // 计算关节权重（如果未配置则返回默认值）
+    double getJointWeight(const ArmConfig &config, const std::string &joint_name, size_t joint_index);
 
     static geometry_msgs::TransformStamped makeTransform(const BaseTransformConfig &cfg,
                                                          const ros::Time &stamp);
@@ -93,6 +121,9 @@ private:
     ros::ServiceServer execute_cartesian_path_srv_;
 
     tf2_ros::StaticTransformBroadcaster static_broadcaster_;
+    
+    // 日志级别控制
+    bool verbose_logging_;
 };
 
 } // namespace mag_device_arm

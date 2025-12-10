@@ -1,6 +1,8 @@
 # 传感器批量打包节点配置
 # 用于将单个传感器消息打包成批量数据
 # 收集齐一组数据后立即发布，不按固定频率发布
+# 日志级别：DEBUG, INFO, WARN, ERROR, FATAL（默认 INFO）
+logging_level: INFO
 config:
   topics:
     input: /magnetic/sensor/field  # 输入话题（单个传感器数据）

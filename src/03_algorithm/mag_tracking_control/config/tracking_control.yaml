@@ -1,4 +1,6 @@
 # 跟踪控制节点配置文件
+# 日志级别：DEBUG, INFO, WARN, ERROR, FATAL（默认 INFO）
+logging_level: INFO
 config:
   # 策略配置
   strategy:

@@ -1,4 +1,6 @@
 # 磁铁姿态估计器节点配置文件
+# 日志级别：DEBUG, INFO, WARN, ERROR, FATAL（默认 INFO）
+logging_level: INFO
 config:
   frames:
     output_frame: sensor_array
