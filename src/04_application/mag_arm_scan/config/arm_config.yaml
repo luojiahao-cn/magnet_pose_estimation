@@ -1,0 +1,22 @@
+# 机械臂配置
+# 用于机械臂扫描场景的机械臂配置
+config:
+  arms:
+    - name: arm1
+      group_name: fr5v6_arm
+      end_effector_link: bracket_tcp_link
+      reference_frame: world
+      default_velocity: 0.2
+      default_acceleration: 0.1
+      planning_time: 5.0
+      allow_replanning: false
+      goal_position_tolerance: 0.005
+      goal_orientation_tolerance: 0.01
+      default_named_target: ready
+      named_targets:
+        - name: ready
+          target: ready
+        - name: up
+          target: up
+
+

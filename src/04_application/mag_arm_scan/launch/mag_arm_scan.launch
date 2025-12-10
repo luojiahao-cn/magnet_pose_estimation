@@ -1,0 +1,87 @@
+<launch>
+    <!-- 参数：是否使用Gazebo仿真 -->
+    <arg name="use_gazebo" default="true" />
+    <!-- 参数：MoveIt日志输出位置，默认为log，可选screen -->
+    <arg name="move_group_output" default="log"/>
+
+    <!-- 工具名称 -->
+    <arg name="tool_name" default="magnetic_sensor_bracket" />
+    <!-- 是否启动 RViz -->
+    <arg name="use_rviz" default="true" />
+
+    <!-- 根据参数选择不同的MoveIt配置 -->
+    <group if="$(arg use_gazebo)">
+        <!-- 使用 mag_device_arm 的 Gazebo + MoveIt 启动文件 -->
+        <include file="$(find mag_device_arm)/launch/gazebo_moveit.launch">
+            <arg name="tool_name" value="$(arg tool_name)" />
+            <arg name="move_group_output" value="$(arg move_group_output)"/>
+            <arg name="use_rviz" value="false" />
+        </include>
+        
+        <!-- Start RViz with our custom config -->
+        <group if="$(arg use_rviz)">
+            <node name="rviz" pkg="rviz" type="rviz" args="-d $(find mag_arm_scan)/rviz/mag_arm_scan.rviz" />
+        </group>
+    </group>
+
+    <group unless="$(arg use_gazebo)">
+        <include file="$(find frcobot_examples)/launch/connect_single_arm.launch">
+            <arg name="use_rviz" value="false" />
+        </include>
+
+        <!-- Start RViz with our custom config -->
+        <group if="$(arg use_rviz)">
+            <node name="rviz" pkg="rviz" type="rviz" args="-d $(find mag_arm_scan)/rviz/mag_arm_scan.rviz" />
+        </group>
+    </group>
+
+    <!-- mag_device_arm 节点：提供机械臂控制服务 -->
+    <node pkg="mag_device_arm" type="arm_node" name="mag_device_arm" output="screen">
+        <rosparam file="$(find mag_arm_scan)/config/arm_config.yaml" command="load" />
+    </node>
+
+    <!-- 磁铁节点（仅在 Gazebo 模式下启动）：生成磁铁 TF 和真值数据 -->
+    <group if="$(arg use_gazebo)">
+        <node pkg="mag_device_magnet" type="magnet_main" name="mag_device_magnet" output="screen">
+            <rosparam file="$(find mag_device_magnet)/config/static.yaml" command="load" />
+        </node>
+    </group>
+
+    <!-- 传感器仿真节点（仅在 Gazebo 模式下启动） -->
+    <group if="$(arg use_gazebo)">
+        <!-- 传感器仿真节点：根据磁体 TF 生成磁传感器数据 -->
+        <node pkg="mag_device_sensor" type="sensor_sim_node" name="mag_device_sensor_sim" output="screen">
+            <rosparam file="$(find mag_arm_scan)/config/sensor_array.yaml" command="load" ns="array" />
+            <rosparam file="$(find mag_device_sensor)/config/simulation.yaml" command="load" />
+            <!-- 启用 TF 发布：发布完整的传感器阵列 TF 树 -->
+            <!-- 包括 bracket_tcp_link -> sensor_array 和 sensor_array -> sensor_* -->
+            <rosparam param="config/tf/enable">true</rosparam>
+            <!-- 使用静态 TF 发布（publish_rate = 0），因为传感器阵列静态安装在工具上 -->
+            <rosparam param="config/tf/publish_rate">0.0</rosparam>
+        </node>
+
+        <!-- 传感器批量打包节点：将单个传感器消息打包成批量数据 -->
+        <node pkg="mag_device_sensor" type="sensor_array_batcher_node" name="sensor_array_batcher" output="screen">
+            <rosparam file="$(find mag_device_sensor)/config/sensor_batcher_config.yaml" command="load" />
+        </node>
+    </group>
+
+    <!-- 扫描控制节点 -->
+    <!-- 在 Gazebo 模式下，覆盖传感器数据话题为传感器仿真节点发布的话题 -->
+    <!-- 注意：scan_controller_node 订阅的是单个传感器数据（MagSensorData），不是批量数据 -->
+    <group if="$(arg use_gazebo)">
+        <node pkg="mag_arm_scan" type="scan_controller_node" name="scan_controller" output="screen">
+            <rosparam file="$(find mag_arm_scan)/config/sensor_array.yaml" command="load" />
+            <rosparam file="$(find mag_arm_scan)/config/scan_controller_node.yaml" command="load" />
+            <!-- 覆盖传感器数据话题：使用传感器仿真节点发布的话题 -->
+            <rosparam param="mag_topic">/magnetic/sensor/field</rosparam>
+        </node>
+    </group>
+    <group unless="$(arg use_gazebo)">
+        <node pkg="mag_arm_scan" type="scan_controller_node" name="scan_controller" output="screen">
+            <rosparam file="$(find mag_arm_scan)/config/sensor_array.yaml" command="load" />
+            <rosparam file="$(find mag_arm_scan)/config/scan_controller_node.yaml" command="load" />
+        </node>
+    </group>
+
+</launch>

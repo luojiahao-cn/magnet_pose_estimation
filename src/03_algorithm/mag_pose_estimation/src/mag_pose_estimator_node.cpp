@@ -6,7 +6,6 @@
 // 项目头文件
 #include "mag_pose_estimator/mag_pose_estimator_node.h"
 #include "mag_pose_estimator/mag_preprocessor.h"
-#include "mag_pose_estimator/estimator_window_optimizer.h"
 
 // 标准库
 #include <algorithm>
@@ -110,9 +109,9 @@ void MagPoseEstimatorNode::loadParameters() {
   optimizer_params_.linear_solver = cfg.linear_solver;
   optimizer_params_.max_acceptable_residual = cfg.max_acceptable_residual;
 
-  // 窗口优化器参数
+  // 窗口优化器参数（注意：dt 不再从配置读取，而是从传感器消息的时间戳动态计算）
   window_optimizer_params_.window_size = cfg.window_size;
-  window_optimizer_params_.dt = cfg.dt;
+  // window_optimizer_params_.dt = cfg.dt;  // dt 已移除，不再从配置读取
   window_optimizer_params_.m0 = cfg.m0;
   window_optimizer_params_.mu0 = cfg.mu0;
   window_optimizer_params_.sigma_meas = cfg.sigma_meas;
@@ -558,7 +557,8 @@ std::unique_ptr<EstimatorBase> MagPoseEstimatorNode::createEstimator(
     return std::make_unique<OptimizerEstimator>();
   }
   if (lower == "window_optimizer") {
-    return std::make_unique<WindowOptimizerEstimator>();
+    ROS_ERROR("[mag_pose_estimator] window_optimizer 估计器尚未实现，请使用 'ekf' 或 'optimizer'");
+    return std::make_unique<OptimizerEstimator>();  // 临时回退到 optimizer
   }
 
   ROS_WARN("[mag_pose_estimator] 未知估计器类型 '%s'，默认使用 EKF", type.c_str());

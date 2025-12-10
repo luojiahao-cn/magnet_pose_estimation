@@ -4,3 +4,4 @@ archive
 data/scan*
 *.bag
 doc
+src/04_application/mag_arm_scan/data/scan*

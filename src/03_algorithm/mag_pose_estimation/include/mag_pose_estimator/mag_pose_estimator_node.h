@@ -19,7 +19,6 @@
 #include "mag_pose_estimator/estimator_ekf.h"
 #include "mag_pose_estimator/mag_preprocessor.h"
 #include "mag_pose_estimator/estimator_optimization.h"
-#include "mag_pose_estimator/estimator_window_optimizer.h"
 
 namespace mag_pose_estimator {
 
