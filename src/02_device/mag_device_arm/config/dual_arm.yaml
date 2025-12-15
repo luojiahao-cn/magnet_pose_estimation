@@ -1,8 +1,12 @@
 config:
   arms:
-    - name: magnet
-      group_name: fr5v6_magnet_arm
-      end_effector_link: magnet_arm_tool
+    - name: arm1
+      group_name: arm1
+      # end_effector_link 根据工具名称动态确定：
+      # - 有工具：{arm_id}_{tool_name}_tcp_link 或 {arm_id}_{tool_name}_link
+      # - 无工具：{arm_id}_flange_link
+      # 例如：arm1_permanent_magnet_tcp_link
+      end_effector_link: arm1_permanent_magnet_tcp_link
       reference_frame: world
       default_velocity: 0.3
       default_acceleration: 0.3
@@ -13,7 +17,7 @@ config:
       default_named_target: home
       base_tf:
         parent: world
-        child: magnet_arm_base
+        child: arm1_base_link
         pose:
           xyz: [0.0, 0.0, 0.0]
           rpy: [0.0, 0.0, 0.0]
@@ -23,9 +27,13 @@ config:
         - name: ready
           target: ready
 
-    - name: sensor
-      group_name: fr5v6_sensor_arm
-      end_effector_link: sensor_arm_tool
+    - name: arm2
+      group_name: arm2
+      # end_effector_link 根据工具名称动态确定：
+      # - 有工具：{arm_id}_{tool_name}_tcp_link 或 {arm_id}_{tool_name}_link
+      # - 无工具：{arm_id}_flange_link
+      # 例如：arm2_magnetic_sensor_bracket_tcp_link
+      end_effector_link: arm2_magnetic_sensor_bracket_tcp_link
       reference_frame: world
       default_velocity: 0.3
       default_acceleration: 0.3
@@ -36,7 +44,7 @@ config:
       default_named_target: home
       base_tf:
         parent: world
-        child: sensor_arm_base
+        child: arm2_base_link
         pose:
           xyz: [0.4, -0.2, 0.0]
           rpy: [0.0, 0.0, 0.0]

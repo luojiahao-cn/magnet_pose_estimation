@@ -1,0 +1,31 @@
+<launch>
+  <!-- 配置参数 -->
+  <arg name="config" default="$(find mag_device_arm)/config/dual_arm.yaml" />
+  
+  <!-- Robot IP 参数 -->
+  <arg name="arm1_ip" default="192.168.31.202" doc="IP address of arm1"/>
+  <arg name="arm2_ip" default="192.168.31.203" doc="IP address of arm2"/>
+  
+  <!-- Tool 参数 -->
+  <arg name="arm1_tool" default="permanent_magnet" doc="Tool name for arm1"/>
+  <arg name="arm2_tool" default="magnetic_sensor_bracket" doc="Tool name for arm2"/>
+  
+  <!-- MoveIt 选项 -->
+  <arg name="pipeline" default="ompl" doc="Planning pipeline to use with MoveIt"/>
+  <arg name="use_rviz" default="true" doc="Start RViz"/>
+
+  <!-- 启动硬件接口和 MoveIt 配置 -->
+  <include file="$(find zlab_arm_bringup)/launch/dual_arms_bringup.launch">
+    <arg name="arm1_ip" value="$(arg arm1_ip)"/>
+    <arg name="arm2_ip" value="$(arg arm2_ip)"/>
+    <arg name="arm1_tool" value="$(arg arm1_tool)"/>
+    <arg name="arm2_tool" value="$(arg arm2_tool)"/>
+    <arg name="pipeline" value="$(arg pipeline)"/>
+    <arg name="use_rviz" value="$(arg use_rviz)"/>
+  </include>
+
+  <node pkg="mag_device_arm" type="arm_node" name="mag_device_arm" output="screen">
+    <rosparam command="load" file="$(arg config)" />
+  </node>
+</launch>
+

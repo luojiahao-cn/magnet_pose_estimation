@@ -11,16 +11,31 @@
 
 ## 配置示例
 
-`config/single_arm.yaml`
+### 单臂配置
 
-- 多机械臂配置参考：`config/dual_arm.yaml`。
+`config/single_arm.yaml` - 单臂配置，使用 `arm1` 作为机械臂名称，planning group 为 `zlab_arm`。
+
+**注意**：`end_effector_link` 需要根据实际使用的工具名称配置：
+- 有工具：`{arm_id}_{tool_name}_tcp_link` 或 `{arm_id}_{tool_name}_link`
+- 无工具：`{arm_id}_flange_link`
+
+例如：
+- `arm1_magnetic_sensor_bracket_tcp_link`（使用磁传感器支架工具）
+- `arm1_permanent_magnet_tcp_link`（使用永久磁铁工具）
+- `arm1_flange_link`（无工具）
+
+### 双臂配置
+
+`config/dual_arm.yaml` - 双臂配置，使用 `arm1` 和 `arm2` 作为机械臂名称，planning group 分别为 `arm1` 和 `arm2`。
+
+**注意**：配置中的 `end_effector_link` 需要与实际使用的工具匹配。如果更换工具，需要相应更新配置文件中的 `end_effector_link` 字段。
 
 ## 启动方式
 
 ### Gazebo 仿真模式
 
 ```bash
-# 单臂仿真（默认无工具）
+# 单臂仿真（默认工具：magnetic_sensor_bracket）
 roslaunch mag_device_arm single_arm_gazebo.launch
 
 # 单臂仿真（指定工具，如永久磁铁）
@@ -28,24 +43,57 @@ roslaunch mag_device_arm single_arm_gazebo.launch tool_name:=permanent_magnet
 
 # 单臂仿真（指定工具，如磁传感器支架）
 roslaunch mag_device_arm single_arm_gazebo.launch tool_name:=magnetic_sensor_bracket
+
+# 单臂仿真（指定 arm_id，默认为 arm1）
+roslaunch mag_device_arm single_arm_gazebo.launch arm_id:=arm1 tool_name:=magnetic_sensor_bracket
+
+# 单臂仿真（禁用 RViz）
+roslaunch mag_device_arm single_arm_gazebo.launch use_rviz:=false
 ```
 
 ### 真实机器人模式
 
-首先启动 zlab_robots 的控制栈（例如 `connect_single_arm.launch`），然后启动：
+启动文件会自动启动 zlab_robots 的硬件接口和 MoveIt 配置：
 
 ```bash
-# 单臂
-roslaunch mag_device_arm single_arm.launch
+# 单臂（默认 arm1，默认 IP 根据 arm_id 自动选择）
+roslaunch mag_device_arm single_arm_bringup.launch
 
-# 双臂
-roslaunch mag_device_arm dual_arm.launch
+# 单臂（指定 IP 地址）
+roslaunch mag_device_arm single_arm_bringup.launch robot_ip:=192.168.31.202
+
+# 单臂（指定 arm_id 和工具）
+roslaunch mag_device_arm single_arm_bringup.launch arm_id:=arm1 tool_name:=magnetic_sensor_bracket
+
+# 单臂（禁用 RViz）
+roslaunch mag_device_arm single_arm_bringup.launch use_rviz:=false
+
+# 双臂（默认 IP：arm1=192.168.31.202, arm2=192.168.31.203）
+roslaunch mag_device_arm dual_arm_bringup.launch
+
+# 双臂（指定 IP 和工具）
+roslaunch mag_device_arm dual_arm_bringup.launch \
+    arm1_ip:=192.168.31.202 \
+    arm2_ip:=192.168.31.203 \
+    arm1_tool:=permanent_magnet \
+    arm2_tool:=magnetic_sensor_bracket
+
+# 双臂 Gazebo 仿真
+roslaunch mag_device_arm dual_arm_gazebo.launch
+
+# 双臂 Gazebo 仿真（指定工具）
+roslaunch mag_device_arm dual_arm_gazebo.launch \
+    arm1_tool:=permanent_magnet \
+    arm2_tool:=magnetic_sensor_bracket
+
+# 双臂 Gazebo 仿真（禁用 RViz）
+roslaunch mag_device_arm dual_arm_gazebo.launch use_rviz:=false
 ```
 
 ## 示例：往复运动脚本
 
 - `roslaunch mag_device_arm arm_ping_pong.launch`：启动单臂配置并运行 `scripts/arm_ping_pong.py`，机械臂会在 `pose_a`/`pose_b` 两个位姿之间往复。
-- 通过 `arm`、`velocity`、`acceleration`、`wait_time` 参数可快速调整目标机械臂和运动节奏；若需要自定义位姿，可在同一 launch 中重写 `pose_a`、`pose_b` 的 `xyz`/`rpy` 数组，或像默认示例一样以 `named_target: ready/up` 指定 MoveIt 的命名姿态。
+- 通过 `arm`（默认为 `arm1`）、`velocity`、`acceleration`、`wait_time` 参数可快速调整目标机械臂和运动节奏；若需要自定义位姿，可在同一 launch 中重写 `pose_a`、`pose_b` 的 `xyz`/`rpy` 数组，或像默认示例一样以 `named_target: ready/up` 指定 MoveIt 的命名姿态。
 
 ## 服务接口
 

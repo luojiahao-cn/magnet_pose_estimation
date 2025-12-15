@@ -101,11 +101,11 @@ mag_single_tracking_app/
 
 ```
 world
-  └── magnet_arm_base (静态，由 mag_device_arm 发布)
+  └── arm1_base_link (静态，由 mag_device_arm 发布，如果配置了 base_tf)
       └── ... (机械臂关节链，由 MoveIt 发布)
-          └── frrobot_ee_link (机械臂末端法兰)
-              └── bracket_base_link (工具基座，静态)
-                  └── bracket_tcp_link (工具末端，静态)
+          └── arm1_flange_link (机械臂末端法兰)
+              └── arm1_magnetic_sensor_bracket_link (工具基座，静态)
+                  └── arm1_magnetic_sensor_bracket_tcp_link (工具末端，静态)
                       └── sensor_array (静态，由 sensor_array_tf_node 发布)
                           ├── sensor_1
                           ├── sensor_2
@@ -195,7 +195,8 @@ config:
 - `mag_tracking_control`: 跟踪控制算法（机械臂自动跟踪）
 - `mag_viz`: 可视化工具
 - `rosparam_shortcuts`: ROS 参数快捷工具
-- `fr5v6_single_moveit_config`: MoveIt 配置（Gazebo 仿真）
+- `zlab_arm_single_moveit_config`: MoveIt 配置（Gazebo 仿真）
+- `zlab_arm_bringup`: 硬件接口和 MoveIt 启动配置
 
 ## 与 mag_sensor_movable_app 的区别
 

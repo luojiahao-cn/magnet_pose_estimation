@@ -57,7 +57,7 @@ class TargetSpec:
 
 class ArmPingPong:
     def __init__(self):
-        self.arm_name = rospy.get_param("~arm", "magnet")
+        self.arm_name = rospy.get_param("~arm", "arm1")
         self.velocity = rospy.get_param("~velocity_scaling", 0.1)
         self.acceleration = rospy.get_param("~acceleration_scaling", 0.1)
         self.wait_time = rospy.get_param("~wait_time", 2.0)

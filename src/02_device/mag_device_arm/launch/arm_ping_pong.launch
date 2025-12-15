@@ -1,6 +1,6 @@
 <launch>
   <arg name="config" default="$(find mag_device_arm)/config/single_arm.yaml" />
-  <arg name="arm" default="magnet" />
+  <arg name="arm" default="arm1" />
   <arg name="velocity" default="0.1" />
   <arg name="acceleration" default="0.1" />
   <arg name="wait_time" default="2.0" />

@@ -23,7 +23,7 @@ config:
       max_movement_per_step: 0.02  # 每步最大移动距离 (米)
   
   # 机械臂配置
-  sensor_arm_name: sensor  # 传感器机械臂名称（用于调用 mag_device_arm 服务）
+  sensor_arm_name: arm1  # 传感器机械臂名称（用于调用 mag_device_arm 服务）
   
   # 话题配置
   topics:

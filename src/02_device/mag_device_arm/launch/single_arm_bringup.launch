@@ -5,30 +5,27 @@
   <!-- Arm ID 参数 -->
   <arg name="arm_id" default="arm1" doc="Arm ID (arm1 or arm2)"/>
   
+  <!-- Robot IP 参数 -->
+  <arg name="robot_ip" default="" doc="IP address of the robot (if empty, uses default based on arm_id)"/>
+  
   <!-- Tool 参数 -->
   <arg name="tool_name" default="magnetic_sensor_bracket" doc="Tool name to use"/>
   
   <!-- MoveIt 选项 -->
   <arg name="pipeline" default="ompl" doc="Planning pipeline to use with MoveIt"/>
   <arg name="use_rviz" default="true" doc="Start RViz"/>
-  
-  <!-- Gazebo 选项 -->
-  <arg name="gazebo_gui" default="true" doc="Start Gazebo GUI"/>
-  <arg name="paused" default="false" doc="Start Gazebo paused"/>
-  <arg name="world_name" default="worlds/empty.world" doc="Gazebo world file"/>
 
-  <!-- 启动 Gazebo 和 MoveIt 配置 -->
-  <include file="$(find zlab_arm_bringup)/launch/single_arm_gazebo.launch">
+  <!-- 启动硬件接口和 MoveIt 配置 -->
+  <include file="$(find zlab_arm_bringup)/launch/single_arm_bringup.launch">
     <arg name="arm_id" value="$(arg arm_id)"/>
+    <arg name="robot_ip" value="$(arg robot_ip)"/>
     <arg name="tool_name" value="$(arg tool_name)"/>
     <arg name="pipeline" value="$(arg pipeline)"/>
     <arg name="use_rviz" value="$(arg use_rviz)"/>
-    <arg name="gazebo_gui" value="$(arg gazebo_gui)"/>
-    <arg name="paused" value="$(arg paused)"/>
-    <arg name="world_name" value="$(arg world_name)"/>
   </include>
 
   <node pkg="mag_device_arm" type="arm_node" name="mag_device_arm" output="screen">
     <rosparam command="load" file="$(arg config)" />
   </node>
 </launch>
+

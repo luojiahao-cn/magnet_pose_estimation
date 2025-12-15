@@ -19,10 +19,8 @@
     <!-- 根据参数选择不同的MoveIt配置 -->
     <group if="$(arg use_gazebo)">
         <!-- 使用 mag_device_arm 的 Gazebo + MoveIt 启动文件 -->
-        <include file="$(find mag_device_arm)/launch/gazebo_moveit.launch">
+        <include file="$(find mag_device_arm)/launch/single_arm_gazebo.launch">
             <arg name="tool_name" value="$(arg tool_name)" />
-            <arg name="move_group_output" value="$(arg move_group_output)"/>
-            <arg name="use_rviz" value="false" />
         </include>
         
         <!-- Start RViz with our custom config -->
@@ -32,8 +30,9 @@
     </group>
 
     <group unless="$(arg use_gazebo)">
-        <include file="$(find frcobot_examples)/launch/connect_single_arm.launch">
-            <arg name="use_rviz" value="false" />
+        <!-- 使用新的 zlab_arm_bringup 启动硬件接口和 MoveIt -->
+        <include file="$(find mag_device_arm)/launch/single_arm_bringup.launch">
+            <arg name="tool_name" value="$(arg tool_name)" />
         </include>
 
         <!-- Start RViz with our custom config -->
