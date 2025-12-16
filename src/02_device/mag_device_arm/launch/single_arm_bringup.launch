@@ -11,6 +11,9 @@
   <!-- Tool 参数 -->
   <arg name="tool_name" default="magnetic_sensor_bracket" doc="Tool name to use"/>
   
+  <!-- 是否启动 mag_device_arm 节点 -->
+  <arg name="start_arm_node" default="true" doc="Whether to start mag_device_arm node"/>
+  
   <!-- MoveIt 选项 -->
   <arg name="pipeline" default="ompl" doc="Planning pipeline to use with MoveIt"/>
   <arg name="use_rviz" default="true" doc="Start RViz"/>
@@ -24,8 +27,10 @@
     <arg name="use_rviz" value="$(arg use_rviz)"/>
   </include>
 
-  <node pkg="mag_device_arm" type="arm_node" name="mag_device_arm" output="screen">
-    <rosparam command="load" file="$(arg config)" />
-  </node>
+  <group if="$(arg start_arm_node)">
+    <node pkg="mag_device_arm" type="arm_node" name="mag_device_arm" output="screen">
+      <rosparam command="load" file="$(arg config)" />
+    </node>
+  </group>
 </launch>
 

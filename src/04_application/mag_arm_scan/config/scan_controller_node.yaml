@@ -8,7 +8,7 @@ config:
   # 坐标系配置
   frames:
     reference_frame: world
-    end_effector_link: bracket_tcp_link
+    end_effector_link: arm1_bracket_tcp_link
 
   # 话题配置
   topics:

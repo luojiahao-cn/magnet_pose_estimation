@@ -19,8 +19,10 @@
     <!-- 根据参数选择不同的MoveIt配置 -->
     <group if="$(arg use_gazebo)">
         <!-- 使用 mag_device_arm 的 Gazebo + MoveIt 启动文件 -->
+        <!-- 禁用 mag_device_arm 节点，因为下面会使用自定义配置启动 -->
         <include file="$(find mag_device_arm)/launch/single_arm_gazebo.launch">
             <arg name="tool_name" value="$(arg tool_name)" />
+            <arg name="start_arm_node" value="false" />
         </include>
         
         <!-- Start RViz with our custom config -->
@@ -31,8 +33,10 @@
 
     <group unless="$(arg use_gazebo)">
         <!-- 使用新的 zlab_arm_bringup 启动硬件接口和 MoveIt -->
+        <!-- 禁用 mag_device_arm 节点，因为下面会使用自定义配置启动 -->
         <include file="$(find mag_device_arm)/launch/single_arm_bringup.launch">
             <arg name="tool_name" value="$(arg tool_name)" />
+            <arg name="start_arm_node" value="false" />
         </include>
 
         <!-- Start RViz with our custom config -->

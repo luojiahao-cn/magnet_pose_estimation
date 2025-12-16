@@ -3,7 +3,7 @@
 # 传感器阵列安装在机械臂末端工具上
 config:
   frames:
-    parent: bracket_tcp_link  # 父坐标系为工具末端执行器（与 arm_config.yaml 中的 end_effector_link 一致）
+    parent: arm1_bracket_tcp_link  # 父坐标系为工具末端执行器（与 arm_config.yaml 中的 end_effector_link 一致）
     array: sensor_array
     sensor_frame_prefix: sensor_
     pose:
