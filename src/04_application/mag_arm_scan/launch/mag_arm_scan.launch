@@ -1,114 +1,133 @@
+<?xml version="1.0"?>
 <launch>
-    <!-- 参数：是否使用Gazebo仿真 -->
+    <!--
+        扫描应用主启动文件
+
+        开关说明：
+            - use_gazebo: 是否使用 Gazebo 仿真机械臂和磁铁
+            - use_real_sensor: 是否使用真实磁传感器（否则使用仿真传感器）
+
+        约定：
+            - 真实传感器和仿真传感器都发布到 /magnetic/sensor/field
+            - 仿真与实物各自有独立的驱动 config（simulation.yaml / hardware.yaml）
+    -->
+
+    <!-- 是否使用 Gazebo 仿真机械臂 + 环境 -->
     <arg name="use_gazebo" default="true" />
-    <!-- 参数：MoveIt日志输出位置，默认为log，可选screen -->
-    <arg name="move_group_output" default="log"/>
-    <!-- 参数：日志级别，可选值：DEBUG, INFO, WARN, ERROR, FATAL -->
-    <!-- DEBUG: 显示所有日志（最详细） -->
-    <!-- INFO: 显示INFO及以上级别（默认） -->
-    <!-- WARN: 只显示警告和错误 -->
-    <!-- ERROR: 只显示错误 -->
-    <!-- FATAL: 只显示致命错误 -->
+
+    <!-- 是否使用真实磁传感器（true=硬件，false=仿真） -->
+    <arg name="use_real_sensor" default="false" />
+
+    <!-- MoveIt 日志输出位置：log 或 screen -->
+    <arg name="move_group_output" default="log" />
+
+    <!-- 日志级别：DEBUG, INFO, WARN, ERROR, FATAL -->
     <arg name="log_level" default="DEBUG" />
 
-    <!-- 工具名称 -->
+    <!-- 工具名称（末端执行器 / 传感器支架） -->
     <arg name="tool_name" default="magnetic_sensor_bracket" />
+
     <!-- 是否启动 RViz -->
     <arg name="use_rviz" default="true" />
 
-    <!-- 根据参数选择不同的MoveIt配置 -->
+    <!--
+        机械臂 + MoveIt 启动：
+            - use_gazebo:=true  -> 使用 single_arm_gazebo.launch
+            - use_gazebo:=false -> 使用 single_arm_bringup.launch（真实机械臂）
+    -->
     <group if="$(arg use_gazebo)">
-        <!-- 使用 mag_device_arm 的 Gazebo + MoveIt 启动文件 -->
-        <!-- 禁用 mag_device_arm 节点，因为下面会使用自定义配置启动 -->
         <include file="$(find mag_device_arm)/launch/single_arm_gazebo.launch">
             <arg name="tool_name" value="$(arg tool_name)" />
+            <!-- 由本文件单独启动 arm_node -->
             <arg name="start_arm_node" value="false" />
         </include>
-        
-        <!-- Start RViz with our custom config -->
+
+        <!-- RViz 配置（Gazebo 模式下） -->
         <group if="$(arg use_rviz)">
-            <node name="rviz" pkg="rviz" type="rviz" args="-d $(find mag_arm_scan)/rviz/mag_arm_scan.rviz" />
+            <node name="rviz" pkg="rviz" type="rviz"
+                        args="-d $(find mag_arm_scan)/rviz/mag_arm_scan.rviz" />
         </group>
     </group>
 
     <group unless="$(arg use_gazebo)">
-        <!-- 使用新的 zlab_arm_bringup 启动硬件接口和 MoveIt -->
-        <!-- 禁用 mag_device_arm 节点，因为下面会使用自定义配置启动 -->
         <include file="$(find mag_device_arm)/launch/single_arm_bringup.launch">
             <arg name="tool_name" value="$(arg tool_name)" />
+            <!-- 由本文件单独启动 arm_node -->
             <arg name="start_arm_node" value="false" />
         </include>
 
-        <!-- Start RViz with our custom config -->
+        <!-- RViz 配置（真实机械臂模式下） -->
         <group if="$(arg use_rviz)">
-            <node name="rviz" pkg="rviz" type="rviz" args="-d $(find mag_arm_scan)/rviz/mag_arm_scan.rviz" />
+            <node name="rviz" pkg="rviz" type="rviz"
+                        args="-d $(find mag_arm_scan)/rviz/mag_arm_scan.rviz" />
         </group>
     </group>
 
-    <!-- mag_device_arm 节点：提供机械臂控制服务 -->
+    <!-- 机械臂控制节点：提供扫描控制所需的基础服务 -->
     <node pkg="mag_device_arm" type="arm_node" name="mag_device_arm" output="screen">
         <rosparam file="$(find mag_arm_scan)/config/arm_config.yaml" command="load" />
     </node>
 
-    <!-- 磁铁节点（仅在 Gazebo 模式下启动）：生成磁铁 TF 和真值数据 -->
+    <!-- 磁铁真值节点（仅在 Gazebo 模式下启动，用于仿真场景） -->
     <group if="$(arg use_gazebo)">
         <node pkg="mag_device_magnet" type="magnet_main" name="mag_device_magnet" output="screen">
             <rosparam file="$(find mag_arm_scan)/config/magnet_config.yaml" command="load" />
         </node>
     </group>
 
-    <!-- 传感器仿真节点（仅在 Gazebo 模式下启动） -->
-    <group if="$(arg use_gazebo)">
-        <!-- 传感器仿真节点：根据磁体 TF 生成磁传感器数据 -->
-        <node pkg="mag_device_sensor" type="sensor_sim_node" name="mag_device_sensor_sim" output="screen">
-            <rosparam file="$(find mag_arm_scan)/config/sensor_array.yaml" command="load" ns="array" />
-            <rosparam file="$(find mag_device_sensor)/config/simulation.yaml" command="load" />
-            <!-- 启用 TF 发布：发布完整的传感器阵列 TF 树 -->
-            <!-- 包括 bracket_tcp_link -> sensor_array 和 sensor_array -> sensor_* -->
-            <rosparam param="config/tf/enable">true</rosparam>
-            <!-- 使用静态 TF 发布（publish_rate = 0），因为传感器阵列静态安装在工具上 -->
-            <rosparam param="config/tf/publish_rate">0.0</rosparam>
-        </node>
+    <!--
+        传感器数据来源（统一通过子 launch）：
+            - use_real_sensor:=true  -> include hardware.launch，使用真实硬件（hardware.yaml）
+            - use_real_sensor:=false -> include simulation.launch，使用仿真传感器（simulation.yaml）
 
-        <!-- 传感器批量打包节点：将单个传感器消息打包成批量数据 -->
-        <node pkg="mag_device_sensor" type="sensor_array_batcher_node" name="sensor_array_batcher" output="screen">
-            <rosparam file="$(find mag_device_sensor)/config/sensor_batcher_config.yaml" command="load" />
-        </node>
+        两种模式都保证输出磁场话题：/magnetic/sensor/field
+        二者共享同一个传感器阵列描述：mag_arm_scan/config/sensor_array.yaml
+    -->
+
+    <!-- 仿真传感器：simulation.launch（与 Gazebo 解耦，只要不用真实传感器就启动） -->
+    <group unless="$(arg use_real_sensor)">
+        <include file="$(find mag_device_sensor)/launch/simulation.launch">
+            <!-- 统一使用扫描应用里的传感器阵列描述 -->
+            <arg name="array_file" value="$(find mag_arm_scan)/config/sensor_array.yaml" />
+            <!-- config_file / batcher_config 使用 simulation.launch 自己的默认（simulation.yaml / sensor_batcher_config.yaml） -->
+        </include>
+    </group>
+
+    <!-- 真实传感器：hardware.launch -->
+    <group if="$(arg use_real_sensor)">
+        <include file="$(find mag_device_sensor)/launch/hardware.launch">
+            <!-- 统一使用扫描应用里的传感器阵列描述 -->
+            <arg name="array_file" value="$(find mag_arm_scan)/config/sensor_array.yaml" />
+            <!-- config_file / batcher_config 使用 hardware.launch 自己的默认（hardware.yaml / sensor_batcher_config.yaml） -->
+        </include>
     </group>
 
     <!-- 扫描控制节点 -->
-    <!-- 在 Gazebo 模式下，覆盖传感器数据话题为传感器仿真节点发布的话题 -->
-    <!-- 注意：scan_controller_node 订阅的是单个传感器数据（MagSensorData），不是批量数据 -->
-    <group if="$(arg use_gazebo)">
-        <node pkg="mag_arm_scan" type="scan_controller_node" name="scan_controller" output="screen">
-            <!-- 方式1：通过环境变量设置日志级别（全局，优先级较低） -->
-            <env name="ROSCONSOLE_MIN_SEVERITY" value="$(arg log_level)"/>
-            <!-- 方式2：通过rosparam设置日志级别（节点级别，优先级更高，会覆盖YAML配置） -->
-            <rosparam param="logging_level">$(arg log_level)</rosparam>
-            <rosparam file="$(find mag_arm_scan)/config/sensor_array.yaml" command="load" />
-            <rosparam file="$(find mag_arm_scan)/config/scan_controller_node.yaml" command="load" />
-            <!-- 覆盖传感器数据话题：使用传感器仿真节点发布的话题 -->
-            <rosparam param="config/topics/mag_field">/magnetic/sensor/field</rosparam>
-        </node>
-    </group>
-    <group unless="$(arg use_gazebo)">
-        <node pkg="mag_arm_scan" type="scan_controller_node" name="scan_controller" output="screen">
-            <!-- 方式1：通过环境变量设置日志级别（全局，优先级较低） -->
-            <env name="ROSCONSOLE_MIN_SEVERITY" value="$(arg log_level)"/>
-            <!-- 方式2：通过rosparam设置日志级别（节点级别，优先级更高，会覆盖YAML配置） -->
-            <rosparam param="logging_level">$(arg log_level)</rosparam>
-            <rosparam file="$(find mag_arm_scan)/config/sensor_array.yaml" command="load" />
-            <rosparam file="$(find mag_arm_scan)/config/scan_controller_node.yaml" command="load" />
-        </node>
-    </group>
+    <!-- 订阅单个传感器数据（MagSensorData）并驱动机械臂进行扫描 -->
+    <node pkg="mag_arm_scan" type="scan_controller_node" name="scan_controller" output="screen">
+        <!-- 方式1：通过环境变量设置日志级别（全局，优先级较低） -->
+        <env name="ROSCONSOLE_MIN_SEVERITY" value="$(arg log_level)" />
+
+        <!-- 方式2：通过 rosparam 设置节点级日志级别（优先级更高） -->
+        <rosparam param="logging_level">$(arg log_level)</rosparam>
+
+        <!-- 加载扫描控制与传感器阵列配置 -->
+        <rosparam file="$(find mag_arm_scan)/config/sensor_array.yaml" command="load" />
+        <rosparam file="$(find mag_arm_scan)/config/scan_controller_node.yaml" command="load" />
+
+        <!-- 显式指定传感器磁场话题（真实 / 仿真均保持一致） -->
+        <rosparam param="config/topics/mag_field">/magnetic/sensor/field</rosparam>
+    </node>
 
     <!-- 传感器阵列实时可视化节点：实时显示传感器磁场数据 -->
     <node pkg="mag_viz" type="sensor_array_viz_node" name="sensor_array_viz" output="screen">
         <rosparam file="$(find mag_arm_scan)/config/sensor_array.yaml" command="load" ns="array" />
         <rosparam file="$(find mag_viz)/config/sensor_array_viz.yaml" command="load" />
-        <!-- 覆盖测量话题：使用传感器数据话题 -->
+
+        <!-- 测量话题统一为 /magnetic/sensor/field（真实 / 仿真一致） -->
         <rosparam param="config/topics/measurement">/magnetic/sensor/field</rosparam>
-        <!-- 设置固定坐标系为 world -->
+
+        <!-- 固定坐标系 -->
         <rosparam param="config/frames/fixed_frame">world</rosparam>
     </node>
 
