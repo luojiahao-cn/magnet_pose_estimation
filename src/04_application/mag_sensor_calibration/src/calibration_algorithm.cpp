@@ -111,8 +111,8 @@ bool CalibrationAlgorithm::fitEllipsoid(const std::vector<MeasurementPoint>& mea
     Eigen::JacobiSVD<Eigen::MatrixXd> svd(D, Eigen::ComputeThinU | Eigen::ComputeThinV);
     Eigen::VectorXd p = svd.solve(ones);
     
-    // 检查解的有效性
-    if (svd.info() != Eigen::Success)
+    // 检查解的有效性（检查是否有 NaN 或 Inf）
+    if (!p.allFinite())
     {
         return false;
     }

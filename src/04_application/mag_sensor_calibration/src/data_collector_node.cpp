@@ -59,17 +59,6 @@ void DataCollectorNode::loadParameters()
     }
 }
 
-void DataCollectorNode::loadParameters()
-{
-    pnh_.param("input_topic", input_topic_, std::string("/mag_sensor/data_mT"));
-    pnh_.param("use_batch_topic", use_batch_topic_, false);
-    
-    if (use_batch_topic_)
-    {
-        pnh_.param("batch_topic", input_topic_, std::string("/mag_sensor/batch"));
-    }
-}
-
 void DataCollectorNode::setupSubscribers()
 {
     if (use_batch_topic_)

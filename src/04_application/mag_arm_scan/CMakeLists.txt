@@ -54,7 +54,12 @@ add_executable(scan_controller_node src/scan_controller_node.cpp)
 target_link_libraries(scan_controller_node ${catkin_LIBRARIES})
 add_dependencies(scan_controller_node ${catkin_EXPORTED_TARGETS})
 
-install(TARGETS scan_controller_node
+# 扫描数据可视化节点
+add_executable(scan_data_visualizer_node src/scan_data_visualizer_node.cpp)
+target_link_libraries(scan_data_visualizer_node ${catkin_LIBRARIES})
+add_dependencies(scan_data_visualizer_node ${catkin_EXPORTED_TARGETS})
+
+install(TARGETS scan_controller_node scan_data_visualizer_node
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

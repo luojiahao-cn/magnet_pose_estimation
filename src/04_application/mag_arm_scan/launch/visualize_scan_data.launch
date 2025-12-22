@@ -1,0 +1,71 @@
+<?xml version="1.0"?>
+<launch>
+    <!--
+        扫描数据可视化启动文件
+        
+        功能：
+            - 从 CSV 文件读取扫描数据
+            - 发布可视化标记到 ROS 话题
+            - 在 RViz 中显示磁场向量和采样点
+        
+        使用方法：
+            roslaunch mag_arm_scan visualize_scan_data.launch csv_file:="路径/to/scan_data.csv"
+            
+        或者指定数据目录，自动查找最新的扫描目录：
+            roslaunch mag_arm_scan visualize_scan_data.launch data_dir:="路径/to/data/save"
+    -->
+
+    <!-- CSV 文件路径（完整路径，必须指定） -->
+    <!-- 示例：csv_file:="$(find mag_arm_scan)/data/save/scan_20251217_1710/scan_data.csv" -->
+    <arg name="csv_file" default="$(find mag_arm_scan)/data/save/scan_20251217_1710/scan_data.csv" />
+    
+    <!-- 坐标系 -->
+    <arg name="frame_id" default="world" />
+    
+    <!-- 是否启动 RViz -->
+    <arg name="use_rviz" default="true" />
+    
+    <!-- 可视化话题名称 -->
+    <arg name="marker_topic" default="/scan_data/markers" />
+    <arg name="pointcloud_topic" default="/scan_data/pointcloud" />
+    
+    <!-- 扫描数据可视化节点 -->
+    <node pkg="mag_arm_scan" type="scan_data_visualizer_node" name="scan_data_visualizer" output="screen">
+        <!-- CSV 文件路径 -->
+        <param name="csv_file" value="$(arg csv_file)" />
+        
+        <!-- 坐标系 -->
+        <param name="frame_id" value="$(arg frame_id)" />
+        
+        <!-- 话题名称 -->
+        <param name="marker_topic" value="$(arg marker_topic)" />
+        <param name="pointcloud_topic" value="$(arg pointcloud_topic)" />
+        
+        <!-- 可视化参数 -->
+        <param name="arrow_length" value="0.05" />  <!-- 箭头长度缩放因子 -->
+        <param name="arrow_shaft_ratio" value="0.1" />  <!-- 箭头杆直径比例 -->
+        <param name="arrow_head_ratio" value="0.25" />  <!-- 箭头头部直径比例 -->
+        <param name="arrow_head_length_ratio" value="0.3" />  <!-- 箭头头部长度比例 -->
+        <param name="magnitude_min" value="0.0" />  <!-- 磁场强度最小值（用于颜色映射） -->
+        <param name="magnitude_max" value="5.0" />  <!-- 磁场强度最大值（用于颜色映射） -->
+        <param name="alpha" value="1.0" />  <!-- 透明度 -->
+        <param name="min_magnitude_threshold" value="0.001" />  <!-- 最小磁场强度阈值（低于此值不显示） -->
+        
+        <!-- 颜色配置（RGB） -->
+        <rosparam param="color_low">[0.0, 0.0, 1.0]</rosparam>  <!-- 蓝色（低强度） -->
+        <rosparam param="color_high">[1.0, 0.0, 0.0]</rosparam>  <!-- 红色（高强度） -->
+        
+        <!-- 发布参数 -->
+        <param name="publish_rate" value="1.0" />  <!-- 发布频率（Hz） -->
+        <param name="publish_pointcloud" value="false" />  <!-- 是否发布点云 -->
+    </node>
+    
+    <!-- 启动 RViz -->
+    <group if="$(arg use_rviz)">
+        <node name="rviz" pkg="rviz" type="rviz"
+              args="-d $(find mag_arm_scan)/rviz/visualize_scan_data.rviz" 
+              output="screen" />
+    </group>
+
+</launch>
+

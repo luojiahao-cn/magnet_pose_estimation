@@ -40,9 +40,9 @@ CalibrationControllerNode::~CalibrationControllerNode()
 {
     if (calibration_running_)
     {
-        stopCalibrationCallback(
-            mag_sensor_calibration::StopCalibration::Request(),
-            mag_sensor_calibration::StopCalibration::Response());
+        mag_sensor_calibration::StopCalibration::Request req;
+        mag_sensor_calibration::StopCalibration::Response res;
+        stopCalibrationCallback(req, res);
     }
 }
 
