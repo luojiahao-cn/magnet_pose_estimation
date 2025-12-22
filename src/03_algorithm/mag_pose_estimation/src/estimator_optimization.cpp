@@ -415,9 +415,10 @@ bool OptimizerEstimator::estimateFromBatch(const std::vector<OptimizerMeasuremen
     }
   }
 
-  // 设置方向向量的参数化（确保归一化约束）
-  problem.SetParameterization(direction, new ceres::HomogeneousVectorParameterization(3));
-  
+  // 方向向量在优化前已归一化，优化后在使用时也会归一化
+  // 一些 Ceres 版本中不再提供 HomogeneousVectorParameterization / SetParameterization 接口
+  // 因此这里不再对 direction 使用流形参数化约束
+
   // 设置强度变量的上下界（如果优化强度）
   if (optimize_strength_) {
     problem.SetParameterLowerBound(&strength, 0, strength_min_);

@@ -1020,14 +1020,20 @@ bool ScanControllerNode::startScan(std_srvs::Trigger::Request &req, std_srvs::Tr
 	at_pos_msg.data = false;
 	at_position_pub_.publish(at_pos_msg);
 
-	if (!moveToReadyPose()) {
+	// 扫描结束后返回 ready 位，并给出清晰的结束提示
+	const bool returned_to_ready = moveToReadyPose();
+	if (!returned_to_ready) {
 		ROS_WARN_STREAM("[scan_controller] failed to return to ready pose after scan");
+	} else {
+		ROS_INFO_STREAM("[scan_controller] scan finished, arm returned to ready pose, controller READY for next command");
 	}
 
 	finalizeScan();
 
 	res.success = true;
-	res.message = "Scan completed";
+	res.message = returned_to_ready
+			? "Scan completed and arm returned to ready pose"
+			: "Scan completed (arm may not be in ready pose)";
 	return true;
 }
 
