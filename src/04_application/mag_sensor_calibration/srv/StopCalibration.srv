@@ -1,0 +1,10 @@
+# 停止传感器校正服务
+# 请求参数
+string session_id                   # 校正会话ID
+bool save_data                      # 是否保存已采集的数据
+---
+# 响应
+bool success
+string message
+int32 collected_samples             # 已采集的样本数量
+

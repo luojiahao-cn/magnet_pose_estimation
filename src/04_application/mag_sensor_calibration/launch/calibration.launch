@@ -1,0 +1,33 @@
+<launch>
+  <!-- 传感器校正启动文件 -->
+  
+  <!-- 参数 -->
+  <arg name="config" default="$(find mag_sensor_calibration)/config/default_config.yaml" />
+  <arg name="output_dir" default="$(find mag_sensor_calibration)/data" />
+  <arg name="use_viz" default="true" />
+  
+  <!-- 加载配置 -->
+  <rosparam file="$(arg config)" command="load" />
+  
+  <!-- 校正控制节点 -->
+  <node pkg="mag_sensor_calibration" type="calibration_controller_node" 
+        name="calibration_controller" output="screen">
+    <rosparam file="$(arg config)" />
+    <param name="output_directory" value="$(arg output_dir)" />
+  </node>
+  
+  <!-- 数据采集节点 -->
+  <node pkg="mag_sensor_calibration" type="data_collector_node" 
+        name="data_collector" output="screen">
+    <rosparam file="$(arg config)" />
+  </node>
+  
+  <!-- 可视化节点（可选） -->
+  <node if="$(arg use_viz)" 
+        pkg="mag_sensor_calibration" type="calibration_viz_node" 
+        name="calibration_viz" output="screen">
+    <rosparam file="$(arg config)" />
+  </node>
+  
+</launch>
+

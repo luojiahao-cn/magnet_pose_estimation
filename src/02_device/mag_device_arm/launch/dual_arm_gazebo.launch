@@ -13,9 +13,22 @@
   <arg name="gazebo_gui" default="true" doc="Start Gazebo GUI"/>
   <arg name="paused" default="false" doc="Start Gazebo paused"/>
   <arg name="world_name" default="worlds/empty.world" doc="Gazebo world file"/>
+  <arg name="world_pose" default="-x 0 -y 0 -z 0 -R 0 -P 0 -Y 0" doc="Pose to spawn the robot at"/>
   
   <!-- MoveIt 选项 -->
   <arg name="use_rviz" default="true" doc="Start RViz"/>
+  
+  <!-- Environment loading options -->
+  <arg name="load_environment" default="false" doc="Whether to load environment obstacles (walls, etc.)"/>
+  <arg name="environment_config" 
+       default="$(find fr5_bringup)/config/default_environment.yaml"
+       doc="Path to environment configuration YAML file"/>
+  
+  <!-- Arm position parameters (optional) -->
+  <arg name="arm1_xyz" default="0 0 0" doc="Position of arm1 (x y z)"/>
+  <arg name="arm1_rpy" default="0 0 0" doc="Orientation of arm1 (roll pitch yaw)"/>
+  <arg name="arm2_xyz" default="" doc="Position of arm2 (x y z), empty for default"/>
+  <arg name="arm2_rpy" default="" doc="Orientation of arm2 (roll pitch yaw), empty for default"/>
 
   <!-- 启动 Gazebo 和 MoveIt 配置 -->
   <include file="$(find zlab_arm_bringup)/launch/dual_arms_gazebo.launch">
@@ -26,6 +39,13 @@
     <arg name="gazebo_gui" value="$(arg gazebo_gui)"/>
     <arg name="paused" value="$(arg paused)"/>
     <arg name="world_name" value="$(arg world_name)"/>
+    <arg name="world_pose" value="$(arg world_pose)"/>
+    <arg name="load_environment" value="$(arg load_environment)"/>
+    <arg name="environment_config" value="$(arg environment_config)"/>
+    <arg name="arm1_xyz" value="$(arg arm1_xyz)"/>
+    <arg name="arm1_rpy" value="$(arg arm1_rpy)"/>
+    <arg name="arm2_xyz" value="$(arg arm2_xyz)"/>
+    <arg name="arm2_rpy" value="$(arg arm2_rpy)"/>
   </include>
 
   <node pkg="mag_device_arm" type="arm_node" name="mag_device_arm" output="screen">
