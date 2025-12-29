@@ -1,0 +1,29 @@
+# 传感器校正数据采集配置文件
+# 日志级别：DEBUG, INFO, WARN, ERROR, FATAL（默认 INFO）
+logging_level: INFO
+config:
+  # 机械臂配置
+  arm:
+    name: arm1
+    base_position: [0.5, 0.0, 1.0]  # 固定位置 [x, y, z] (米)
+    base_orientation: [0.0, 0.0, 0.0]  # 基础姿态 [roll, pitch, yaw] (弧度)
+  
+  # 旋转配置
+  rotation:
+    roll_range: [-3.14, 3.14]      # roll角度范围 [min, max] (弧度)
+    pitch_range: [-3.14, 3.14]     # pitch角度范围 [min, max] (弧度)
+    yaw_range: [-3.14, 3.14]       # yaw角度范围 [min, max] (弧度)
+    step_size: 0.3                  # 角度步长（弧度），建议0.2-0.5
+    stable_wait_time: 2.0          # 每个姿态稳定等待时间（秒）
+    sample_duration: 1.0           # 每个姿态采样时长（秒）
+  
+  # 话题配置
+  topics:
+    sensor_batch: /magnetic/sensor/batch  # 传感器批量数据话题
+    arm_service: /mag_device_arm/set_end_effector_pose  # 机械臂服务
+  
+  # 输出配置
+  output:
+    data_file: calibration_raw_data.csv  # 原始数据文件（可选，暂未实现）
+    params_file: config/calibration_params.yaml  # 校正参数输出文件
+

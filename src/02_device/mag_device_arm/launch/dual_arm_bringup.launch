@@ -6,9 +6,6 @@
   <arg name="arm1_ip" default="192.168.31.202" doc="IP address of arm1"/>
   <arg name="arm2_ip" default="192.168.31.203" doc="IP address of arm2"/>
   
-  <!-- Control loop frequency -->
-  <arg name="loop_hz" default="60.0" doc="Control loop frequency (Hz)"/>
-  
   <!-- Tool 参数 -->
   <arg name="arm1_tool" default="permanent_magnet" doc="Tool name for arm1"/>
   <arg name="arm2_tool" default="magnetic_sensor_bracket" doc="Tool name for arm2"/>
@@ -16,34 +13,15 @@
   <!-- MoveIt 选项 -->
   <arg name="pipeline" default="ompl" doc="Planning pipeline to use with MoveIt"/>
   <arg name="use_rviz" default="true" doc="Start RViz"/>
-  
-  <!-- Environment loading options -->
-  <arg name="load_environment" default="false" doc="Whether to load environment obstacles (walls, etc.)"/>
-  <arg name="environment_config" 
-       default="$(find fr5_bringup)/config/default_environment.yaml"
-       doc="Path to environment configuration YAML file"/>
-  
-  <!-- Arm position parameters (optional) -->
-  <arg name="arm1_xyz" default="0 0 0" doc="Position of arm1 (x y z)"/>
-  <arg name="arm1_rpy" default="0 0 0" doc="Orientation of arm1 (roll pitch yaw)"/>
-  <arg name="arm2_xyz" default="" doc="Position of arm2 (x y z), empty for default"/>
-  <arg name="arm2_rpy" default="" doc="Orientation of arm2 (roll pitch yaw), empty for default"/>
 
   <!-- 启动硬件接口和 MoveIt 配置 -->
-  <include file="$(find zlab_arm_bringup)/launch/dual_arms_bringup.launch">
+  <include file="$(find zlab_robots_bringup)/launch/fr5/dual/fr5_dual_bringup.launch">
     <arg name="arm1_ip" value="$(arg arm1_ip)"/>
     <arg name="arm2_ip" value="$(arg arm2_ip)"/>
-    <arg name="loop_hz" value="$(arg loop_hz)"/>
     <arg name="arm1_tool" value="$(arg arm1_tool)"/>
     <arg name="arm2_tool" value="$(arg arm2_tool)"/>
     <arg name="pipeline" value="$(arg pipeline)"/>
     <arg name="use_rviz" value="$(arg use_rviz)"/>
-    <arg name="load_environment" value="$(arg load_environment)"/>
-    <arg name="environment_config" value="$(arg environment_config)"/>
-    <arg name="arm1_xyz" value="$(arg arm1_xyz)"/>
-    <arg name="arm1_rpy" value="$(arg arm1_rpy)"/>
-    <arg name="arm2_xyz" value="$(arg arm2_xyz)"/>
-    <arg name="arm2_rpy" value="$(arg arm2_rpy)"/>
   </include>
 
   <node pkg="mag_device_arm" type="arm_node" name="mag_device_arm" output="screen">

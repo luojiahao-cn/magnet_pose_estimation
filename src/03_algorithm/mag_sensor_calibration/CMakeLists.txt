@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(mag_pose_estimator)
+project(mag_sensor_calibration)
 
 add_compile_options(-Wall -Wextra -Wpedantic)
 set(CMAKE_CXX_STANDARD 17)
@@ -12,7 +12,7 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   mag_core_msgs
   mag_core_utils
-  mag_sensor_calibration
+  mag_device_arm
   rosparam_shortcuts
   tf2
   tf2_ros
@@ -20,42 +20,40 @@ find_package(catkin REQUIRED COMPONENTS
 )
 
 find_package(Eigen3 REQUIRED)
-find_package(Ceres REQUIRED)
 
 catkin_package(
   INCLUDE_DIRS include
-  LIBRARIES mag_pose_estimator_core
-  CATKIN_DEPENDS mag_core_msgs mag_core_utils
+  LIBRARIES mag_sensor_calibration_core
+  CATKIN_DEPENDS mag_core_msgs mag_core_utils mag_device_arm
 )
 
 include_directories(
   include
   ${catkin_INCLUDE_DIRS}
   ${EIGEN3_INCLUDE_DIRS}
-  ${CERES_INCLUDE_DIRS}
 )
 
-add_library(mag_pose_estimator_core
-  src/estimator_ekf.cpp
-  src/estimator_optimization.cpp
-  src/mag_preprocessor.cpp
+add_library(mag_sensor_calibration_core
+  src/ellipsoid_fitter.cpp
+  src/calibration_data_collector.cpp
+  src/calibration_applier.cpp
+  src/calibration_config_loader.cpp
 )
 
-add_executable(mag_pose_estimator_node
-  src/mag_pose_estimator_node.cpp
+add_executable(mag_sensor_calibration_node
+  src/calibration_node.cpp
 )
 
-target_link_libraries(mag_pose_estimator_core
-  ${catkin_LIBRARIES}
-  ${CERES_LIBRARIES}
-)
-
-target_link_libraries(mag_pose_estimator_node
-  mag_pose_estimator_core
+target_link_libraries(mag_sensor_calibration_core
   ${catkin_LIBRARIES}
 )
 
-install(TARGETS mag_pose_estimator_core mag_pose_estimator_node
+target_link_libraries(mag_sensor_calibration_node
+  mag_sensor_calibration_core
+  ${catkin_LIBRARIES}
+)
+
+install(TARGETS mag_sensor_calibration_core mag_sensor_calibration_node
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
@@ -69,3 +67,4 @@ install(DIRECTORY config launch
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
   FILES_MATCHING PATTERN "*.yaml" PATTERN "*.launch"
 )
+

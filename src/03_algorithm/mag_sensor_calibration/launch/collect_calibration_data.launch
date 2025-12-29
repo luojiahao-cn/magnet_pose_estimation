@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- 传感器校正数据采集节点 -->
+  <node name="mag_sensor_calibration_node" 
+        pkg="mag_sensor_calibration" 
+        type="mag_sensor_calibration_node"
+        output="screen">
+    <rosparam file="$(find mag_sensor_calibration)/config/calibration_collect_config.yaml" command="load"/>
+  </node>
+</launch>
+

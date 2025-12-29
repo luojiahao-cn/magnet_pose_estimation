@@ -14,7 +14,7 @@ config:
       allow_replanning: false
       goal_position_tolerance: 0.005
       goal_orientation_tolerance: 0.01
-      default_named_target: home
+      default_named_target: ready
       base_tf:
         parent: world
         child: arm1_base_link
@@ -41,7 +41,7 @@ config:
       allow_replanning: false
       goal_position_tolerance: 0.005
       goal_orientation_tolerance: 0.01
-      default_named_target: home
+      default_named_target: ready
       base_tf:
         parent: world
         child: arm2_base_link
@@ -49,8 +49,8 @@ config:
           xyz: [0.4, -0.2, 0.0]
           rpy: [0.0, 0.0, 0.0]
       named_targets:
-        - name: home
-          target: home
+        - name: zero
+          target: zero
         - name: ready
           target: ready
 

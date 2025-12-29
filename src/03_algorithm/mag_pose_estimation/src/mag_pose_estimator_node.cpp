@@ -426,7 +426,8 @@ sensor_msgs::MagneticField MagPoseEstimatorNode::convertAndProcess(
   mag_msg.magnetic_field.x = sensor_data.mag_x;
   mag_msg.magnetic_field.y = sensor_data.mag_y;
   mag_msg.magnetic_field.z = sensor_data.mag_z;
-  return preprocessor_.process(mag_msg);
+  // 使用带sensor_id的处理方法，以支持多传感器校正
+  return preprocessor_.process(mag_msg, sensor_data.sensor_id);
 }
 
 /**

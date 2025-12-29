@@ -92,4 +92,14 @@
         "qvboxlayout": "cpp",
         "dense": "cpp"
     },
+    "python.autoComplete.extraPaths": [
+        "/home/zhang/magnet_pose_estimation/devel/lib/python3/dist-packages",
+        "/home/zhang/magmed_ws/devel/lib/python3/dist-packages",
+        "/opt/ros/noetic/lib/python3/dist-packages"
+    ],
+    "python.analysis.extraPaths": [
+        "/home/zhang/magnet_pose_estimation/devel/lib/python3/dist-packages",
+        "/home/zhang/magmed_ws/devel/lib/python3/dist-packages",
+        "/opt/ros/noetic/lib/python3/dist-packages"
+    ],
 }

@@ -3,7 +3,7 @@ logging_level: INFO
 config:
   arms:
     - name: arm1
-      group_name: zlab_arm
+      group_name: fr
       # end_effector_link 根据工具名称动态确定：
       # - 有工具：{arm_id}_{tool_name}_tcp_link 或 {arm_id}_{tool_name}_link
       # - 无工具：{arm_id}_flange_link
