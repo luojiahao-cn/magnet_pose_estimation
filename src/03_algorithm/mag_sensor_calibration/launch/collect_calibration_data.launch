@@ -1,11 +1,75 @@
 <?xml version="1.0"?>
 <launch>
+  <!--
+    传感器校正数据采集启动文件
+    
+    开关说明：
+      - use_real_robot: 是否使用真实机械臂（true=真实机械臂+硬件接口，false=纯MoveIt仿真，默认false）
+      - use_real_sensor: 是否使用真实磁传感器（true=硬件，false=仿真）
+      - use_rviz: 是否启动 RViz
+      - tool_name: 工具名称（末端执行器/传感器支架），默认 magnetic_sensor_bracket
+      - robot_ip: 真实机械臂IP地址（仅在use_real_robot=true时使用）
+  -->
+
+  <!-- 参数配置 -->
+  <arg name="use_real_robot" default="false" doc="是否使用真实机械臂（true=真实机械臂+硬件接口，false=纯MoveIt仿真）"/>
+  <arg name="use_real_sensor" default="false" doc="是否使用真实磁传感器"/>
+  <arg name="use_rviz" default="true" doc="是否启动 RViz"/>
+  <arg name="tool_name" default="magnetic_sensor_bracket" doc="工具名称"/>
+  <arg name="robot_ip" default="" doc="真实机械臂IP地址（仅在use_real_robot=true时使用，为空则使用默认值）"/>
+  <arg name="log_level" default="INFO" doc="日志级别：DEBUG, INFO, WARN, ERROR, FATAL"/>
+
+  <!-- 机械臂 + MoveIt 启动 -->
+  <group if="$(arg use_real_robot)">
+    <!-- 真实机械臂模式：使用硬件接口和MoveIt -->
+    <include file="$(find mag_device_arm)/launch/fr5/single/fr5_single_bringup.launch">
+      <arg name="tool_name" value="$(arg tool_name)"/>
+      <arg name="robot_ip" value="$(arg robot_ip)"/>
+      <!-- 由本文件单独启动 arm_node -->
+      <arg name="start_arm_node" value="false"/>
+      <arg name="use_rviz" value="false"/>
+    </include>
+  </group>
+
+  <group unless="$(arg use_real_robot)">
+    <!-- 纯MoveIt模式：仅MoveIt仿真，无硬件接口 -->
+    <include file="$(find mag_device_arm)/launch/fr5/single/fr5_single_moveit.launch">
+      <arg name="tool_name" value="$(arg tool_name)"/>
+      <!-- 由本文件单独启动 arm_node -->
+      <arg name="start_arm_node" value="false"/>
+      <arg name="use_rviz" value="false"/>
+    </include>
+  </group>
+
+  <!-- 机械臂控制节点：提供校正数据采集所需的基础服务 -->
+  <node pkg="mag_device_arm" type="arm_node" name="mag_device_arm" output="screen">
+    <rosparam file="$(find mag_device_arm)/config/single_arm.yaml" command="load"/>
+  </node>
+
+
+  <!-- 真实传感器硬件驱动 -->
+  <group if="$(arg use_real_sensor)">
+    <include file="$(find mag_device_sensor)/launch/hardware.launch">
+      <arg name="array_file" value="$(find mag_core_description)/config/sensor_array.yaml"/>
+      <arg name="use_batcher" value="true"/>
+    </include>
+  </group>
+
   <!-- 传感器校正数据采集节点 -->
   <node name="mag_sensor_calibration_node" 
         pkg="mag_sensor_calibration" 
         type="mag_sensor_calibration_node"
         output="screen">
     <rosparam file="$(find mag_sensor_calibration)/config/calibration_collect_config.yaml" command="load"/>
+    <rosparam param="logging_level">$(arg log_level)</rosparam>
   </node>
+
+  <!-- RViz 可视化（可选） -->
+  <group if="$(arg use_rviz)">
+    <node name="rviz" pkg="rviz" type="rviz" 
+          args="-d $(find mag_sensor_calibration)/rviz/mag_sensor_calibration.rviz" 
+          output="screen"/>
+  </group>
+
 </launch>
 

@@ -1,0 +1,58 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- Robot IP addresses -->
+  <arg name="arm1_ip" default="192.168.31.201" doc="IP address of arm1"/>
+  <arg name="arm2_ip" default="192.168.31.202" doc="IP address of arm2"/>
+  
+  <!-- Control loop frequency -->
+  <arg name="loop_hz" default="60.0" doc="Control loop frequency (Hz)"/>
+  
+  <!-- Tool parameters -->
+  <arg name="arm1_tool" default="permanent_magnet" doc="Tool name for arm1"/>
+  <arg name="arm2_tool" default="magnetic_sensor_bracket" doc="Tool name for arm2"/>
+  
+  <!-- MoveIt options -->
+  <arg name="pipeline" default="ompl" doc="Planning pipeline to use with MoveIt"/>
+  <arg name="use_rviz" default="true" doc="Start RViz"/>
+  <arg name="debug" default="false" doc="Debug mode"/>
+  
+  <!-- Layout configuration -->
+  <arg name="layout_config" default="$(find zlab_robots_bringup)/config/robot_layout.yaml" doc="Path to robot layout configuration YAML"/>
+
+  <!-- Arm position parameters (optional, overrides layout_config) -->
+  <arg name="arm1_xyz" default="" doc="Position of arm1 (x y z)"/>
+  <arg name="arm1_rpy" default="" doc="Orientation of arm1 (roll pitch yaw)"/>
+  <arg name="arm2_xyz" default="" doc="Position of arm2 (x y z)"/>
+  <arg name="arm2_rpy" default="" doc="Orientation of arm2 (roll pitch yaw)"/>
+
+  <!-- 配置参数 -->
+  <arg name="config" default="$(find mag_device_arm)/config/dual_arm.yaml" />
+  
+  <!-- 是否启动 mag_device_arm 节点 -->
+  <arg name="start_arm_node" default="true" doc="Whether to start mag_device_arm node"/>
+
+  <!-- Launch hardware interface and MoveIt -->
+  <include file="$(find zlab_robots_bringup)/launch/fr5/dual/fr5_dual_bringup.launch">
+    <arg name="arm1_ip" value="$(arg arm1_ip)"/>
+    <arg name="arm2_ip" value="$(arg arm2_ip)"/>
+    <arg name="loop_hz" value="$(arg loop_hz)"/>
+    <arg name="arm1_tool" value="$(arg arm1_tool)"/>
+    <arg name="arm2_tool" value="$(arg arm2_tool)"/>
+    <arg name="layout_config" value="$(arg layout_config)"/>
+    <arg name="arm1_xyz" value="$(arg arm1_xyz)"/>
+    <arg name="arm1_rpy" value="$(arg arm1_rpy)"/>
+    <arg name="arm2_xyz" value="$(arg arm2_xyz)"/>
+    <arg name="arm2_rpy" value="$(arg arm2_rpy)"/>
+    <arg name="pipeline" value="$(arg pipeline)"/>
+    <arg name="use_rviz" value="$(arg use_rviz)"/>
+    <arg name="debug" value="$(arg debug)"/>
+  </include>
+
+  <!-- Launch mag_device_arm node -->
+  <group if="$(arg start_arm_node)">
+    <node pkg="mag_device_arm" type="arm_node" name="mag_device_arm" output="screen">
+      <rosparam command="load" file="$(arg config)" />
+    </node>
+  </group>
+</launch>
+

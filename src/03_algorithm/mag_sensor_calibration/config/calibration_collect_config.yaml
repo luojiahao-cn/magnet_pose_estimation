@@ -10,10 +10,14 @@ config:
   
   # 旋转配置
   rotation:
-    roll_range: [-3.14, 3.14]      # roll角度范围 [min, max] (弧度)
-    pitch_range: [-3.14, 3.14]     # pitch角度范围 [min, max] (弧度)
-    yaw_range: [-3.14, 3.14]       # yaw角度范围 [min, max] (弧度)
-    step_size: 0.3                  # 角度步长（弧度），建议0.2-0.5
+    # 角度范围（弧度）：减小范围可以减少点数
+    # 选项1：全范围但大步长（约512个点）：step_size=0.8
+    # 选项2：半范围中等步长（约343个点）：范围[-1.57, 1.57]，step_size=0.5
+    # 选项3：半范围大步长（约216个点）：范围[-1.57, 1.57]，step_size=0.6
+    roll_range: [-1.57, 1.57]      # roll角度范围 [min, max] (弧度)，-90°到90°
+    pitch_range: [-1.57, 1.57]     # pitch角度范围 [min, max] (弧度)，-90°到90°
+    yaw_range: [-1.57, 1.57]       # yaw角度范围 [min, max] (弧度)，-90°到90°
+    step_size: 0.6                  # 角度步长（弧度），增大步长可以减少点数
     stable_wait_time: 2.0          # 每个姿态稳定等待时间（秒）
     sample_duration: 1.0           # 每个姿态采样时长（秒）
   
@@ -24,6 +28,6 @@ config:
   
   # 输出配置
   output:
-    data_file: calibration_raw_data.csv  # 原始数据文件（可选，暂未实现）
+    data_file: calibration_raw_data.csv  # 原始数据文件（CSV格式，包含磁场和角度信息）
     params_file: config/calibration_params.yaml  # 校正参数输出文件
 

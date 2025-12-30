@@ -8,6 +8,7 @@
 #include <iomanip>
 
 int main(int argc, char **argv) {
+  setlocale(LC_ALL, "zh_CN.UTF-8");
   ros::init(argc, argv, "mag_sensor_calibration_node");
   ros::NodeHandle nh;
   ros::NodeHandle pnh("~");

@@ -13,7 +13,7 @@
 
 ### 单臂配置
 
-`config/single_arm.yaml` - 单臂配置，使用 `arm1` 作为机械臂名称，planning group 为 `zlab_arm`。
+`config/single_arm.yaml` - 单臂配置，使用 `arm1` 作为机械臂名称，planning group 为 `fr5`。
 
 **注意**：`end_effector_link` 需要根据实际使用的工具名称配置：
 - 有工具：`{arm_id}_{tool_name}_tcp_link` 或 `{arm_id}_{tool_name}_link`
@@ -36,19 +36,19 @@
 
 ```bash
 # 单臂仿真（默认工具：magnetic_sensor_bracket）
-roslaunch mag_device_arm single_arm_gazebo.launch
+roslaunch mag_device_arm fr5/single/fr5_single_gazebo.launch
 
 # 单臂仿真（指定工具，如永久磁铁）
-roslaunch mag_device_arm single_arm_gazebo.launch tool_name:=permanent_magnet
+roslaunch mag_device_arm fr5/single/fr5_single_gazebo.launch tool_name:=permanent_magnet
 
 # 单臂仿真（指定工具，如磁传感器支架）
-roslaunch mag_device_arm single_arm_gazebo.launch tool_name:=magnetic_sensor_bracket
+roslaunch mag_device_arm fr5/single/fr5_single_gazebo.launch tool_name:=magnetic_sensor_bracket
 
 # 单臂仿真（指定 arm_id，默认为 arm1）
-roslaunch mag_device_arm single_arm_gazebo.launch arm_id:=arm1 tool_name:=magnetic_sensor_bracket
+roslaunch mag_device_arm fr5/single/fr5_single_gazebo.launch arm_id:=arm1 tool_name:=magnetic_sensor_bracket
 
 # 单臂仿真（禁用 RViz）
-roslaunch mag_device_arm single_arm_gazebo.launch use_rviz:=false
+roslaunch mag_device_arm fr5/single/fr5_single_gazebo.launch use_rviz:=false
 ```
 
 ### 真实机器人模式
@@ -57,37 +57,54 @@ roslaunch mag_device_arm single_arm_gazebo.launch use_rviz:=false
 
 ```bash
 # 单臂（默认 arm1，默认 IP 根据 arm_id 自动选择）
-roslaunch mag_device_arm single_arm_bringup.launch
+roslaunch mag_device_arm fr5/single/fr5_single_bringup.launch
 
 # 单臂（指定 IP 地址）
-roslaunch mag_device_arm single_arm_bringup.launch robot_ip:=192.168.31.202
+roslaunch mag_device_arm fr5/single/fr5_single_bringup.launch robot_ip:=192.168.31.202
 
 # 单臂（指定 arm_id 和工具）
-roslaunch mag_device_arm single_arm_bringup.launch arm_id:=arm1 tool_name:=magnetic_sensor_bracket
+roslaunch mag_device_arm fr5/single/fr5_single_bringup.launch arm_id:=arm1 tool_name:=magnetic_sensor_bracket
 
 # 单臂（禁用 RViz）
-roslaunch mag_device_arm single_arm_bringup.launch use_rviz:=false
+roslaunch mag_device_arm fr5/single/fr5_single_bringup.launch use_rviz:=false
+```
 
-# 双臂（默认 IP：arm1=192.168.31.202, arm2=192.168.31.203）
-roslaunch mag_device_arm dual_arm_bringup.launch
+### MoveIt 仿真模式（无 Gazebo）
+
+```bash
+# 单臂 MoveIt 仿真（fake execution）
+roslaunch mag_device_arm fr5/single/fr5_single_moveit.launch
+
+# 单臂 MoveIt 仿真（指定工具）
+roslaunch mag_device_arm fr5/single/fr5_single_moveit.launch tool_name:=magnetic_sensor_bracket
+```
+
+### 双臂模式
+
+```bash
+# 双臂（默认 IP：arm1=192.168.31.201, arm2=192.168.31.202）
+roslaunch mag_device_arm fr5/dual/fr5_dual_bringup.launch
 
 # 双臂（指定 IP 和工具）
-roslaunch mag_device_arm dual_arm_bringup.launch \
-    arm1_ip:=192.168.31.202 \
-    arm2_ip:=192.168.31.203 \
+roslaunch mag_device_arm fr5/dual/fr5_dual_bringup.launch \
+    arm1_ip:=192.168.31.201 \
+    arm2_ip:=192.168.31.202 \
     arm1_tool:=permanent_magnet \
     arm2_tool:=magnetic_sensor_bracket
 
 # 双臂 Gazebo 仿真
-roslaunch mag_device_arm dual_arm_gazebo.launch
+roslaunch mag_device_arm fr5/dual/fr5_dual_gazebo.launch
 
 # 双臂 Gazebo 仿真（指定工具）
-roslaunch mag_device_arm dual_arm_gazebo.launch \
+roslaunch mag_device_arm fr5/dual/fr5_dual_gazebo.launch \
     arm1_tool:=permanent_magnet \
     arm2_tool:=magnetic_sensor_bracket
 
 # 双臂 Gazebo 仿真（禁用 RViz）
-roslaunch mag_device_arm dual_arm_gazebo.launch use_rviz:=false
+roslaunch mag_device_arm fr5/dual/fr5_dual_gazebo.launch use_rviz:=false
+
+# 双臂 MoveIt 仿真（fake execution）
+roslaunch mag_device_arm fr5/dual/fr5_dual_moveit.launch
 ```
 
 ## 示例：往复运动脚本

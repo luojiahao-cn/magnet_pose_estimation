@@ -6,6 +6,7 @@
 #include <ros/ros.h>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
+#include <Eigen/Dense>
 
 #include <map>
 #include <vector>
@@ -118,6 +119,17 @@ private:
    * @brief 从RPY创建姿态
    */
   geometry_msgs::Pose poseFromRpy(double roll, double pitch, double yaw);
+  
+  /**
+   * @brief 从四元数提取RPY角度
+   */
+  void quaternionToRpy(const geometry_msgs::Quaternion &q, double &roll, double &pitch, double &yaw);
+  
+  /**
+   * @brief 保存原始数据到CSV文件
+   * @return 是否成功
+   */
+  bool saveRawDataToFile(const std::string &file_path);
   
   ros::NodeHandle nh_;
   ros::NodeHandle pnh_;

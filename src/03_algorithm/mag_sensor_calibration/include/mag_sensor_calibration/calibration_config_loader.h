@@ -2,6 +2,7 @@
 
 #include <mag_core_utils/xmlrpc_utils.hpp>
 #include <Eigen/Dense>
+#include <ros/ros.h>
 
 #include <map>
 #include <string>

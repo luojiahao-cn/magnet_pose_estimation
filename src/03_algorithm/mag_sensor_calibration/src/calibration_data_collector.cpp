@@ -2,8 +2,11 @@
 
 #include <mag_core_utils/xmlrpc_utils.hpp>
 #include <tf2/LinearMath/Quaternion.h>
+#include <tf2/LinearMath/Matrix3x3.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+#include <ros/package.h>
 #include <fstream>
+#include <iomanip>
 #include <cmath>
 #include <algorithm>
 
@@ -39,7 +42,8 @@ bool CalibrationDataCollector::loadConfig() {
   
   try {
     const auto config_ctx = "config";
-    const auto &config = xml::requireStructField(root, "config", config_ctx);
+    // root已经包含了config下的所有内容，直接使用
+    const auto &config = root;
     
     // 机械臂配置
     const auto arm_ctx = xml::makeContext(config_ctx, "arm");
@@ -84,9 +88,9 @@ bool CalibrationDataCollector::loadConfig() {
         config_.yaw_range.push_back(xml::readNumber(yaw_array[i], xml::makeContext(rot_ctx, "yaw_range[" + std::to_string(i) + "]")));
       }
     }
-    config_.step_size = xml::readNumber(rotation, "step_size", rot_ctx, 0.2);
-    config_.stable_wait_time = xml::readNumber(rotation, "stable_wait_time", rot_ctx, 2.0);
-    config_.sample_duration = xml::readNumber(rotation, "sample_duration", rot_ctx, 1.0);
+    config_.step_size = xml::optionalNumberField(rotation, "step_size", rot_ctx, 0.2);
+    config_.stable_wait_time = xml::optionalNumberField(rotation, "stable_wait_time", rot_ctx, 2.0);
+    config_.sample_duration = xml::optionalNumberField(rotation, "sample_duration", rot_ctx, 1.0);
     
     // 话题配置
     const auto topics_ctx = xml::makeContext(config_ctx, "topics");
@@ -150,6 +154,15 @@ bool CalibrationDataCollector::collectData() {
   }
   
   ROS_INFO("[calibration_collector] 数据采集完成，共采集 %zu 个姿态的数据", collected_data_.size());
+  
+  // 保存原始数据到文件（如果配置了）
+  if (!config_.data_file.empty()) {
+    if (saveRawDataToFile(config_.data_file)) {
+      ROS_INFO("[calibration_collector] 原始数据已保存到: %s", config_.data_file.c_str());
+    } else {
+      ROS_WARN("[calibration_collector] 保存原始数据失败: %s", config_.data_file.c_str());
+    }
+  }
   
   return !collected_data_.empty();
 }
@@ -251,6 +264,75 @@ geometry_msgs::Pose CalibrationDataCollector::poseFromRpy(double roll, double pi
   geometry_msgs::Pose pose;
   pose.orientation = tf2::toMsg(q);
   return pose;
+}
+
+void CalibrationDataCollector::quaternionToRpy(const geometry_msgs::Quaternion &q, double &roll, double &pitch, double &yaw) {
+  tf2::Quaternion tf_q;
+  tf2::fromMsg(q, tf_q);
+  tf2::Matrix3x3 m(tf_q);
+  m.getRPY(roll, pitch, yaw);
+}
+
+bool CalibrationDataCollector::saveRawDataToFile(const std::string &file_path) {
+  try {
+    // 解析文件路径（支持相对路径）
+    std::string full_path = file_path;
+    if (file_path[0] != '/') {
+      std::string package_path = ros::package::getPath("mag_sensor_calibration");
+      if (!package_path.empty()) {
+        full_path = package_path + "/" + file_path;
+      }
+    }
+    
+    std::ofstream file(full_path);
+    if (!file.is_open()) {
+      ROS_ERROR("[calibration_collector] 无法打开文件进行写入: %s", full_path.c_str());
+      return false;
+    }
+    
+    // 写入CSV表头
+    file << "timestamp,sensor_id,mag_x,mag_y,mag_z,"
+         << "pos_x,pos_y,pos_z,"
+         << "ori_x,ori_y,ori_z,ori_w,"
+         << "roll,pitch,yaw\n";
+    
+    // 写入数据
+    std::lock_guard<std::mutex> lock(data_mutex_);
+    for (const auto &pose_data : collected_data_) {
+      double roll, pitch, yaw;
+      quaternionToRpy(pose_data.pose.orientation, roll, pitch, yaw);
+      
+      // 对每个传感器的每次测量都写入一行
+      for (const auto &sensor_kv : pose_data.sensor_measurements) {
+        uint32_t sensor_id = sensor_kv.first;
+        const auto &measurements = sensor_kv.second;
+        
+        for (const auto &field : measurements) {
+          file << std::fixed << std::setprecision(9)
+               << pose_data.timestamp.toSec() << ","
+               << sensor_id << ","
+               << std::setprecision(6)
+               << field.x() << "," << field.y() << "," << field.z() << ","
+               << pose_data.pose.position.x << ","
+               << pose_data.pose.position.y << ","
+               << pose_data.pose.position.z << ","
+               << pose_data.pose.orientation.x << ","
+               << pose_data.pose.orientation.y << ","
+               << pose_data.pose.orientation.z << ","
+               << pose_data.pose.orientation.w << ","
+               << roll << "," << pitch << "," << yaw << "\n";
+        }
+      }
+    }
+    
+    file.close();
+    ROS_INFO("[calibration_collector] 成功保存 %zu 个姿态的原始数据到: %s", 
+             collected_data_.size(), full_path.c_str());
+    return true;
+  } catch (const std::exception &e) {
+    ROS_ERROR_STREAM("[calibration_collector] 保存原始数据失败: " << e.what());
+    return false;
+  }
 }
 
 }  // namespace mag_sensor_calibration

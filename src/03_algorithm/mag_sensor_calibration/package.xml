@@ -33,6 +33,7 @@
   <exec_depend>std_msgs</exec_depend>
   <exec_depend>mag_core_msgs</exec_depend>
   <exec_depend>mag_core_utils</exec_depend>
+  <exec_depend>mag_device_arm</exec_depend>
   <exec_depend>rosparam_shortcuts</exec_depend>
   <exec_depend>tf2</exec_depend>
   <exec_depend>tf2_ros</exec_depend>

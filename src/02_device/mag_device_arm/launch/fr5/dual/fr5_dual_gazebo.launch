@@ -1,0 +1,39 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- Tool parameters (optional, defaults to none) -->
+  <arg name="arm1_tool" default="permanent_magnet" doc="Tool name for arm1 (e.g., permanent_magnet, magnetic_sensor_bracket, electronic_magnet)"/>
+  <arg name="arm2_tool" default="magnetic_sensor_bracket" doc="Tool name for arm2 (e.g., permanent_magnet, magnetic_sensor_bracket, electronic_magnet)"/>
+  
+  <!-- Arm position parameters (optional) -->
+  <arg name="arm1_xyz" default="0 0 0" doc="Position of arm1 (x y z)"/>
+  <arg name="arm1_rpy" default="0 0 0" doc="Orientation of arm1 (roll pitch yaw)"/>
+  <arg name="arm2_xyz" default="" doc="Position of arm2 (x y z), empty for default"/>
+  <arg name="arm2_rpy" default="" doc="Orientation of arm2 (roll pitch yaw), empty for default"/>
+  
+  <!-- MoveIt options -->
+  <arg name="pipeline" default="ompl" doc="Planning pipeline to use with MoveIt"/>
+  <arg name="use_rviz" default="true" doc="Use Rviz to visualize the robot"/>
+  
+  <!-- Gazebo options -->
+  <arg name="gazebo_gui" default="true" doc="Start Gazebo GUI"/>
+  <arg name="paused" default="false" doc="Start Gazebo paused"/>
+  <arg name="world_name" default="worlds/empty.world" doc="Gazebo world file"/>
+  <arg name="world_pose" default="-x 0 -y 0 -z 0 -R 0 -P 0 -Y 0" doc="Pose to spawn the robot at"/>
+  
+  <!-- 配置参数 -->
+  <arg name="config" default="$(find mag_device_arm)/config/dual_arm.yaml" />
+  
+  <!-- 是否启动 mag_device_arm 节点 -->
+  <arg name="start_arm_node" default="true" doc="Whether to start mag_device_arm node"/>
+  
+  <!-- Launch Gazebo and MoveIt -->
+  <include file="$(find zlab_robots_bringup)/launch/fr5/dual/fr5_dual_gazebo.launch" pass_all_args="true"/>
+  
+  <!-- Launch mag_device_arm node -->
+  <group if="$(arg start_arm_node)">
+    <node pkg="mag_device_arm" type="arm_node" name="mag_device_arm" output="screen">
+      <rosparam command="load" file="$(arg config)" />
+    </node>
+  </group>
+</launch>
+
