@@ -7,25 +7,23 @@ config:
     name: arm1
     base_position: [0.5, 0.0, 1.0]  # 固定位置 [x, y, z] (米)
     base_orientation: [0.0, 0.0, 0.0]  # 基础姿态 [roll, pitch, yaw] (弧度)
-  
+
   # 旋转配置
   rotation:
     # 角度范围（弧度）：减小范围可以减少点数
-    # 选项1：全范围但大步长（约512个点）：step_size=0.8
-    # 选项2：半范围中等步长（约343个点）：范围[-1.57, 1.57]，step_size=0.5
-    # 选项3：半范围大步长（约216个点）：范围[-1.57, 1.57]，step_size=0.6
-    roll_range: [-1.57, 1.57]      # roll角度范围 [min, max] (弧度)，-90°到90°
-    pitch_range: [-1.57, 1.57]     # pitch角度范围 [min, max] (弧度)，-90°到90°
-    yaw_range: [-1.57, 1.57]       # yaw角度范围 [min, max] (弧度)，-90°到90°
-    step_size: 0.6                  # 角度步长（弧度），增大步长可以减少点数
+    # 旋转覆盖配置：使用全范围 (-pi, pi) 以获得完整的标定球壳
+    roll_range: [-3.14, 3.14]      # roll角度范围 [min, max] (弧度)，覆盖全圆
+    pitch_range: [-3.14, 3.14]     # pitch角度范围 [min, max] (弧度)，覆盖全圆
+    yaw_range: [-3.14, 3.14]       # yaw角度范围 [min, max] (弧度)，覆盖全圆
+    step_size: 0.5                  # 角度步长（弧度），约13^3=2197个点，高质量标定配置
     stable_wait_time: 2.0          # 每个姿态稳定等待时间（秒）
     sample_duration: 1.0           # 每个姿态采样时长（秒）
-  
+
   # 话题配置
   topics:
     sensor_batch: /magnetic/sensor/batch  # 传感器批量数据话题
     arm_service: /mag_device_arm/set_end_effector_pose  # 机械臂服务
-  
+
   # 输出配置
   output:
     data_file: calibration_raw_data.csv  # 原始数据文件（CSV格式，包含磁场和角度信息）

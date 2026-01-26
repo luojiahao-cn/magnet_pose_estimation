@@ -1,3 +1,8 @@
+/**
+ * @file calibration_data_collector.cpp
+ * @brief 实现磁力计校正数据的自动化采集，通过控制机械臂运动并记录传感器数据
+ */
+
 #include "mag_sensor_calibration/calibration_data_collector.h"
 
 #include <mag_core_utils/xmlrpc_utils.hpp>
@@ -39,12 +44,12 @@ bool CalibrationDataCollector::loadConfig() {
     ROS_ERROR("[calibration_collector] 无法加载配置参数 'config'");
     return false;
   }
-  
+
   try {
     const auto config_ctx = "config";
     // root已经包含了config下的所有内容，直接使用
     const auto &config = root;
-    
+
     // 机械臂配置
     const auto arm_ctx = xml::makeContext(config_ctx, "arm");
     const auto &arm = xml::requireStructField(config, "arm", config_ctx);
@@ -63,7 +68,7 @@ bool CalibrationDataCollector::loadConfig() {
         config_.base_orientation.push_back(xml::readNumber(ori_array[i], xml::makeContext(arm_ctx, "base_orientation[" + std::to_string(i) + "]")));
       }
     }
-    
+
     // 旋转配置
     const auto rot_ctx = xml::makeContext(config_ctx, "rotation");
     const auto &rotation = xml::requireStructField(config, "rotation", config_ctx);
@@ -91,19 +96,19 @@ bool CalibrationDataCollector::loadConfig() {
     config_.step_size = xml::optionalNumberField(rotation, "step_size", rot_ctx, 0.2);
     config_.stable_wait_time = xml::optionalNumberField(rotation, "stable_wait_time", rot_ctx, 2.0);
     config_.sample_duration = xml::optionalNumberField(rotation, "sample_duration", rot_ctx, 1.0);
-    
+
     // 话题配置
     const auto topics_ctx = xml::makeContext(config_ctx, "topics");
     const auto &topics = xml::requireStructField(config, "topics", config_ctx);
     config_.sensor_batch_topic = xml::requireStringField(topics, "sensor_batch", topics_ctx);
     config_.arm_service_name = xml::requireStringField(topics, "arm_service", topics_ctx);
-    
+
     // 输出配置
     const auto output_ctx = xml::makeContext(config_ctx, "output");
     const auto &output = xml::requireStructField(config, "output", config_ctx);
     config_.data_file = xml::requireStringField(output, "data_file", output_ctx);
     config_.params_file = xml::requireStringField(output, "params_file", output_ctx);
-    
+
     return true;
   } catch (const std::exception &e) {
     ROS_ERROR_STREAM("[calibration_collector] 配置加载失败: " << e.what());
@@ -116,45 +121,45 @@ bool CalibrationDataCollector::collectData() {
   sensor_batch_sub_ = nh_.subscribe<mag_core_msgs::MagSensorBatch>(
       config_.sensor_batch_topic, 10,
       &CalibrationDataCollector::sensorBatchCallback, this);
-  
+
   arm_pose_client_ = nh_.serviceClient<mag_device_arm::SetEndEffectorPose>(
       config_.arm_service_name);
-  
+
   if (!arm_pose_client_.waitForExistence(ros::Duration(5.0))) {
     ROS_ERROR("[calibration_collector] 机械臂服务不可用: %s", config_.arm_service_name.c_str());
     return false;
   }
-  
+
   // 生成旋转轨迹
   std::vector<geometry_msgs::Pose> trajectory = generateRotationTrajectory();
   ROS_INFO("[calibration_collector] 生成了 %zu 个姿态点", trajectory.size());
-  
+
   collected_data_.clear();
   collected_data_.reserve(trajectory.size());
-  
+
   // 遍历每个姿态，采集数据
   for (size_t i = 0; i < trajectory.size(); ++i) {
     ROS_INFO("[calibration_collector] 采集进度: %zu/%zu", i + 1, trajectory.size());
-    
+
     // 移动到目标姿态
     if (!moveArmToPose(trajectory[i])) {
       ROS_WARN("[calibration_collector] 无法移动到姿态 %zu，跳过", i);
       continue;
     }
-    
+
     // 等待稳定
     waitForStability(config_.stable_wait_time);
-    
+
     // 采集数据
     PoseSensorData pose_data = sampleSensorData(config_.sample_duration, trajectory[i]);
     collected_data_.push_back(pose_data);
-    
+
     ROS_INFO("[calibration_collector] 姿态 %zu 采集完成，获得 %zu 个传感器的数据",
              i, pose_data.sensor_measurements.size());
   }
-  
+
   ROS_INFO("[calibration_collector] 数据采集完成，共采集 %zu 个姿态的数据", collected_data_.size());
-  
+
   // 保存原始数据到文件（如果配置了）
   if (!config_.data_file.empty()) {
     if (saveRawDataToFile(config_.data_file)) {
@@ -163,16 +168,16 @@ bool CalibrationDataCollector::collectData() {
       ROS_WARN("[calibration_collector] 保存原始数据失败: %s", config_.data_file.c_str());
     }
   }
-  
+
   return !collected_data_.empty();
 }
 
 std::vector<geometry_msgs::Pose> CalibrationDataCollector::generateRotationTrajectory() {
   std::vector<geometry_msgs::Pose> trajectory;
-  
+
   // 生成角度网格
   std::vector<double> roll_angles, pitch_angles, yaw_angles;
-  
+
   for (double r = config_.roll_range[0]; r <= config_.roll_range[1]; r += config_.step_size) {
     roll_angles.push_back(r);
   }
@@ -182,7 +187,7 @@ std::vector<geometry_msgs::Pose> CalibrationDataCollector::generateRotationTraje
   for (double y = config_.yaw_range[0]; y <= config_.yaw_range[1]; y += config_.step_size) {
     yaw_angles.push_back(y);
   }
-  
+
   // 生成所有组合
   for (double roll : roll_angles) {
     for (double pitch : pitch_angles) {
@@ -195,7 +200,7 @@ std::vector<geometry_msgs::Pose> CalibrationDataCollector::generateRotationTraje
       }
     }
   }
-  
+
   return trajectory;
 }
 
@@ -206,17 +211,17 @@ bool CalibrationDataCollector::moveArmToPose(const geometry_msgs::Pose &pose) {
   srv.request.velocity_scaling = 0.3;
   srv.request.acceleration_scaling = 0.3;
   srv.request.execute = true;
-  
+
   if (!arm_pose_client_.call(srv)) {
     ROS_ERROR("[calibration_collector] 调用机械臂服务失败");
     return false;
   }
-  
+
   if (!srv.response.success) {
     ROS_WARN_STREAM("[calibration_collector] 机械臂移动失败: " << srv.response.message);
     return false;
   }
-  
+
   return true;
 }
 
@@ -228,15 +233,15 @@ PoseSensorData CalibrationDataCollector::sampleSensorData(double duration, const
   PoseSensorData pose_data;
   pose_data.pose = current_pose;
   pose_data.timestamp = ros::Time::now();
-  
+
   ros::Time start_time = ros::Time::now();
   ros::Time end_time = start_time + ros::Duration(duration);
-  
+
   std::map<uint32_t, std::vector<Eigen::Vector3d>> measurements;
-  
+
   while (ros::Time::now() < end_time) {
     ros::spinOnce();
-    
+
     std::lock_guard<std::mutex> lock(batch_mutex_);
     if (latest_batch_) {
       for (const auto &sensor : latest_batch_->measurements) {
@@ -244,10 +249,10 @@ PoseSensorData CalibrationDataCollector::sampleSensorData(double duration, const
         measurements[sensor.sensor_id].push_back(field);
       }
     }
-    
+
     ros::Duration(0.01).sleep();  // 10ms采样间隔
   }
-  
+
   pose_data.sensor_measurements = measurements;
   return pose_data;
 }
@@ -260,7 +265,7 @@ void CalibrationDataCollector::sensorBatchCallback(const mag_core_msgs::MagSenso
 geometry_msgs::Pose CalibrationDataCollector::poseFromRpy(double roll, double pitch, double yaw) {
   tf2::Quaternion q;
   q.setRPY(roll, pitch, yaw);
-  
+
   geometry_msgs::Pose pose;
   pose.orientation = tf2::toMsg(q);
   return pose;
@@ -283,30 +288,30 @@ bool CalibrationDataCollector::saveRawDataToFile(const std::string &file_path) {
         full_path = package_path + "/" + file_path;
       }
     }
-    
+
     std::ofstream file(full_path);
     if (!file.is_open()) {
       ROS_ERROR("[calibration_collector] 无法打开文件进行写入: %s", full_path.c_str());
       return false;
     }
-    
+
     // 写入CSV表头
     file << "timestamp,sensor_id,mag_x,mag_y,mag_z,"
          << "pos_x,pos_y,pos_z,"
          << "ori_x,ori_y,ori_z,ori_w,"
          << "roll,pitch,yaw\n";
-    
+
     // 写入数据
     std::lock_guard<std::mutex> lock(data_mutex_);
     for (const auto &pose_data : collected_data_) {
       double roll, pitch, yaw;
       quaternionToRpy(pose_data.pose.orientation, roll, pitch, yaw);
-      
+
       // 对每个传感器的每次测量都写入一行
       for (const auto &sensor_kv : pose_data.sensor_measurements) {
         uint32_t sensor_id = sensor_kv.first;
         const auto &measurements = sensor_kv.second;
-        
+
         for (const auto &field : measurements) {
           file << std::fixed << std::setprecision(9)
                << pose_data.timestamp.toSec() << ","
@@ -324,9 +329,9 @@ bool CalibrationDataCollector::saveRawDataToFile(const std::string &file_path) {
         }
       }
     }
-    
+
     file.close();
-    ROS_INFO("[calibration_collector] 成功保存 %zu 个姿态的原始数据到: %s", 
+    ROS_INFO("[calibration_collector] 成功保存 %zu 个姿态的原始数据到: %s",
              collected_data_.size(), full_path.c_str());
     return true;
   } catch (const std::exception &e) {

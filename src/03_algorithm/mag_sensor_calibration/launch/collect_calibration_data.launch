@@ -2,12 +2,12 @@
 <launch>
   <!--
     传感器校正数据采集启动文件
-    
+
     开关说明：
       - use_real_robot: 是否使用真实机械臂（true=真实机械臂+硬件接口，false=纯MoveIt仿真，默认false）
       - use_real_sensor: 是否使用真实磁传感器（true=硬件，false=仿真）
       - use_rviz: 是否启动 RViz
-      - tool_name: 工具名称（末端执行器/传感器支架），默认 magnetic_sensor_bracket
+      - tool_name: 工具名称（末端执行器/传感器支架），默认 bracket
       - robot_ip: 真实机械臂IP地址（仅在use_real_robot=true时使用）
   -->
 
@@ -15,7 +15,7 @@
   <arg name="use_real_robot" default="false" doc="是否使用真实机械臂（true=真实机械臂+硬件接口，false=纯MoveIt仿真）"/>
   <arg name="use_real_sensor" default="false" doc="是否使用真实磁传感器"/>
   <arg name="use_rviz" default="true" doc="是否启动 RViz"/>
-  <arg name="tool_name" default="magnetic_sensor_bracket" doc="工具名称"/>
+  <arg name="tool_name" default="bracket" doc="工具名称"/>
   <arg name="robot_ip" default="" doc="真实机械臂IP地址（仅在use_real_robot=true时使用，为空则使用默认值）"/>
   <arg name="log_level" default="INFO" doc="日志级别：DEBUG, INFO, WARN, ERROR, FATAL"/>
 
@@ -56,8 +56,8 @@
   </group>
 
   <!-- 传感器校正数据采集节点 -->
-  <node name="mag_sensor_calibration_node" 
-        pkg="mag_sensor_calibration" 
+  <node name="mag_sensor_calibration_node"
+        pkg="mag_sensor_calibration"
         type="mag_sensor_calibration_node"
         output="screen">
     <rosparam file="$(find mag_sensor_calibration)/config/calibration_collect_config.yaml" command="load"/>
@@ -66,8 +66,8 @@
 
   <!-- RViz 可视化（可选） -->
   <group if="$(arg use_rviz)">
-    <node name="rviz" pkg="rviz" type="rviz" 
-          args="-d $(find mag_sensor_calibration)/rviz/mag_sensor_calibration.rviz" 
+    <node name="rviz" pkg="rviz" type="rviz"
+          args="-d $(find mag_sensor_calibration)/rviz/mag_sensor_calibration.rviz"
           output="screen"/>
   </group>
 

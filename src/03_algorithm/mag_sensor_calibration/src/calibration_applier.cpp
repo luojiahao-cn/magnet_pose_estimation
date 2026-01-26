@@ -1,3 +1,8 @@
+/**
+ * @file calibration_applier.cpp
+ * @brief 实现磁力计校正参数的应用功能，将原始观测值转换为校正后的磁场强度
+ */
+
 #include "mag_sensor_calibration/calibration_applier.h"
 #include "mag_sensor_calibration/ellipsoid_fitter.h"
 
@@ -16,7 +21,7 @@ Eigen::Vector3d CalibrationApplier::applyCalibration(uint32_t sensor_id, const E
     // 没有校正参数，返回原始值
     return raw_field;
   }
-  
+
   const auto &calib = it->second;
   return EllipsoidFitter::applyCalibration(raw_field, calib.hard_iron_offset, calib.soft_iron_matrix);
 }
