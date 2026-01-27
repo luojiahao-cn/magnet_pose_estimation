@@ -1,0 +1,34 @@
+<launch>
+    <arg name="use_sim" default="true" />
+    <arg name="magnet_arm" default="arm1" />
+    <arg name="sensor_arm" default="arm2" />
+    <arg name="magnet_arm_tool" default="permanent_magnet" />
+    <arg name="sensor_arm_tool" default="bracket" />
+    <arg name="bag_file" default="$(find mag_dual_arm_tracking)/data/experiment.bag" />
+
+    <!-- Dual Arm Bringup -->
+    <group if="$(arg use_sim)">
+         <include file="$(find mag_device_arm)/launch/fr5/dual/fr5_dual_gazebo.launch">
+             <arg name="arm1_tool" value="$(arg magnet_arm_tool)" />
+             <arg name="arm2_tool" value="$(arg sensor_arm_tool)" />
+         </include>
+    </group>
+    <group unless="$(arg use_sim)">
+         <include file="$(find mag_device_arm)/launch/fr5/dual/fr5_dual_bringup.launch">
+             <arg name="arm1_tool" value="$(arg magnet_arm_tool)" />
+             <arg name="arm2_tool" value="$(arg sensor_arm_tool)" />
+         </include>
+    </group>
+
+    <!-- Sensor -->
+    <include file="$(find mag_device_sensor)/launch/simulation.launch" if="$(arg use_sim)" />
+    <include file="$(find mag_device_sensor)/launch/hardware.launch" unless="$(arg use_sim)" />
+
+    <!-- Tracking Node -->
+    <node pkg="mag_dual_arm_tracking" type="dual_tracking_node" name="dual_tracking_node" output="screen">
+        <rosparam command="load" file="$(find mag_dual_arm_tracking)/config/dual_tracking.yaml" />
+        <param name="magnet_arm_name" value="$(arg magnet_arm)" />
+        <param name="sensor_arm_name" value="$(arg sensor_arm)" />
+        <param name="bag_filename" value="$(arg bag_file)" />
+    </node>
+</launch>

@@ -104,8 +104,8 @@ world
   └── arm1_base_link (静态，由 mag_device_arm 发布，如果配置了 base_tf)
       └── ... (机械臂关节链，由 MoveIt 发布)
           └── arm1_flange_link (机械臂末端法兰)
-              └── arm1_magnetic_sensor_bracket_link (工具基座，静态)
-                  └── arm1_magnetic_sensor_bracket_tcp_link (工具末端，静态)
+              └── arm1_bracket_link (工具基座，静态)
+                  └── arm1_bracket_tcp_link (工具末端，静态)
                       └── sensor_array (静态，由 sensor_array_tf_node 发布)
                           ├── sensor_1
                           ├── sensor_2

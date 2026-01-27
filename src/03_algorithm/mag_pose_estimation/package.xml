@@ -12,6 +12,7 @@
   <build_depend>std_msgs</build_depend>
   <build_depend>mag_core_msgs</build_depend>
   <build_depend>mag_core_utils</build_depend>
+  <build_depend>mag_sensor_calibration</build_depend>
   <build_depend>rosparam_shortcuts</build_depend>
   <build_depend>tf2</build_depend>
   <build_depend>tf2_ros</build_depend>

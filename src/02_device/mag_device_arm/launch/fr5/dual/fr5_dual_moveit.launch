@@ -2,7 +2,7 @@
 <launch>
   <!-- Tool parameters -->
   <arg name="arm1_tool" default="permanent_magnet" doc="Tool name for arm1"/>
-  <arg name="arm2_tool" default="magnetic_sensor_bracket" doc="Tool name for arm2"/>
+  <arg name="arm2_tool" default="bracket" doc="Tool name for arm2"/>
   
   <!-- Arm position parameters -->
   <arg name="arm1_xyz" default="0 0 0" doc="Position of arm1 (x y z)"/>

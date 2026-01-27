@@ -1,0 +1,8 @@
+magnet_arm_name: "arm1"
+sensor_arm_name: "arm2"
+radius: 0.1
+center_x: 0.5
+center_y: 0.0
+center_z: 0.3
+z_offset: 0.2
+bag_filename: "experiment.bag"  # Note: The launch file overrides this with an absolute path

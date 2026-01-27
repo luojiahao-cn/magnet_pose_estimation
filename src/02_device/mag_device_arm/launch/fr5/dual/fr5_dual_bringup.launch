@@ -9,7 +9,7 @@
   
   <!-- Tool parameters -->
   <arg name="arm1_tool" default="permanent_magnet" doc="Tool name for arm1"/>
-  <arg name="arm2_tool" default="magnetic_sensor_bracket" doc="Tool name for arm2"/>
+  <arg name="arm2_tool" default="bracket" doc="Tool name for arm2"/>
   
   <!-- MoveIt options -->
   <arg name="pipeline" default="ompl" doc="Planning pipeline to use with MoveIt"/>

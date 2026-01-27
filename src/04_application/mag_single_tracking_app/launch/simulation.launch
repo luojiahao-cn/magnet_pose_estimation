@@ -19,7 +19,7 @@
 
   <!-- 启动 Gazebo 和 MoveIt 配置 -->
   <include file="$(find mag_device_arm)/launch/single_arm_gazebo.launch">
-    <arg name="tool_name" value="magnetic_sensor_bracket" />
+    <arg name="tool_name" value="bracket" />
   </include>
 
   <!-- 机械臂控制节点 -->

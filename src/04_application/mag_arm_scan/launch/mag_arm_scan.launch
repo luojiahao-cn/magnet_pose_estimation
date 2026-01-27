@@ -25,7 +25,7 @@
     <arg name="log_level" default="DEBUG" />
 
     <!-- 工具名称（末端执行器 / 传感器支架） -->
-    <arg name="tool_name" default="magnetic_sensor_bracket" />
+    <arg name="tool_name" default="bracket" />
 
     <!-- 是否启动 RViz -->
     <arg name="use_rviz" default="true" />

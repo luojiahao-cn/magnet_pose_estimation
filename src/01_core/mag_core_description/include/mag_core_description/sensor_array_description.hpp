@@ -1,12 +1,11 @@
 #pragma once
 
-#include <mag_core_description/sensor_array_config_loader.hpp>
-
 #include <geometry_msgs/Pose.h>
 #include <geometry_msgs/TransformStamped.h>
 #include <ros/ros.h>
 #include <tf2_ros/static_transform_broadcaster.h>
 #include <tf2_ros/transform_broadcaster.h>
+#include <XmlRpcValue.h>
 
 #include <string>
 #include <unordered_map>
@@ -15,61 +14,79 @@
 namespace mag_core_description
 {
 
-struct SensorEntry
-{
-    int id{0};
-    geometry_msgs::Pose pose;
-    std::string frame_id;
-};
+    struct SensorArraySensorConfig
+    {
+        int id{0};
+        geometry_msgs::Pose pose;
+        std::string frame_id;
+    };
 
-class SensorArrayDescription
-{
-public:
-    void load(const SensorArrayConfig &config);
+    struct SensorArrayConfig
+    {
+        std::string parent_frame;
+        std::string array_frame;
+        std::string sensor_frame_prefix{"sensor_"};
+        geometry_msgs::Pose array_pose;
+        std::vector<SensorArraySensorConfig> sensors;
+    };
 
-    const std::string &parentFrame() const { return parent_frame_; }
-    const std::string &arrayFrame() const { return array_frame_; }
-    const geometry_msgs::Pose &arrayPose() const { return array_pose_; }
-    const std::vector<SensorEntry> &sensors() const { return sensors_; }
-    const SensorEntry *findSensor(int id) const;
-    std::string sensorFrameName(int id) const;
+    struct SensorEntry
+    {
+        int id{0};
+        geometry_msgs::Pose pose;
+        std::string frame_id;
+    };
 
-    const std::string &sensorFramePrefix() const { return sensor_frame_prefix_; }
+    class SensorArrayDescription
+    {
+    public:
+        static SensorArrayConfig loadFromParam(const XmlRpc::XmlRpcValue &root, const std::string &context = "");
 
-private:
-    static geometry_msgs::Pose poseFromXyzRpy(const std::vector<double> &xyz, const std::vector<double> &rpy);
+        void load(const SensorArrayConfig &config);
 
-    std::string parent_frame_;
-    std::string array_frame_;
-    geometry_msgs::Pose array_pose_;
-    std::vector<SensorEntry> sensors_;
-    std::unordered_map<int, std::size_t> index_by_id_;
-    std::string sensor_frame_prefix_ = "sensor_";
-};
+        const std::string &parentFrame() const { return parent_frame_; }
+        const std::string &arrayFrame() const { return array_frame_; }
+        const geometry_msgs::Pose &arrayPose() const { return array_pose_; }
+        const std::vector<SensorEntry> &sensors() const { return sensors_; }
+        const SensorEntry *findSensor(int id) const;
+        std::string sensorFrameName(int id) const;
 
-class SensorArrayTfPublisher
-{
-public:
-    explicit SensorArrayTfPublisher(const SensorArrayDescription &description);
+        const std::string &sensorFramePrefix() const { return sensor_frame_prefix_; }
 
-    void publishDynamic(const ros::Time &stamp);
-    void publishStatic();
-    
-    /**
-     * @brief 只发布传感器相对于阵列的静态 TF（不发布阵列相对于父坐标系的 TF）
-     * 用于可移动传感器阵列场景，其中阵列的 TF 由其他节点发布
-     */
-    void publishSensorTfsOnly();
+    private:
+        static geometry_msgs::Pose poseFromXyzRpy(const std::vector<double> &xyz, const std::vector<double> &rpy);
 
-private:
-    std::vector<geometry_msgs::TransformStamped> buildTransforms(const ros::Time &stamp) const;
-    std::vector<geometry_msgs::TransformStamped> buildSensorTransforms(const ros::Time &stamp) const;
+        std::string parent_frame_;
+        std::string array_frame_;
+        geometry_msgs::Pose array_pose_;
+        std::vector<SensorEntry> sensors_;
+        std::unordered_map<int, std::size_t> index_by_id_;
+        std::string sensor_frame_prefix_ = "sensor_";
+    };
 
-    const SensorArrayDescription &description_;
-    tf2_ros::TransformBroadcaster dynamic_broadcaster_;
-    tf2_ros::StaticTransformBroadcaster static_broadcaster_;
-    bool static_sent_{false};
-    bool sensor_tfs_sent_{false};
-};
+    class SensorArrayTfPublisher
+    {
+    public:
+        explicit SensorArrayTfPublisher(const SensorArrayDescription &description);
+
+        void publishDynamic(const ros::Time &stamp);
+        void publishStatic();
+
+        /**
+         * @brief 只发布传感器相对于阵列的静态 TF（不发布阵列相对于父坐标系的 TF）
+         * 用于可移动传感器阵列场景，其中阵列的 TF 由其他节点发布
+         */
+        void publishSensorTfsOnly();
+
+    private:
+        std::vector<geometry_msgs::TransformStamped> buildTransforms(const ros::Time &stamp) const;
+        std::vector<geometry_msgs::TransformStamped> buildSensorTransforms(const ros::Time &stamp) const;
+
+        const SensorArrayDescription &description_;
+        tf2_ros::TransformBroadcaster dynamic_broadcaster_;
+        tf2_ros::StaticTransformBroadcaster static_broadcaster_;
+        bool static_sent_{false};
+        bool sensor_tfs_sent_{false};
+    };
 
 } // namespace mag_core_description

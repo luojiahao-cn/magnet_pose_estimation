@@ -1,0 +1,46 @@
+<launch>
+    <arg name="use_sim" default="true" />
+    <arg name="use_gazebo" default="false" />
+    <arg name="arm_id" default="arm1" />
+    <arg name="tool_name" default="bracket" />
+
+    <!-- Arm -->
+    <group if="$(arg use_sim)">
+         <!-- Gazebo simulation -->
+         <group if="$(arg use_gazebo)">
+             <include file="$(find mag_device_arm)/launch/fr5/single/fr5_single_gazebo.launch">
+                <arg name="arm_id" value="$(arg arm_id)" />
+                <arg name="tool_name" value="$(arg tool_name)" />
+             </include>
+         </group>
+
+         <!-- MoveIt only (fake execution) -->
+         <group unless="$(arg use_gazebo)">
+             <include file="$(find mag_device_arm)/launch/fr5/single/fr5_single_moveit.launch">
+                <arg name="arm_id" value="$(arg arm_id)" />
+                <arg name="tool_name" value="$(arg tool_name)" />
+             </include>
+         </group>
+    </group>
+
+    <group unless="$(arg use_sim)">
+         <include file="$(find mag_device_arm)/launch/fr5/single/fr5_single_bringup.launch">
+            <arg name="arm_id" value="$(arg arm_id)" />
+            <arg name="tool_name" value="$(arg tool_name)" />
+         </include>
+    </group>
+
+    <!-- Sensor -->
+    <group if="$(arg use_sim)">
+        <include file="$(find mag_device_sensor)/launch/simulation.launch" />
+    </group>
+    <group unless="$(arg use_sim)">
+        <include file="$(find mag_device_sensor)/launch/hardware.launch" />
+    </group>
+
+    <!-- Scanner Node -->
+    <node pkg="mag_planar_scan" type="planar_scan_node" name="planar_scan_node" output="screen">
+        <param name="arm_name" value="$(arg arm_id)" />
+        <rosparam command="load" file="$(find mag_planar_scan)/config/planar_scan_config.yaml" />
+    </node>
+</launch>

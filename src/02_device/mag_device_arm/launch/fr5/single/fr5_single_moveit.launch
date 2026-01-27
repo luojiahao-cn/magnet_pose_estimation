@@ -4,7 +4,7 @@
   <arg name="arm_id" default="arm1" doc="Arm ID to use"/>
 
   <!-- Tool parameter (optional, defaults to none) -->
-  <arg name="tool_name" default="magnetic_sensor_bracket" doc="Tool name to use"/>
+  <arg name="tool_name" default="bracket" doc="Tool name to use"/>
 
   <!-- specify the planning pipeline -->
   <arg name="pipeline" default="ompl" />

@@ -10,7 +10,7 @@
   <arg name="loop_hz" default="60.0" doc="Control loop frequency (Hz)"/>
   
   <!-- Tool parameter (optional) -->
-  <arg name="tool_name" default="magnetic_sensor_bracket" doc="Tool name to use"/>
+  <arg name="tool_name" default="bracket" doc="Tool name to use"/>
   
   <!-- MoveIt options -->
   <arg name="pipeline" default="ompl" doc="Planning pipeline to use with MoveIt"/>

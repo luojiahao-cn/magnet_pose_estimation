@@ -7,8 +7,8 @@ config:
       # end_effector_link 根据工具名称动态确定：
       # - 有工具：{arm_id}_{tool_name}_tcp_link 或 {arm_id}_{tool_name}_link
       # - 无工具：{arm_id}_flange_link
-      # 例如：arm1_magnetic_sensor_bracket_tcp_link
-      end_effector_link: arm1_magnetic_sensor_bracket_tcp_link
+      # 例如：arm1_bracket_tcp_link
+      end_effector_link: arm1_bracket_tcp_link
       reference_frame: world
       default_velocity: 0.1
       default_acceleration: 0.1

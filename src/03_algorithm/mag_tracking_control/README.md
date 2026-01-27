@@ -148,7 +148,7 @@ config:
     trajectory_buffer_size: 5         # 累积5个点后执行
     cartesian_path_step_size: 0.01   # 笛卡尔路径步长（米）
     move_group_name: zlab_arm       # MoveIt 规划组名称（单臂）或 arm1/arm2（双臂）
-    end_effector_link: arm1_magnetic_sensor_bracket_tcp_link  # 末端执行器链接（根据工具名称动态确定）
+    end_effector_link: arm1_bracket_tcp_link  # 末端执行器链接（根据工具名称动态确定）
     reference_frame: world           # 参考坐标系
 ```
 

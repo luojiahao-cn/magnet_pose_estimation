@@ -20,7 +20,7 @@
 - 无工具：`{arm_id}_flange_link`
 
 例如：
-- `arm1_magnetic_sensor_bracket_tcp_link`（使用磁传感器支架工具）
+- `arm1_bracket_tcp_link`（使用磁传感器支架工具）
 - `arm1_permanent_magnet_tcp_link`（使用永久磁铁工具）
 - `arm1_flange_link`（无工具）
 
@@ -35,17 +35,17 @@
 ### Gazebo 仿真模式
 
 ```bash
-# 单臂仿真（默认工具：magnetic_sensor_bracket）
+# 单臂仿真（默认工具：bracket）
 roslaunch mag_device_arm fr5/single/fr5_single_gazebo.launch
 
 # 单臂仿真（指定工具，如永久磁铁）
 roslaunch mag_device_arm fr5/single/fr5_single_gazebo.launch tool_name:=permanent_magnet
 
 # 单臂仿真（指定工具，如磁传感器支架）
-roslaunch mag_device_arm fr5/single/fr5_single_gazebo.launch tool_name:=magnetic_sensor_bracket
+roslaunch mag_device_arm fr5/single/fr5_single_gazebo.launch tool_name:=bracket
 
 # 单臂仿真（指定 arm_id，默认为 arm1）
-roslaunch mag_device_arm fr5/single/fr5_single_gazebo.launch arm_id:=arm1 tool_name:=magnetic_sensor_bracket
+roslaunch mag_device_arm fr5/single/fr5_single_gazebo.launch arm_id:=arm1 tool_name:=bracket
 
 # 单臂仿真（禁用 RViz）
 roslaunch mag_device_arm fr5/single/fr5_single_gazebo.launch use_rviz:=false
@@ -63,7 +63,7 @@ roslaunch mag_device_arm fr5/single/fr5_single_bringup.launch
 roslaunch mag_device_arm fr5/single/fr5_single_bringup.launch robot_ip:=192.168.31.202
 
 # 单臂（指定 arm_id 和工具）
-roslaunch mag_device_arm fr5/single/fr5_single_bringup.launch arm_id:=arm1 tool_name:=magnetic_sensor_bracket
+roslaunch mag_device_arm fr5/single/fr5_single_bringup.launch arm_id:=arm1 tool_name:=bracket
 
 # 单臂（禁用 RViz）
 roslaunch mag_device_arm fr5/single/fr5_single_bringup.launch use_rviz:=false
@@ -76,7 +76,7 @@ roslaunch mag_device_arm fr5/single/fr5_single_bringup.launch use_rviz:=false
 roslaunch mag_device_arm fr5/single/fr5_single_moveit.launch
 
 # 单臂 MoveIt 仿真（指定工具）
-roslaunch mag_device_arm fr5/single/fr5_single_moveit.launch tool_name:=magnetic_sensor_bracket
+roslaunch mag_device_arm fr5/single/fr5_single_moveit.launch tool_name:=bracket
 ```
 
 ### 双臂模式
@@ -90,7 +90,7 @@ roslaunch mag_device_arm fr5/dual/fr5_dual_bringup.launch \
     arm1_ip:=192.168.31.201 \
     arm2_ip:=192.168.31.202 \
     arm1_tool:=permanent_magnet \
-    arm2_tool:=magnetic_sensor_bracket
+    arm2_tool:=bracket
 
 # 双臂 Gazebo 仿真
 roslaunch mag_device_arm fr5/dual/fr5_dual_gazebo.launch
@@ -98,7 +98,7 @@ roslaunch mag_device_arm fr5/dual/fr5_dual_gazebo.launch
 # 双臂 Gazebo 仿真（指定工具）
 roslaunch mag_device_arm fr5/dual/fr5_dual_gazebo.launch \
     arm1_tool:=permanent_magnet \
-    arm2_tool:=magnetic_sensor_bracket
+    arm2_tool:=bracket
 
 # 双臂 Gazebo 仿真（禁用 RViz）
 roslaunch mag_device_arm fr5/dual/fr5_dual_gazebo.launch use_rviz:=false
@@ -131,7 +131,7 @@ roslaunch mag_device_arm fr5/dual/fr5_dual_moveit.launch
 工具配置由 zlab_robots 的 launch 文件通过 `tool_name` 参数管理，支持的工具有：
 - `permanent_magnet`：永久磁铁
 - `electronic_magnet`：电磁铁
-- `magnetic_sensor_bracket`：磁传感器支架
+- `bracket`：磁传感器支架
 - `none`：无工具（默认）
 
 工具会在 MoveIt 的 URDF 加载时自动配置，无需在 `mag_device_arm` 包内进行额外配置。

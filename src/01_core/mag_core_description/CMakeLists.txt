@@ -25,7 +25,6 @@ include_directories(
 
 add_library(mag_core_description
 	src/sensor_array_description.cpp
-	src/sensor_array_config_loader.cpp
 )
 
 target_link_libraries(mag_core_description
