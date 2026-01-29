@@ -44,7 +44,7 @@ namespace mag_device_sensor
         void setupPublishers();
         void openSerial();
 
-        bool parseLine(const std::string &line, int &id, double &x, double &y, double &z) const;
+        void processLine(const std::string &line);
         void publishMeasurement(int id, double x_raw, double y_raw, double z_raw);
         double rawToMilliTesla(double raw) const;
 
@@ -207,29 +207,21 @@ namespace mag_device_sensor
         }
     }
 
-    bool SensorDriverNode::parseLine(const std::string &line, int &id, double &x, double &y, double &z) const
+    void SensorDriverNode::processLine(const std::string &line)
     {
-        // 假设格式: "id,x,y,z" 或者 "id x y z"
-        // 需要根据实际协议调整
-        // 这里简单实现：查找逗号或空格分割
-        // 示例实现，需要根据硬件协议修改
         if (line.empty())
-            return false;
+            return;
 
-        // 简单的sscanf或者stringstream
-        // 假设是: ID:0 X:123 Y:456 Z:789 格式
-        // 或者 ID,X,Y,Z
-        // 这里我们假设标准CSV: id,x,y,z
-
-        // 替换逗号为空格
-        std::string temp = line;
-        std::replace(temp.begin(), temp.end(), ',', ' ');
-        std::stringstream ss(temp);
-        if (ss >> id >> x >> y >> z)
+        std::stringstream ss(line);
+        double x, y, z;
+        // 假设数据按顺序对应 sensor_id: 1, 2, 3...
+        // 格式为: x1 y1 z1 x2 y2 z2 ...
+        int id = 1;
+        while (ss >> x >> y >> z)
         {
-            return true;
+            publishMeasurement(id, x, y, z);
+            id++;
         }
-        return false;
     }
 
     void SensorDriverNode::publishMeasurement(int id, double x_raw, double y_raw, double z_raw)
@@ -293,13 +285,8 @@ namespace mag_device_sensor
                         line.pop_back();
                     }
 
-                    int id;
-                    double x, y, z;
-                    if (parseLine(line, id, x, y, z))
-                    {
-                        publishMeasurement(id, x, y, z);
-                        message_counter_++;
-                    }
+                    processLine(line);
+                    message_counter_++;
                 }
             }
             else

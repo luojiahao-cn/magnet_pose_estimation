@@ -8,7 +8,7 @@
 
     <!-- Dual Arm Bringup -->
     <group if="$(arg use_sim)">
-         <include file="$(find mag_device_arm)/launch/fr5/dual/fr5_dual_gazebo.launch">
+         <include file="$(find mag_device_arm)/launch/fr5/dual/fr5_dual_moveit.launch">
              <arg name="arm1_tool" value="$(arg magnet_arm_tool)" />
              <arg name="arm2_tool" value="$(arg sensor_arm_tool)" />
          </include>

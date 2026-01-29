@@ -1,29 +1,19 @@
 <launch>
-    <arg name="use_sim" default="true" />
-    <arg name="use_gazebo" default="false" />
+    <arg name="sim_arm" default="true" />
+    <arg name="sim_sensor" default="true" />
     <arg name="arm_id" default="arm1" />
     <arg name="tool_name" default="bracket" />
 
     <!-- Arm -->
-    <group if="$(arg use_sim)">
-         <!-- Gazebo simulation -->
-         <group if="$(arg use_gazebo)">
-             <include file="$(find mag_device_arm)/launch/fr5/single/fr5_single_gazebo.launch">
-                <arg name="arm_id" value="$(arg arm_id)" />
-                <arg name="tool_name" value="$(arg tool_name)" />
-             </include>
-         </group>
-
+    <group if="$(arg sim_arm)">
          <!-- MoveIt only (fake execution) -->
-         <group unless="$(arg use_gazebo)">
-             <include file="$(find mag_device_arm)/launch/fr5/single/fr5_single_moveit.launch">
-                <arg name="arm_id" value="$(arg arm_id)" />
-                <arg name="tool_name" value="$(arg tool_name)" />
-             </include>
-         </group>
+        <include file="$(find mag_device_arm)/launch/fr5/single/fr5_single_moveit.launch">
+            <arg name="arm_id" value="$(arg arm_id)" />
+            <arg name="tool_name" value="$(arg tool_name)" />
+        </include>
     </group>
 
-    <group unless="$(arg use_sim)">
+    <group unless="$(arg sim_arm)">
          <include file="$(find mag_device_arm)/launch/fr5/single/fr5_single_bringup.launch">
             <arg name="arm_id" value="$(arg arm_id)" />
             <arg name="tool_name" value="$(arg tool_name)" />
@@ -31,10 +21,10 @@
     </group>
 
     <!-- Sensor -->
-    <group if="$(arg use_sim)">
+    <group if="$(arg sim_sensor)">
         <include file="$(find mag_device_sensor)/launch/simulation.launch" />
     </group>
-    <group unless="$(arg use_sim)">
+    <group unless="$(arg sim_sensor)">
         <include file="$(find mag_device_sensor)/launch/hardware.launch" />
     </group>
 
