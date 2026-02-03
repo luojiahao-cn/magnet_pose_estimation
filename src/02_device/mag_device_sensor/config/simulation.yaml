@@ -2,6 +2,7 @@ config:
   topics:
     raw: ""
     field: /magnetic/sensor/field
+    batch: /magnetic/sensor/batch
 
   params:
     calibration:

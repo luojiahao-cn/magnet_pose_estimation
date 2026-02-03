@@ -1,21 +1,10 @@
-# 日志级别：DEBUG, INFO, WARN, ERROR, FATAL（默认 INFO）
-logging_level: INFO
-config:
-  topics:
-    raw: /magnetic/sensor/raw
-    field: /magnetic/sensor/field
+# 传感器硬件驱动配置
+port: /dev/ttyUSB0
+baud: 921600
+full_scale_mT: 0.8  # 磁力计满量程，单位毫特斯拉
+raw_max: 32767.0
 
-  params:
-    driver:
-      serial_port: /dev/ttyUSB0
-      baud_rate: 921600
-      timeout_ms: 1000
-      poll_sleep_ms: 1
-      freq_stat_period: 20.0
-    calibration:
-      full_scale_mT: 3.2
-      raw_max: 32767.0
+# 话题名称自定义设置
+raw_topic: "data_raw"
+field_topic: "data_mT"
 
-  tf:
-    enable: true
-    publish_rate: 50.0

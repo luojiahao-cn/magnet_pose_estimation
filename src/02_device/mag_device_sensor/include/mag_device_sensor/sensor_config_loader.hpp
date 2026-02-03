@@ -28,6 +28,7 @@ namespace mag_device_sensor
     {
         std::string raw_topic{"/mag_sensor/data_raw"};
         std::string field_topic{"/mag_sensor/data_mT"};
+        std::string batch_topic{"/mag_sensor/data_batch"};
     };
 
     struct TfConfig
@@ -123,9 +124,10 @@ namespace mag_device_sensor
             const auto &topics = xml::requireStructField(root, "topics", context);
             cfg.raw_topic = xml::optionalStringField(topics, "raw", topics_ctx, cfg.raw_topic);
             cfg.field_topic = xml::optionalStringField(topics, "field", topics_ctx, cfg.field_topic);
-            if (cfg.raw_topic.empty() && cfg.field_topic.empty())
+            cfg.batch_topic = xml::optionalStringField(topics, "batch", topics_ctx, cfg.batch_topic);
+            if (cfg.raw_topic.empty() && cfg.field_topic.empty() && cfg.batch_topic.empty())
             {
-                throw std::runtime_error(topics_ctx + ": 至少需要 raw 或 field 话题");
+                throw std::runtime_error(topics_ctx + ": 至少需要 raw, field 或 batch 话题中的一个");
             }
             return cfg;
         }

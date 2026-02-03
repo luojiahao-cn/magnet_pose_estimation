@@ -1,0 +1,7 @@
+<launch>
+    <!-- 加载传感器阵列配置 -->
+    <rosparam command="load" file="$(find mag_core_description)/config/sensor_array.yaml" />
+
+    <!-- 启动 TF 发布节点 -->
+    <node pkg="mag_core_description" type="mag_description_node" name="mag_description_node" output="screen" />
+</launch>

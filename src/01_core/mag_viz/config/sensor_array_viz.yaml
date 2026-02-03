@@ -12,7 +12,7 @@ config:
 
   # 话题配置
   topics:
-    measurement: "/magnetic/sensor/field"  # 磁传感器测量数据话题
+    measurement: "/mag_device_sensor/data_mT"  # 磁传感器测量数据话题
 
   # 功能参数配置
   params:

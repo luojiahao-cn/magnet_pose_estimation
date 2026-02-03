@@ -1,6 +1,7 @@
 #include <mag_device_sensor/sensor_config_loader.hpp>
 #include <mag_core_description/sensor_array_description.hpp>
 #include <mag_core_msgs/MagSensorData.h>
+#include <mag_core_msgs/MagSensorBatch.h>
 #include <mag_core_utils/rosparam_shortcuts_extensions.hpp>
 
 #include <geometry_msgs/TransformStamped.h>
@@ -72,6 +73,7 @@ namespace mag_device_sensor
 
         ros::Publisher raw_pub_;
         ros::Publisher field_pub_;
+        ros::Publisher batch_pub_;
 
         tf2_ros::Buffer tf_buffer_;
         tf2_ros::TransformListener tf_listener_;
@@ -150,6 +152,10 @@ namespace mag_device_sensor
         if (!topic_config_.field_topic.empty())
         {
             field_pub_ = nh_.advertise<mag_core_msgs::MagSensorData>(topic_config_.field_topic, 50);
+        }
+        if (!topic_config_.batch_topic.empty())
+        {
+            batch_pub_ = nh_.advertise<mag_core_msgs::MagSensorBatch>(topic_config_.batch_topic, 50);
         }
     }
 
@@ -246,6 +252,10 @@ namespace mag_device_sensor
         // 3. 计算理论磁场
         Eigen::MatrixXd fields = computeField(sensor_positions, mag_pos, mag_dir, simulation_.dipole_strength);
 
+        mag_core_msgs::MagSensorBatch batch_msg;
+        batch_msg.header.stamp = stamp;
+        // batch_msg.header.frame_id = "";
+
         // 4. 添加噪声并发布
         for (size_t i = 0; i < n_sensors; ++i)
         {
@@ -264,6 +274,11 @@ namespace mag_device_sensor
             msg_mT.mag_y = B_meas.y();
             msg_mT.mag_z = B_meas.z();
 
+            if (batch_pub_)
+            {
+               batch_msg.measurements.push_back(msg_mT);
+            }
+
             if (field_pub_)
             {
                 field_pub_.publish(msg_mT);
@@ -277,6 +292,11 @@ namespace mag_device_sensor
                 msg_raw.mag_z = toRaw(B_meas.z());
                 raw_pub_.publish(msg_raw);
             }
+        }
+
+        if (batch_pub_ && !batch_msg.measurements.empty())
+        {
+            batch_pub_.publish(batch_msg);
         }
     }
 

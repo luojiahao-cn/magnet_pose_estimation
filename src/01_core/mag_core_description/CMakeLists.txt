@@ -36,6 +36,16 @@ install(TARGETS mag_core_description
 	LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
 )
 
+add_executable(mag_description_node src/mag_description_node.cpp)
+target_link_libraries(mag_description_node
+	mag_core_description
+	${catkin_LIBRARIES}
+)
+
+install(TARGETS mag_description_node
+	RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
+
 install(DIRECTORY include/
 	DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
 )

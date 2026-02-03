@@ -1,5 +1,5 @@
 #include <mag_core_description/sensor_array_description.hpp>
-#include <mag_core_msgs/MagSensorData.h>
+#include <mag_core_msgs/MagSensorArray.h>
 #include <mag_core_utils/rosparam_shortcuts_extensions.hpp>
 #include <mag_core_utils/xmlrpc_utils.hpp>
 
@@ -212,20 +212,33 @@ namespace mag_viz
          * 处理接收到的磁传感器测量数据，更新内部状态
          * @param msg 接收到的磁传感器测量消息
          */
-        void onMeasurement(const mag_core_msgs::MagSensorDataConstPtr &msg)
+        void onMeasurement(const mag_core_msgs::MagSensorArrayConstPtr &msg)
         {
-            const auto it = sensor_index_.find(static_cast<int>(msg->sensor_id));
-            if (it == sensor_index_.end())
+            if (msg->sensor_ids.size() != msg->mag_x.size() ||
+                msg->sensor_ids.size() != msg->mag_y.size() ||
+                msg->sensor_ids.size() != msg->mag_z.size())
             {
-                ROS_WARN_STREAM_THROTTLE(5.0, "[sensor_array_viz] ✗ 未知传感器 ID: " << msg->sensor_id);
+                ROS_ERROR_STREAM_THROTTLE(5.0, "[sensor_array_viz] ✗ 收到非法数据：数组长度不匹配");
                 return;
             }
 
-            MeasurementState state;
-            state.stamp = msg->header.stamp.isZero() ? ros::Time::now() : msg->header.stamp;
-            state.value_sensor = tf2::Vector3(msg->mag_x, msg->mag_y, msg->mag_z);
-            // value_parent 将在发布标记时从 TF 树查询后计算
-            measurements_[msg->sensor_id] = state;
+            ros::Time stamp = msg->header.stamp.isZero() ? ros::Time::now() : msg->header.stamp;
+
+            for (size_t i = 0; i < msg->sensor_ids.size(); ++i)
+            {
+                uint32_t sensor_id = msg->sensor_ids[i];
+                const auto it = sensor_index_.find(static_cast<int>(sensor_id));
+                if (it == sensor_index_.end())
+                {
+                    ROS_WARN_STREAM_THROTTLE(5.0, "[sensor_array_viz] ✗ 未知传感器 ID: " << sensor_id);
+                    continue;
+                }
+
+                MeasurementState state;
+                state.stamp = stamp;
+                state.value_sensor = tf2::Vector3(msg->mag_x[i], msg->mag_y[i], msg->mag_z[i]);
+                measurements_[sensor_id] = state;
+            }
         }
 
         /**

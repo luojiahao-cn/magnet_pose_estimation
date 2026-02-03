@@ -45,16 +45,7 @@ target_link_libraries(sensor_sim_node
 )
 add_dependencies(sensor_sim_node ${catkin_EXPORTED_TARGETS})
 
-add_executable(sensor_array_batcher_node
-	src/sensor_array_batcher_node.cpp
-)
-
-target_link_libraries(sensor_array_batcher_node
-	${catkin_LIBRARIES}
-)
-add_dependencies(sensor_array_batcher_node ${catkin_EXPORTED_TARGETS})
-
-install(TARGETS sensor_driver_node sensor_sim_node sensor_array_batcher_node
+install(TARGETS sensor_driver_node sensor_sim_node
 	ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
 	LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
 	RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
