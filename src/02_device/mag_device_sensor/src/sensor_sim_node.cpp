@@ -1,7 +1,6 @@
 #include <mag_device_sensor/sensor_config_loader.hpp>
 #include <mag_core_description/sensor_array_description.hpp>
-#include <mag_core_msgs/MagSensorData.h>
-#include <mag_core_msgs/MagSensorBatch.h>
+#include <mag_core_msgs/MagSensorArray.h>
 #include <mag_core_utils/rosparam_shortcuts_extensions.hpp>
 
 #include <geometry_msgs/TransformStamped.h>
@@ -147,15 +146,15 @@ namespace mag_device_sensor
         // 初始化仿真数据的 raw 与 field 发布器
         if (!topic_config_.raw_topic.empty())
         {
-            raw_pub_ = nh_.advertise<mag_core_msgs::MagSensorData>(topic_config_.raw_topic, 50);
+            raw_pub_ = nh_.advertise<mag_core_msgs::MagSensorArray>(topic_config_.raw_topic, 10);
         }
         if (!topic_config_.field_topic.empty())
         {
-            field_pub_ = nh_.advertise<mag_core_msgs::MagSensorData>(topic_config_.field_topic, 50);
+            field_pub_ = nh_.advertise<mag_core_msgs::MagSensorArray>(topic_config_.field_topic, 10);
         }
         if (!topic_config_.batch_topic.empty())
         {
-            batch_pub_ = nh_.advertise<mag_core_msgs::MagSensorBatch>(topic_config_.batch_topic, 50);
+            batch_pub_ = nh_.advertise<mag_core_msgs::MagSensorArray>(topic_config_.batch_topic, 10);
         }
     }
 
@@ -252,9 +251,15 @@ namespace mag_device_sensor
         // 3. 计算理论磁场
         Eigen::MatrixXd fields = computeField(sensor_positions, mag_pos, mag_dir, simulation_.dipole_strength);
 
-        mag_core_msgs::MagSensorBatch batch_msg;
-        batch_msg.header.stamp = stamp;
-        // batch_msg.header.frame_id = "";
+        mag_core_msgs::MagSensorArray array_msg;
+        array_msg.header.stamp = stamp;
+        array_msg.header.frame_id = array_.arrayFrame();
+        array_msg.sensor_ids.resize(n_sensors);
+        array_msg.mag_x.resize(n_sensors);
+        array_msg.mag_y.resize(n_sensors);
+        array_msg.mag_z.resize(n_sensors);
+
+        mag_core_msgs::MagSensorArray raw_array_msg = array_msg;
 
         // 4. 添加噪声并发布
         for (size_t i = 0; i < n_sensors; ++i)
@@ -265,38 +270,31 @@ namespace mag_device_sensor
             Eigen::Vector3d noise = sampleNoise();
             Eigen::Vector3d B_meas = B_true + noise;
 
-            // 构造消息
-            mag_core_msgs::MagSensorData msg_mT;
-            msg_mT.header.stamp = stamp;
-            msg_mT.header.frame_id = sensors[i].frame_id;
-            msg_mT.sensor_id = sensors[i].id;
-            msg_mT.mag_x = B_meas.x();
-            msg_mT.mag_y = B_meas.y();
-            msg_mT.mag_z = B_meas.z();
+            // 填充消息
+            array_msg.sensor_ids[i] = sensors[i].id;
+            array_msg.mag_x[i] = B_meas.x();
+            array_msg.mag_y[i] = B_meas.y();
+            array_msg.mag_z[i] = B_meas.z();
 
-            if (batch_pub_)
-            {
-               batch_msg.measurements.push_back(msg_mT);
-            }
-
-            if (field_pub_)
-            {
-                field_pub_.publish(msg_mT);
-            }
-
-            if (raw_pub_)
-            {
-                mag_core_msgs::MagSensorData msg_raw = msg_mT;
-                msg_raw.mag_x = toRaw(B_meas.x());
-                msg_raw.mag_y = toRaw(B_meas.y());
-                msg_raw.mag_z = toRaw(B_meas.z());
-                raw_pub_.publish(msg_raw);
-            }
+            // 填充 Raw 消息
+            raw_array_msg.mag_x[i] = toRaw(B_meas.x());
+            raw_array_msg.mag_y[i] = toRaw(B_meas.y());
+            raw_array_msg.mag_z[i] = toRaw(B_meas.z());
         }
 
-        if (batch_pub_ && !batch_msg.measurements.empty())
+        if (field_pub_)
         {
-            batch_pub_.publish(batch_msg);
+            field_pub_.publish(array_msg);
+        }
+
+        if (batch_pub_)
+        {
+            batch_pub_.publish(array_msg);
+        }
+
+        if (raw_pub_)
+        {
+            raw_pub_.publish(raw_array_msg);
         }
     }
 

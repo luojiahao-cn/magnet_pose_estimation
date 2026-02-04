@@ -21,8 +21,7 @@ config:
 
   # 话题配置
   topics:
-    sensor_batch: /magnetic/sensor/batch  # 传感器批量数据话题
-    arm_service: /mag_device_arm/set_end_effector_pose  # 机械臂服务
+    mag_array: /mag_device_sensor/data_mT  # 传感器数组数据话题
 
   # 输出配置
   output:

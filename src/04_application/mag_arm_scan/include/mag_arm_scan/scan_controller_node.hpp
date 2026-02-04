@@ -10,17 +10,16 @@
 
 #include <geometry_msgs/Pose.h>
 #include <mag_core_description/sensor_array_description.hpp>
-#include <mag_core_msgs/MagSensorData.h>
-#include <mag_device_arm/SetEndEffectorPose.h>
-#include <mag_device_arm/ExecuteNamedTarget.h>
-#include <mag_device_arm/ExecuteCartesianPath.h>
+#include <mag_core_msgs/MagSensorArray.h>
 #include <ros/ros.h>
 #include <sensor_msgs/JointState.h>
+#include <sensor_msgs/MagneticField.h>
 #include <std_msgs/Bool.h>
 #include <std_msgs/String.h>
 #include <std_srvs/Trigger.h>
 #include <tf2_ros/transform_listener.h>
 #include <visualization_msgs/MarkerArray.h>
+#include <moveit/move_group_interface/move_group_interface.h>
 
 namespace mag_arm_scan {
 
@@ -47,13 +46,19 @@ private:
   void finalizeScan();
 
   bool startScan(std_srvs::Trigger::Request &req, std_srvs::Trigger::Response &res);
-  void magDataCallback(const mag_core_msgs::MagSensorData::ConstPtr &msg);
+  void magDataCallback(const mag_core_msgs::MagSensorArray::ConstPtr &msg);
   void jointStateCallback(const sensor_msgs::JointState::ConstPtr &msg);
+
+  struct SensorSample {
+      ros::Time stamp;
+      uint32_t sensor_id;
+      double x, y, z;
+  };
 
   std::string resolveRelativePath(const std::string &path);
   void createTimestampDirectory();
   bool hasEnoughSamplesLocked() const;
-  void extractSamplesLocked(std::vector<mag_core_msgs::MagSensorData> &out, bool best_effort);
+  void extractSamplesLocked(std::vector<SensorSample> &out, bool best_effort);
   void resetSampleBuffers();
   void loadTestPoints();
   
@@ -68,10 +73,8 @@ private:
 
   ros::NodeHandle nh_, pnh_;
   
-  // 使用 mag_device_arm 服务而不是直接使用 MoveIt
-  ros::ServiceClient arm_set_pose_client_;
-  ros::ServiceClient arm_execute_named_client_;
-  ros::ServiceClient arm_cartesian_path_client_;
+  // Directly use MoveIt
+  std::unique_ptr<moveit::planning_interface::MoveGroupInterface> move_group_;
   std::string arm_name_;
   std::string end_effector_link_;  // 末端执行器 link 名称，用于 TF 查询
   double cartesian_path_threshold_;  // 距离阈值（米），小于此值使用笛卡尔路径
@@ -119,8 +122,8 @@ private:
   std::vector<geometry_msgs::Pose> scan_points_;
   std::vector<geometry_msgs::Pose> test_points_;
   bool use_test_points_{false};
-  std::unordered_map<std::uint32_t, std::deque<mag_core_msgs::MagSensorData>> sensor_samples_buffer_;
-  std::vector<mag_core_msgs::MagSensorData> collected_samples_;
+  std::unordered_map<std::uint32_t, std::deque<SensorSample>> sensor_samples_buffer_;
+  std::vector<SensorSample> collected_samples_;
   mutable std::mutex data_mutex_;
 
   bool visualization_enabled_{false};

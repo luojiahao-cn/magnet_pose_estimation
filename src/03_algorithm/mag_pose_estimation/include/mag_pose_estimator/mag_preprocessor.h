@@ -6,20 +6,14 @@
 #include <Eigen/Dense>
 #include <string>
 #include <vector>
-
-namespace mag_sensor_calibration
-{
-  struct CalibrationParams;
-}
+#include <map>
 
 namespace mag_pose_estimator
 {
-
-  // 前向声明配置结构体
   struct MagPoseEstimatorConfig;
 
   /**
-   * @brief 磁场数据预处理器
+   * @brief 磁场数据预处理器 - 专注于背景采集和基础滤波
    */
   class MagPreprocessor
   {
@@ -28,36 +22,32 @@ namespace mag_pose_estimator
     void configure(const MagPoseEstimatorConfig &config);
 
     /**
-     * @brief 处理单个传感器数据（使用全局校正参数）
-     */
-    sensor_msgs::MagneticField process(const sensor_msgs::MagneticField &msg);
-
-    /**
-     * @brief 处理传感器数据（使用指定传感器ID的校正参数）
-     * @param msg 磁场消息
+     * @brief 处理传感器数据：采样背景或减去背景
+     * @param msg 原始磁场消息
      * @param sensor_id 传感器ID
      */
     sensor_msgs::MagneticField process(const sensor_msgs::MagneticField &msg, uint32_t sensor_id);
 
     /**
-     * @brief 加载多传感器校正参数
-     * @param params 校正参数
+     * @brief 背景采样是否完成
      */
-    void loadMultiSensorCalibration(const mag_sensor_calibration::CalibrationParams &params);
+    bool isBackgroundCollected() const { return background_collected_; }
 
   private:
-    Eigen::Matrix3d soft_iron_matrix_; ///< 软铁校准矩阵（3×3）（全局/默认）
-    Eigen::Vector3d hard_iron_offset_; ///< 硬铁偏移向量 [x, y, z] (mT)（全局/默认）
-    double low_pass_alpha_;            ///< 低通滤波器系数（0-1）
-    bool enable_filter_;               ///< 是否启用低通滤波器
-    bool enable_calibration_;          ///< 是否启用软/硬铁校准
-    bool filter_initialized_;          ///< 滤波器是否已初始化
-    Eigen::Vector3d filtered_field_;   ///< 滤波后的磁场值
+    bool enable_background_removal_ = true;
+    double background_duration_ = 3.0;
+    bool enable_filter_ = false;
+    double low_pass_alpha_ = 0.3;
 
-    // 多传感器校正参数
-    std::map<uint32_t, Eigen::Matrix3d> sensor_soft_iron_matrices_; ///< 传感器ID -> 软铁矩阵
-    std::map<uint32_t, Eigen::Vector3d> sensor_hard_iron_offsets_;  ///< 传感器ID -> 硬铁偏移
-    bool use_multi_sensor_calibration_;                             ///< 是否使用多传感器校正
+    bool background_collected_ = false;
+    ros::Time sampling_start_time_;
+
+    std::map<uint32_t, Eigen::Vector3d> bias_sum_;
+    std::map<uint32_t, int> bias_count_;
+    std::map<uint32_t, Eigen::Vector3d> background_bias_;
+
+    bool filter_initialized_ = false;
+    Eigen::Vector3d filtered_field_;
   };
 
 } // 命名空间 mag_pose_estimator

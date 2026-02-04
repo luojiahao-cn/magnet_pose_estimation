@@ -1,6 +1,5 @@
 #include "mag_pose_estimator/mag_preprocessor.h"
 #include "mag_pose_estimator/mag_pose_estimator_node.h"
-#include "mag_sensor_calibration/calibration_config_loader.h"
 
 #include <Eigen/Geometry>
 #include <string>
@@ -13,81 +12,69 @@ namespace mag_pose_estimator {
 MagPreprocessor::MagPreprocessor()
     : low_pass_alpha_(0.3),
       enable_filter_(true),
-      enable_calibration_(false),
-      filter_initialized_(false),
-      use_multi_sensor_calibration_(false) {
-  soft_iron_matrix_.setIdentity();
-  hard_iron_offset_.setZero();
+      filter_initialized_(false) {
 }
 
 /**
  * @brief 配置预处理器参数
- * @param config 配置结构体
  */
 void MagPreprocessor::configure(const MagPoseEstimatorConfig &config) {
   enable_filter_ = config.enable_filter;
-  enable_calibration_ = config.enable_calibration;
+  enable_background_removal_ = config.enable_background_removal;
+  background_duration_ = config.background_removal_duration;
   low_pass_alpha_ = config.low_pass_alpha;
-  soft_iron_matrix_ = config.soft_iron_matrix;
-  hard_iron_offset_ = config.hard_iron_offset;
+
+  // 如果禁用了背景滤除，直接标记为已采集完成（不进行任何减偏置操作）
+  if (!enable_background_removal_) {
+    background_collected_ = true;
+  }
 }
 
 /**
- * @brief 处理磁场测量数据（使用全局校正参数）
- * @param msg 输入的磁场测量消息
- * @return 处理后的磁场测量消息
- */
-sensor_msgs::MagneticField MagPreprocessor::process(const sensor_msgs::MagneticField &msg) {
-  Eigen::Vector3d field(msg.magnetic_field.x, msg.magnetic_field.y, msg.magnetic_field.z);
-
-  if (enable_calibration_ && !use_multi_sensor_calibration_) {
-    field = soft_iron_matrix_ * (field - hard_iron_offset_);
-  }
-
-  if (enable_filter_) {
-    if (!filter_initialized_) {
-      filtered_field_ = field;
-      filter_initialized_ = true;
-    } else {
-      filtered_field_ = low_pass_alpha_ * field + (1.0 - low_pass_alpha_) * filtered_field_;
-    }
-    field = filtered_field_;
-  }
-
-  sensor_msgs::MagneticField calibrated = msg;
-  calibrated.magnetic_field.x = field.x();
-  calibrated.magnetic_field.y = field.y();
-  calibrated.magnetic_field.z = field.z();
-  return calibrated;
-}
-
-/**
- * @brief 处理磁场测量数据（使用指定传感器ID的校正参数）
- * @param msg 输入的磁场测量消息
- * @param sensor_id 传感器ID
- * @return 处理后的磁场测量消息
+ * @brief 处理磁场测量数据
  */
 sensor_msgs::MagneticField MagPreprocessor::process(const sensor_msgs::MagneticField &msg, uint32_t sensor_id) {
   Eigen::Vector3d field(msg.magnetic_field.x, msg.magnetic_field.y, msg.magnetic_field.z);
 
-  if (enable_calibration_) {
-    if (use_multi_sensor_calibration_) {
-      // 使用多传感器校正参数
-      auto soft_it = sensor_soft_iron_matrices_.find(sensor_id);
-      auto hard_it = sensor_hard_iron_offsets_.find(sensor_id);
-      
-      if (soft_it != sensor_soft_iron_matrices_.end() && hard_it != sensor_hard_iron_offsets_.end()) {
-        field = soft_it->second * (field - hard_it->second);
+  // 1. 初始背景磁场采样
+  if (!background_collected_) {
+    if (sampling_start_time_.isZero()) {
+      sampling_start_time_ = ros::Time::now();
+      ROS_INFO("[mag_preprocessor] 开始 %.1f 秒静默背景采样，请远离磁铁...", background_duration_);
+    }
+
+    double elapsed = (ros::Time::now() - sampling_start_time_).toSec();
+    if (elapsed < background_duration_) {
+      if (bias_count_.find(sensor_id) == bias_count_.end()) {
+        bias_sum_[sensor_id] = field;
+        bias_count_[sensor_id] = 1;
       } else {
-        // 如果没有找到该传感器的校正参数，使用全局参数
-        field = soft_iron_matrix_ * (field - hard_iron_offset_);
+        bias_sum_[sensor_id] += field;
+        bias_count_[sensor_id]++;
       }
+
+      // 采样期间返回 0，不参与计算
+      sensor_msgs::MagneticField zero_msg = msg;
+      zero_msg.magnetic_field.x = 0; zero_msg.magnetic_field.y = 0; zero_msg.magnetic_field.z = 0;
+      return zero_msg;
     } else {
-      // 使用全局校正参数
-      field = soft_iron_matrix_ * (field - hard_iron_offset_);
+      // 计算每个传感器的平均背景（地磁等静态场）
+      for (auto const& [id, sum] : bias_sum_) {
+        if (bias_count_[id] > 0) {
+          background_bias_[id] = sum / bias_count_[id];
+        }
+      }
+      background_collected_ = true;
+      ROS_INFO("[mag_preprocessor] 背景采样完成，共捕获 %zu 个传感器的静态偏置。", background_bias_.size());
     }
   }
 
+  // 2. 减去采集到的背景
+  if (enable_background_removal_ && background_bias_.count(sensor_id)) {
+    field -= background_bias_[sensor_id];
+  }
+
+  // 3. 低通滤波
   if (enable_filter_) {
     if (!filter_initialized_) {
       filtered_field_ = field;
@@ -98,26 +85,11 @@ sensor_msgs::MagneticField MagPreprocessor::process(const sensor_msgs::MagneticF
     field = filtered_field_;
   }
 
-  sensor_msgs::MagneticField calibrated = msg;
-  calibrated.magnetic_field.x = field.x();
-  calibrated.magnetic_field.y = field.y();
-  calibrated.magnetic_field.z = field.z();
-  return calibrated;
-}
-
-/**
- * @brief 加载多传感器校正参数
- */
-void MagPreprocessor::loadMultiSensorCalibration(const mag_sensor_calibration::CalibrationParams &params) {
-  sensor_soft_iron_matrices_.clear();
-  sensor_hard_iron_offsets_.clear();
-  
-  for (const auto &kv : params.sensors) {
-    sensor_soft_iron_matrices_[kv.first] = kv.second.soft_iron_matrix;
-    sensor_hard_iron_offsets_[kv.first] = kv.second.hard_iron_offset;
-  }
-  
-  use_multi_sensor_calibration_ = !params.sensors.empty();
+  sensor_msgs::MagneticField out_msg = msg;
+  out_msg.magnetic_field.x = field.x();
+  out_msg.magnetic_field.y = field.y();
+  out_msg.magnetic_field.z = field.z();
+  return out_msg;
 }
 
 }  // 命名空间 mag_pose_estimator

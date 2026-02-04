@@ -19,7 +19,6 @@ find_package(catkin REQUIRED COMPONENTS
   geometric_shapes
   mag_core_msgs
   mag_core_description
-  mag_device_arm
   mag_device_sensor
 )
 
@@ -40,7 +39,6 @@ catkin_package(
     geometric_shapes
     mag_core_msgs
     mag_core_description
-    mag_device_arm
     mag_device_sensor
 )
 

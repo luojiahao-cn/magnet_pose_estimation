@@ -46,13 +46,6 @@ TrackingControlConfig loadTrackingControlConfig(const XmlRpc::XmlRpcValue &root,
     cfg.magnet_pose_topic = xml::requireStringField(topics, "magnet_pose", topics_ctx);
     cfg.target_pose_topic = xml::requireStringField(topics, "target_pose", topics_ctx);
     
-    // 解析服务配置
-    const auto services_ctx = xml::makeContext(context, "services");
-    const auto &services = xml::requireStructField(node, "services", context);
-    cfg.arm_service_name = xml::requireStringField(services, "arm_service", services_ctx);
-    cfg.cartesian_path_service_name = xml::optionalStringField(
-        services, "cartesian_path_service", services_ctx, "/mag_device_arm/execute_cartesian_path");
-
     // 解析坐标系配置
     const auto frames_ctx = xml::makeContext(context, "frames");
     const auto &frames = xml::requireStructField(node, "frames", context);

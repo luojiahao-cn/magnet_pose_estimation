@@ -22,30 +22,20 @@
   <!-- 机械臂 + MoveIt 启动 -->
   <group if="$(arg use_real_robot)">
     <!-- 真实机械臂模式：使用硬件接口和MoveIt -->
-    <include file="$(find mag_device_arm)/launch/fr5/single/fr5_single_bringup.launch">
+    <include file="$(find zlab_robots_bringup)/launch/fr5/single/fr5_single_bringup.launch">
       <arg name="tool_name" value="$(arg tool_name)"/>
       <arg name="robot_ip" value="$(arg robot_ip)"/>
-      <!-- 由本文件单独启动 arm_node -->
-      <arg name="start_arm_node" value="false"/>
       <arg name="use_rviz" value="false"/>
     </include>
   </group>
 
   <group unless="$(arg use_real_robot)">
     <!-- 纯MoveIt模式：仅MoveIt仿真，无硬件接口 -->
-    <include file="$(find mag_device_arm)/launch/fr5/single/fr5_single_moveit.launch">
+    <include file="$(find zlab_robots_bringup)/launch/fr5/single/fr5_single_moveit.launch">
       <arg name="tool_name" value="$(arg tool_name)"/>
-      <!-- 由本文件单独启动 arm_node -->
-      <arg name="start_arm_node" value="false"/>
       <arg name="use_rviz" value="false"/>
     </include>
   </group>
-
-  <!-- 机械臂控制节点：提供校正数据采集所需的基础服务 -->
-  <node pkg="mag_device_arm" type="arm_node" name="mag_device_arm" output="screen">
-    <rosparam file="$(find mag_device_arm)/config/single_arm.yaml" command="load"/>
-  </node>
-
 
   <!-- 真实传感器硬件驱动 -->
   <group if="$(arg use_real_sensor)">

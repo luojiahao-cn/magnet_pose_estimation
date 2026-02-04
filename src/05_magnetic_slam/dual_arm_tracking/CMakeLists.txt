@@ -1,20 +1,31 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(mag_dual_arm_tracking)
+project(dual_arm_tracking)
 
-## Compile as C++11, supported in ROS Kinetic and newer
-add_compile_options(-std=c++11)
+add_compile_options(-Wall -Wextra -Wpedantic)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-## Find catkin macros and libraries
-## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
-## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
-  mag_core_msgs
-  mag_device_arm
-  mag_device_sensor
-  rosbag
+  moveit_ros_planning_interface
   roscpp
-  std_msgs
+  tf2
+  tf2_geometry_msgs
+  mag_core_msgs
+)
+
+include_directories(
+  ${catkin_INCLUDE_DIRS}
+)
+
+catkin_package(
+  CATKIN_DEPENDS roscpp geometry_msgs moveit_ros_planning_interface tf2 tf2_geometry_msgs mag_core_msgs
+)
+
+add_executable(dual_arm_tracking_node src/dual_arm_tracking.cpp)
+
+target_link_libraries(dual_arm_tracking_node
+  ${catkin_LIBRARIES}
 )
 
 ## System dependencies are found with CMake's conventions
@@ -74,7 +85,7 @@ find_package(catkin REQUIRED COMPONENTS
 ## Generate added messages and services with any dependencies listed here
 # generate_messages(
 #   DEPENDENCIES
-#   geometry_msgs#   mag_core_msgs#   std_msgs
+#   geometry_msgs#   tf2_geometry_msgs
 # )
 
 ################################################
@@ -108,8 +119,8 @@ find_package(catkin REQUIRED COMPONENTS
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
 #  INCLUDE_DIRS include
-#  LIBRARIES mag_dual_arm_tracking
-#  CATKIN_DEPENDS geometry_msgs mag_core_msgs mag_device_arm mag_device_sensor rosbag roscpp std_msgs
+#  LIBRARIES dual_arm_tracking
+#  CATKIN_DEPENDS geometry_msgs moveit_ros_planning_interface roscpp tf2 tf2_geometry_msgs
 #  DEPENDS system_lib
 )
 
@@ -120,14 +131,14 @@ catkin_package(
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
 include_directories(
-  include
+# include
   ${catkin_INCLUDE_DIRS}
 )
 
-add_executable(dual_tracking_node src/dual_tracking_node.cpp)
-target_link_libraries(dual_tracking_node ${catkin_LIBRARIES})
-add_dependencies(dual_tracking_node ${catkin_EXPORTED_TARGETS})
-
+## Declare a C++ library
+# add_library(${PROJECT_NAME}
+#   src/${PROJECT_NAME}/dual_arm_tracking.cpp
+# )
 
 ## Add cmake target dependencies of the library
 ## as an example, code may need to be generated before libraries
@@ -137,7 +148,7 @@ add_dependencies(dual_tracking_node ${catkin_EXPORTED_TARGETS})
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
-# add_executable(${PROJECT_NAME}_node src/mag_dual_arm_tracking_node.cpp)
+# add_executable(${PROJECT_NAME}_node src/dual_arm_tracking_node.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -201,7 +212,7 @@ add_dependencies(dual_tracking_node ${catkin_EXPORTED_TARGETS})
 #############
 
 ## Add gtest based cpp test target and link libraries
-# catkin_add_gtest(${PROJECT_NAME}-test test/test_mag_dual_arm_tracking.cpp)
+# catkin_add_gtest(${PROJECT_NAME}-test test/test_dual_arm_tracking.cpp)
 # if(TARGET ${PROJECT_NAME}-test)
 #   target_link_libraries(${PROJECT_NAME}-test ${PROJECT_NAME})
 # endif()

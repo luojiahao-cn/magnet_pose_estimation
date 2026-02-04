@@ -14,7 +14,6 @@ find_package(catkin REQUIRED COMPONENTS
   mag_core_utils
   mag_device_sensor
   mag_device_magnet
-  mag_device_arm
   mag_pose_estimator
   mag_tracking_control
   mag_viz
@@ -33,7 +32,6 @@ catkin_package(
     mag_core_utils
     mag_device_sensor
     mag_device_magnet
-    mag_device_arm
     mag_pose_estimator
     mag_tracking_control
     mag_viz

@@ -5,13 +5,13 @@
 #include "mag_tracking_control/strategy_adaptive_distance.h"
 
 #include <mag_core_msgs/MagnetPose.h>
-#include <mag_device_arm/SetEndEffectorPose.h>
-#include <mag_device_arm/ExecuteCartesianPath.h>
 
 #include <ros/ros.h>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
 #include <geometry_msgs/PoseStamped.h>
+#include <moveit/move_group_interface/move_group_interface.h>
+#include <moveit/planning_scene_interface/planning_scene_interface.h>
 
 #include <Eigen/Dense>
 #include <memory>
@@ -29,11 +29,9 @@ namespace mag_tracking_control {
  */
 struct TrackingControlConfig {
     std::string strategy_type;              ///< 策略类型：fixed_offset, adaptive_distance
-    std::string sensor_arm_name;            ///< 传感器机械臂名称
+    std::string sensor_arm_name;            ///< 传感器机械臂名称 (MoveGroup 组名)
     std::string magnet_pose_topic;          ///< 磁铁位姿估计话题
     std::string target_pose_topic;          ///< 目标位姿发布话题
-    std::string arm_service_name;           ///< 机械臂服务名称（用于非连续模式）
-    std::string cartesian_path_service_name; ///< 笛卡尔路径服务名称（用于连续轨迹模式）
     std::string sensor_frame;               ///< 传感器阵列坐标系名称
     std::string magnet_frame;               ///< 磁铁坐标系名称
     double update_rate;                     ///< 控制循环频率 (Hz)
@@ -142,8 +140,7 @@ private:
     ros::Publisher target_pose_pub_;        ///< 目标位姿发布者（用于可视化）
     ros::Timer control_timer_;              ///< 控制循环定时器
     
-    ros::ServiceClient arm_service_client_; ///< 机械臂服务客户端（用于非连续模式）
-    ros::ServiceClient cartesian_path_client_; ///< 笛卡尔路径服务客户端（用于连续轨迹模式）
+    std::unique_ptr<moveit::planning_interface::MoveGroupInterface> move_group_; ///< MoveIt 规划接口
     
     tf2_ros::Buffer tf_buffer_;             ///< TF缓冲
     tf2_ros::TransformListener tf_listener_; ///< TF监听器
@@ -161,7 +158,6 @@ private:
     std::atomic<bool> is_executing_trajectory_;           ///< 是否正在执行轨迹
     std::thread trajectory_execution_thread_;             ///< 轨迹执行线程
     std::atomic<bool> should_stop_thread_;                ///< 线程停止标志
-    std::string cartesian_path_service_name_;              ///< 笛卡尔路径服务名称
 };
 
 }  // namespace mag_tracking_control

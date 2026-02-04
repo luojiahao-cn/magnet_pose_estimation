@@ -36,10 +36,8 @@
             - use_gazebo:=false -> 使用 single_arm_bringup.launch（真实机械臂）
     -->
     <group if="$(arg use_gazebo)">
-        <include file="$(find mag_device_arm)/launch/single_arm_gazebo.launch">
+        <include file="$(find zlab_robots_bringup)/launch/fr5/single/fr5_single_gazebo.launch">
             <arg name="tool_name" value="$(arg tool_name)" />
-            <!-- 由本文件单独启动 arm_node -->
-            <arg name="start_arm_node" value="false" />
         </include>
 
         <!-- RViz 配置（Gazebo 模式下） -->
@@ -50,10 +48,8 @@
     </group>
 
     <group unless="$(arg use_gazebo)">
-        <include file="$(find mag_device_arm)/launch/single_arm_bringup.launch">
+        <include file="$(find zlab_robots_bringup)/launch/fr5/single/fr5_single_bringup.launch">
             <arg name="tool_name" value="$(arg tool_name)" />
-            <!-- 由本文件单独启动 arm_node -->
-            <arg name="start_arm_node" value="false" />
         </include>
 
         <!-- RViz 配置（真实机械臂模式下） -->
@@ -63,10 +59,10 @@
         </group>
     </group>
 
-    <!-- 机械臂控制节点：提供扫描控制所需的基础服务 -->
-    <node pkg="mag_device_arm" type="arm_node" name="mag_device_arm" output="screen">
-        <rosparam file="$(find mag_arm_scan)/config/arm_config.yaml" command="load" />
-    </node>
+    <!-- 磁场描述与 TF 发布器 -->
+    <include file="$(find mag_core_description)/launch/mag_description.launch">
+        <arg name="array_file" value="$(find mag_arm_scan)/config/sensor_array.yaml" />
+    </include>
 
     <!-- 磁铁真值节点（仅在 Gazebo 模式下启动，用于仿真场景） -->
     <group if="$(arg use_gazebo)">

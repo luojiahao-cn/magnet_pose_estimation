@@ -2,7 +2,7 @@
 port: /dev/ttyUSB0
 baud: 921600
 full_scale_mT: 0.8  # 磁力计满量程，单位毫特斯拉
-raw_max: 32767.0
+raw_max: 32768.0
 
 # 话题名称自定义设置
 raw_topic: "data_raw"

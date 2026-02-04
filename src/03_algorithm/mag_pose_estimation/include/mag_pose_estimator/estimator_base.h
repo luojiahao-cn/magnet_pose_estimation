@@ -27,20 +27,18 @@ struct EKFParameters {
  * @brief 优化器参数配置结构体
  */
 struct OptimizerParameters {
-  int min_sensors;  ///< 最小有效传感器数量
   Eigen::Vector3d initial_position;  ///< 初始位置估计 [x, y, z] (米)
   Eigen::Vector3d initial_direction;  ///< 初始磁矩方向向量（归一化）
+  Eigen::Vector3d position_min;       ///< 位置优化下界 [x, y, z] (米)
+  Eigen::Vector3d position_max;       ///< 位置优化上界 [x, y, z] (米)
   double initial_strength;  ///< 初始磁矩强度 (Am²)
   double strength_delta;  ///< 磁矩强度优化范围 (±delta)
   bool optimize_strength;  ///< 是否优化磁矩强度
+  bool use_strength_limit;  ///< 是否限制磁矩强度范围
+  bool use_position_limit;  ///< 是否限制位置范围
   int max_iterations;  ///< 最大迭代次数
-  double function_tolerance;  ///< 函数值收敛容差
-  double gradient_tolerance;  ///< 梯度收敛容差
-  double parameter_tolerance;  ///< 参数收敛容差
   int num_threads;  ///< 并行计算线程数
-  bool minimizer_progress;  ///< 是否输出优化进度信息
   std::string linear_solver;  ///< 线性求解器类型
-  double max_acceptable_residual;  ///< 可接受的最大平均残差 (mT)，超过此值即使优化收敛也认为失败
 };
 
 /**
@@ -128,7 +126,7 @@ public:
    * @brief 获取估计的协方差矩阵
    * @param covariance_out 输出的协方差矩阵（6x6，位置3维+姿态3维）
    * @return 是否成功获取协方差矩阵
-   * 
+   *
    * 协方差矩阵的排列顺序：
    * [0:3, 0:3] - 位置协方差 (x, y, z)
    * [3:6, 3:6] - 姿态协方差（方向向量的x, y, z分量）

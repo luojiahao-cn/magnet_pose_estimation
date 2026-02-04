@@ -100,8 +100,7 @@ bool CalibrationDataCollector::loadConfig() {
     // 话题配置
     const auto topics_ctx = xml::makeContext(config_ctx, "topics");
     const auto &topics = xml::requireStructField(config, "topics", config_ctx);
-    config_.sensor_batch_topic = xml::requireStringField(topics, "sensor_batch", topics_ctx);
-    config_.arm_service_name = xml::requireStringField(topics, "arm_service", topics_ctx);
+    config_.sensor_array_topic = xml::optionalStringField(topics, "mag_array", topics_ctx, "/mag_device_sensor/data_mT");
 
     // 输出配置
     const auto output_ctx = xml::makeContext(config_ctx, "output");
@@ -117,16 +116,20 @@ bool CalibrationDataCollector::loadConfig() {
 }
 
 bool CalibrationDataCollector::collectData() {
-  // 设置订阅者和服务客户端
-  sensor_batch_sub_ = nh_.subscribe<mag_core_msgs::MagSensorBatch>(
-      config_.sensor_batch_topic, 10,
-      &CalibrationDataCollector::sensorBatchCallback, this);
+  // 设置订阅者
+  sensor_array_sub_ = nh_.subscribe<mag_core_msgs::MagSensorArray>(
+      config_.sensor_array_topic, 10,
+      &CalibrationDataCollector::sensorArrayCallback, this);
 
-  arm_pose_client_ = nh_.serviceClient<mag_device_arm::SetEndEffectorPose>(
-      config_.arm_service_name);
-
-  if (!arm_pose_client_.waitForExistence(ros::Duration(5.0))) {
-    ROS_ERROR("[calibration_collector] 机械臂服务不可用: %s", config_.arm_service_name.c_str());
+  // 初始化 MoveGroupInterface
+  try {
+    move_group_ = std::make_unique<moveit::planning_interface::MoveGroupInterface>(config_.arm_name);
+    move_group_->setPlanningTime(10.0);
+    move_group_->setMaxVelocityScalingFactor(0.3);
+    move_group_->setMaxAccelerationScalingFactor(0.3);
+  } catch (const std::exception &e) {
+    ROS_ERROR("[calibration_collector] 初始化 MoveGroupInterface 失败 (组名: %s): %s",
+              config_.arm_name.c_str(), e.what());
     return false;
   }
 
@@ -205,24 +208,23 @@ std::vector<geometry_msgs::Pose> CalibrationDataCollector::generateRotationTraje
 }
 
 bool CalibrationDataCollector::moveArmToPose(const geometry_msgs::Pose &pose) {
-  mag_device_arm::SetEndEffectorPose srv;
-  srv.request.arm = config_.arm_name;
-  srv.request.target = pose;
-  srv.request.velocity_scaling = 0.3;
-  srv.request.acceleration_scaling = 0.3;
-  srv.request.execute = true;
+  if (!move_group_) return false;
 
-  if (!arm_pose_client_.call(srv)) {
-    ROS_ERROR("[calibration_collector] 调用机械臂服务失败");
+  move_group_->setPoseTarget(pose);
+  moveit::planning_interface::MoveGroupInterface::Plan my_plan;
+  bool success = (move_group_->plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
+
+  if (success) {
+    auto res = move_group_->execute(my_plan);
+    if (res != moveit::planning_interface::MoveItErrorCode::SUCCESS) {
+      ROS_WARN_STREAM("[calibration_collector] 机械臂执行计划失败，错误码: " << res.val);
+      return false;
+    }
+    return true;
+  } else {
+    ROS_WARN("[calibration_collector] 机械臂规划失败");
     return false;
   }
-
-  if (!srv.response.success) {
-    ROS_WARN_STREAM("[calibration_collector] 机械臂移动失败: " << srv.response.message);
-    return false;
-  }
-
-  return true;
 }
 
 void CalibrationDataCollector::waitForStability(double wait_time) {
@@ -242,11 +244,11 @@ PoseSensorData CalibrationDataCollector::sampleSensorData(double duration, const
   while (ros::Time::now() < end_time) {
     ros::spinOnce();
 
-    std::lock_guard<std::mutex> lock(batch_mutex_);
-    if (latest_batch_) {
-      for (const auto &sensor : latest_batch_->measurements) {
-        Eigen::Vector3d field(sensor.mag_x, sensor.mag_y, sensor.mag_z);
-        measurements[sensor.sensor_id].push_back(field);
+    std::lock_guard<std::mutex> lock(array_mutex_);
+    if (latest_array_) {
+      for (size_t i = 0; i < latest_array_->sensor_ids.size(); ++i) {
+        Eigen::Vector3d field(latest_array_->mag_x[i], latest_array_->mag_y[i], latest_array_->mag_z[i]);
+        measurements[latest_array_->sensor_ids[i]].push_back(field);
       }
     }
 
@@ -257,9 +259,9 @@ PoseSensorData CalibrationDataCollector::sampleSensorData(double duration, const
   return pose_data;
 }
 
-void CalibrationDataCollector::sensorBatchCallback(const mag_core_msgs::MagSensorBatchConstPtr &msg) {
-  std::lock_guard<std::mutex> lock(batch_mutex_);
-  latest_batch_ = msg;
+void CalibrationDataCollector::sensorArrayCallback(const mag_core_msgs::MagSensorArrayConstPtr &msg) {
+  std::lock_guard<std::mutex> lock(array_mutex_);
+  latest_array_ = msg;
 }
 
 geometry_msgs::Pose CalibrationDataCollector::poseFromRpy(double roll, double pitch, double yaw) {

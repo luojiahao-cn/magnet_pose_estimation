@@ -39,16 +39,11 @@ namespace mag_pose_estimator {
  */
 MagPoseEstimatorNode::MagPoseEstimatorNode(ros::NodeHandle nh, ros::NodeHandle pnh)
     : nh_(std::move(nh)), pnh_(std::move(pnh)) {
-  // 设置日志级别
   setLogLevel();
   loadParameters();
   initializeEstimator();
 
-  if (!batch_topic_.empty()) {
-    batch_sub_ = nh_.subscribe(batch_topic_, 10, &MagPoseEstimatorNode::batchCallback, this);
-  } else {
-    mag_sub_ = nh_.subscribe(mag_topic_, 25, &MagPoseEstimatorNode::magCallback, this);
-  }
+  array_sub_ = nh_.subscribe(array_topic_, 10, &MagPoseEstimatorNode::arrayCallback, this);
   pose_pub_ = nh_.advertise<mag_core_msgs::MagnetPose>(pose_topic_, 10);
 }
 
@@ -58,10 +53,10 @@ MagPoseEstimatorNode::MagPoseEstimatorNode(ros::NodeHandle nh, ros::NodeHandle p
 void MagPoseEstimatorNode::setLogLevel() {
   std::string log_level_str = "INFO";
   pnh_.param("logging_level", log_level_str, log_level_str);
-  
+
   // 转换为大写
   std::transform(log_level_str.begin(), log_level_str.end(), log_level_str.begin(), ::toupper);
-  
+
   ros::console::Level level = ros::console::levels::Info;
   if (log_level_str == "DEBUG") {
     level = ros::console::levels::Debug;
@@ -74,7 +69,7 @@ void MagPoseEstimatorNode::setLogLevel() {
   } else if (log_level_str == "FATAL") {
     level = ros::console::levels::Fatal;
   }
-  
+
   ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, level);
 }
 
@@ -94,14 +89,13 @@ void MagPoseEstimatorNode::loadParameters() {
 
   // 设置成员变量
   estimator_type_ = cfg.estimator_type;
-  mag_topic_ = cfg.mag_topic;
-  batch_topic_ = cfg.batch_topic;
+  array_topic_ = cfg.array_topic;
   pose_topic_ = cfg.pose_topic;
   output_frame_ = cfg.output_frame;
   magnet_frame_ = cfg.magnet_frame;
   enable_tf_ = cfg.enable_tf;
   tf_timeout_ = cfg.tf_timeout;
-  
+
   // 使用统一的日志格式化工具
   namespace logger = mag_core_utils::logger;
   std::vector<std::pair<std::string, std::string>> config_items;
@@ -109,9 +103,9 @@ void MagPoseEstimatorNode::loadParameters() {
   config_items.emplace_back("输出坐标系", cfg.output_frame);
   config_items.emplace_back("磁铁坐标系", magnet_frame_);
   config_items.emplace_back("TF发布", logger::boolToString(enable_tf_));
-  config_items.emplace_back("数据话题", !batch_topic_.empty() ? batch_topic_ : mag_topic_);
+  config_items.emplace_back("数据话题", array_topic_);
   config_items.emplace_back("结果话题", pose_topic_);
-  
+
   ROS_INFO_STREAM("[mag_pose_estimator] " << logger::formatConfig(config_items));
 
   // EKF 参数
@@ -122,20 +116,18 @@ void MagPoseEstimatorNode::loadParameters() {
   ekf_params_.position_gain = cfg.position_gain;
 
   // 优化器参数
-  optimizer_params_.min_sensors = cfg.min_sensors;
   optimizer_params_.initial_position = cfg.initial_position;
   optimizer_params_.initial_direction = cfg.initial_direction;
+  optimizer_params_.position_min = cfg.position_min;
+  optimizer_params_.position_max = cfg.position_max;
   optimizer_params_.initial_strength = cfg.initial_strength;
   optimizer_params_.strength_delta = cfg.strength_delta;
   optimizer_params_.optimize_strength = cfg.optimize_strength;
+  optimizer_params_.use_strength_limit = cfg.use_strength_limit;
+  optimizer_params_.use_position_limit = cfg.use_position_limit;
   optimizer_params_.max_iterations = cfg.max_iterations;
-  optimizer_params_.function_tolerance = cfg.function_tolerance;
-  optimizer_params_.gradient_tolerance = cfg.gradient_tolerance;
-  optimizer_params_.parameter_tolerance = cfg.parameter_tolerance;
   optimizer_params_.num_threads = cfg.num_threads;
-  optimizer_params_.minimizer_progress = cfg.minimizer_progress;
   optimizer_params_.linear_solver = cfg.linear_solver;
-  optimizer_params_.max_acceptable_residual = cfg.max_acceptable_residual;
 
   // 窗口优化器参数（注意：dt 不再从配置读取，而是从传感器消息的时间戳动态计算）
   window_optimizer_params_.window_size = cfg.window_size;
@@ -163,9 +155,9 @@ void MagPoseEstimatorNode::initializeEstimator() {
   EstimatorConfig cfg = buildConfigFromParameters();
   estimator_->setConfig(cfg);
   estimator_->initialize();
-  
+
   tf_listener_ = std::make_unique<tf2_ros::TransformListener>(tf_buffer_);
-  
+
   // 使用统一的日志格式化工具
   namespace logger = mag_core_utils::logger;
   std::vector<std::pair<std::string, std::string>> init_items;
@@ -208,9 +200,8 @@ MagPoseEstimatorConfig MagPoseEstimatorNode::loadMagPoseEstimatorConfig(
   // 解析话题配置
   const auto topics_ctx = xml::makeContext(context, "topics");
   const auto &topics = xml::requireStructField(node, "topics", context);
-  cfg.mag_topic = xml::requireStringField(topics, "mag_field", topics_ctx);
   cfg.pose_topic = xml::requireStringField(topics, "pose_estimate", topics_ctx);
-  cfg.batch_topic = xml::optionalStringField(topics, "mag_batch", topics_ctx, "");
+  cfg.array_topic = xml::optionalStringField(topics, "mag_array", topics_ctx, "/mag_device_sensor/data_mT");
 
   const auto estimator_ctx = xml::makeContext(context, "params/estimator");
   const auto &estimator = xml::requireStructField(
@@ -246,15 +237,18 @@ MagPoseEstimatorConfig MagPoseEstimatorNode::loadMagPoseEstimatorConfig(
     const auto optimizer_ctx = xml::makeContext(context, "params/optimizer");
     const auto &optimizer = xml::requireStructField(
         xml::requireStructField(node, "params", context), "optimizer", context);
-    cfg.min_sensors = static_cast<int>(xml::readNumber(
-        xml::requireMember(optimizer, "min_sensors", optimizer_ctx),
-        optimizer_ctx + "/min_sensors"));
     cfg.initial_position = xml::readEigenVector3(
         xml::requireMember(optimizer, "initial_position", optimizer_ctx),
         optimizer_ctx + "/initial_position");
     cfg.initial_direction = xml::readEigenVector3(
         xml::requireMember(optimizer, "initial_direction", optimizer_ctx),
         optimizer_ctx + "/initial_direction");
+    cfg.position_min = xml::hasMember(optimizer, "position_min") ?
+        xml::readEigenVector3(optimizer["position_min"], optimizer_ctx + "/position_min") :
+        Eigen::Vector3d(-10.0, -10.0, -10.0);
+    cfg.position_max = xml::hasMember(optimizer, "position_max") ?
+        xml::readEigenVector3(optimizer["position_max"], optimizer_ctx + "/position_max") :
+        Eigen::Vector3d(10.0, 10.0, 10.0);
     cfg.initial_strength = xml::readNumber(
         xml::requireMember(optimizer, "initial_strength", optimizer_ctx),
         optimizer_ctx + "/initial_strength");
@@ -263,27 +257,18 @@ MagPoseEstimatorConfig MagPoseEstimatorNode::loadMagPoseEstimatorConfig(
         optimizer_ctx + "/strength_delta");
     cfg.optimize_strength = xml::requireBoolField(
         optimizer, "optimize_strength", optimizer_ctx);
+    cfg.use_strength_limit = xml::optionalBoolField(
+        optimizer, "use_strength_limit", optimizer_ctx, true);
+    cfg.use_position_limit = xml::optionalBoolField(
+        optimizer, "use_position_limit", optimizer_ctx, false);
     cfg.max_iterations = static_cast<int>(xml::readNumber(
         xml::requireMember(optimizer, "max_iterations", optimizer_ctx),
         optimizer_ctx + "/max_iterations"));
-    cfg.function_tolerance = xml::readNumber(
-        xml::requireMember(optimizer, "function_tolerance", optimizer_ctx),
-        optimizer_ctx + "/function_tolerance");
-    cfg.gradient_tolerance = xml::readNumber(
-        xml::requireMember(optimizer, "gradient_tolerance", optimizer_ctx),
-        optimizer_ctx + "/gradient_tolerance");
-    cfg.parameter_tolerance = xml::readNumber(
-        xml::requireMember(optimizer, "parameter_tolerance", optimizer_ctx),
-        optimizer_ctx + "/parameter_tolerance");
     cfg.num_threads = static_cast<int>(xml::readNumber(
         xml::requireMember(optimizer, "num_threads", optimizer_ctx),
         optimizer_ctx + "/num_threads"));
-    cfg.minimizer_progress = xml::requireBoolField(
-        optimizer, "minimizer_progress", optimizer_ctx);
     cfg.linear_solver = xml::requireStringField(
         optimizer, "linear_solver", optimizer_ctx);
-    cfg.max_acceptable_residual = xml::optionalNumberField(
-        optimizer, "max_acceptable_residual", optimizer_ctx, 1.0);  // 默认值 1.0 mT
   } else if (lower_type == "window_optimizer") {
     const auto window_opt_ctx = xml::makeContext(context, "params/window_optimizer");
     const auto &window_optimizer = xml::requireStructField(
@@ -328,14 +313,10 @@ MagPoseEstimatorConfig MagPoseEstimatorNode::loadMagPoseEstimatorConfig(
   const auto preprocessor_ctx = xml::makeContext(context, "params/preprocessor");
   const auto &preprocessor = xml::requireStructField(
       xml::requireStructField(node, "params", context), "preprocessor", context);
-  cfg.enable_calibration = xml::requireBoolField(
-      preprocessor, "enable_calibration", preprocessor_ctx);
-  cfg.soft_iron_matrix = xml::readEigenMatrix3x3(
-      xml::requireMember(preprocessor, "soft_iron_matrix", preprocessor_ctx),
-      preprocessor_ctx + "/soft_iron_matrix");
-  cfg.hard_iron_offset = xml::readEigenVector3(
-      xml::requireMember(preprocessor, "hard_iron_offset", preprocessor_ctx),
-      preprocessor_ctx + "/hard_iron_offset");
+  cfg.enable_background_removal = xml::optionalBoolField(
+      preprocessor, "enable_background_removal", preprocessor_ctx, true);
+  cfg.background_removal_duration = xml::optionalNumberField(
+      preprocessor, "background_removal_duration", preprocessor_ctx, 3.0);
   cfg.enable_filter = xml::requireBoolField(
       preprocessor, "enable_filter", preprocessor_ctx);
   cfg.low_pass_alpha = xml::readNumber(
@@ -350,84 +331,60 @@ MagPoseEstimatorConfig MagPoseEstimatorNode::loadMagPoseEstimatorConfig(
  * @brief 批量传感器数据回调函数
  * @param msg 批量传感器测量消息
  */
-void MagPoseEstimatorNode::batchCallback(
-    const mag_core_msgs::MagSensorBatchConstPtr &msg) {
-  if (msg->measurements.empty()) {
-    ROS_DEBUG_STREAM_THROTTLE(2.0, "[mag_pose_estimator] 批量数据为空");
+/**
+ * @brief 传感器数组数据回调函数 (SoA 格式)
+ * @param msg 传感器数组消息
+ */
+void MagPoseEstimatorNode::arrayCallback(
+    const mag_core_msgs::MagSensorArrayConstPtr &msg) {
+  if (msg->sensor_ids.empty()) {
+    ROS_DEBUG_STREAM_THROTTLE(2.0, "[mag_pose_estimator] 接收到空传感器数据数组");
     return;
   }
 
+  size_t n = msg->sensor_ids.size();
   std::vector<sensor_msgs::MagneticField> processed_measurements;
-  processed_measurements.reserve(msg->measurements.size());
-  for (const auto &sensor_data : msg->measurements) {
-    processed_measurements.push_back(convertAndProcess(sensor_data));
+  processed_measurements.reserve(n);
+
+  for (size_t i = 0; i < n; ++i) {
+    Eigen::Vector3d field_vec(msg->mag_x[i], msg->mag_y[i], msg->mag_z[i]);
+    processed_measurements.push_back(convertAndProcess(msg->header, msg->sensor_ids[i], field_vec));
   }
 
   geometry_msgs::Pose pose;
   double error = 0.0;
   bool success = processMeasurements(processed_measurements, pose, &error);
-  
-  // 获取协方差矩阵并计算置信度
-  Eigen::Matrix<double, 6, 6> covariance;
-  double confidence = 0.0;
-  if (estimator_->getCovariance(covariance)) {
-    confidence = computeConfidence(covariance, success);
-  } else {
-    // 如果无法获取协方差矩阵，使用默认值
-    confidence = success ? 0.5 : 0.0;
-  }
-  
-  publishPose(pose, msg->header.stamp, confidence);
-  
+
+  publishPose(pose, msg->header.stamp);
+
   if (success) {
     double avg_residual = std::sqrt(error / (processed_measurements.size() * 3));
-    ROS_INFO_STREAM_THROTTLE(1.0, "[mag_pose_estimator] 姿态估计成功，总误差: " << error 
-                             << "，平均残差: " << avg_residual << " mT，传感器数: " 
-                             << processed_measurements.size() << "，置信度: " << confidence);
+    ROS_INFO_STREAM_THROTTLE(1.0, "[mag_pose_estimator] 姿态估计：x=" << pose.position.x
+                             << ", y=" << pose.position.y << ", z=" << pose.position.z
+                             << ", 强度=" << estimator_->getMagneticStrength()
+                             << ", 平均残差: " << avg_residual << " mT");
   } else {
-    ROS_WARN_STREAM_THROTTLE(1.0, "[mag_pose_estimator] 姿态估计失败，传感器数量: " 
-                              << processed_measurements.size() << "，置信度: " << confidence);
+    ROS_WARN_STREAM_THROTTLE(1.0, "[mag_pose_estimator] 姿态估计失败");
   }
-}
-
-/**
- * @brief 单个磁传感器数据回调函数
- * @param msg 磁传感器测量消息
- */
-void MagPoseEstimatorNode::magCallback(
-    const mag_core_msgs::MagSensorDataConstPtr &msg) {
-  std::vector<sensor_msgs::MagneticField> single_measurement = {convertAndProcess(*msg)};
-  geometry_msgs::Pose pose;
-  double error = 0.0;
-  bool success = processMeasurements(single_measurement, pose, &error);
-  
-  ros::Time stamp = msg->header.stamp.isZero() ? ros::Time::now() : msg->header.stamp;
-  
-  // 获取协方差矩阵并计算置信度
-  Eigen::Matrix<double, 6, 6> covariance;
-  double confidence = 0.0;
-  if (estimator_->getCovariance(covariance)) {
-    confidence = computeConfidence(covariance, success);
-  } else {
-    // 如果无法获取协方差矩阵，使用默认值
-    confidence = success ? 0.5 : 0.0;
-  }
-  
-  publishPose(pose, stamp, confidence);
 }
 
 /**
  * @brief 转换并处理传感器数据
  */
 sensor_msgs::MagneticField MagPoseEstimatorNode::convertAndProcess(
-    const mag_core_msgs::MagSensorData &sensor_data) {
+    const std_msgs::Header &header, int sensor_id, const Eigen::Vector3d &field) {
   sensor_msgs::MagneticField mag_msg;
-  mag_msg.header = sensor_data.header;
-  mag_msg.magnetic_field.x = sensor_data.mag_x;
-  mag_msg.magnetic_field.y = sensor_data.mag_y;
-  mag_msg.magnetic_field.z = sensor_data.mag_z;
-  // 使用带sensor_id的处理方法，以支持多传感器校正
-  return preprocessor_.process(mag_msg, sensor_data.sensor_id);
+  mag_msg.header = header;
+
+  // 按照 mag_core_description 的约定构造 frame_id
+  mag_msg.header.frame_id = "sensor_" + std::to_string(sensor_id);
+
+  mag_msg.magnetic_field.x = field.x();
+  mag_msg.magnetic_field.y = field.y();
+  mag_msg.magnetic_field.z = field.z();
+
+  // 使用带 sensor_id 的处理方法，以支持各个传感器独立的软/硬铁校正
+  return preprocessor_.process(mag_msg, sensor_id);
 }
 
 /**
@@ -446,65 +403,19 @@ bool MagPoseEstimatorNode::processMeasurements(
 }
 
 /**
- * @brief 计算位姿估计置信度（基于协方差矩阵）
- * @param covariance 估计的协方差矩阵（6x6，位置3维+姿态3维）
- * @param success 估计是否成功
- * @return 置信度值 [0.0, 1.0]
- */
-double MagPoseEstimatorNode::computeConfidence(const Eigen::Matrix<double, 6, 6> &covariance, bool success) const {
-  if (!success) {
-    return 0.0;  // 估计失败，置信度为0
-  }
-  
-  // 计算位置不确定性（位置协方差矩阵的行列式的平方根）
-  Eigen::Matrix3d position_cov = covariance.block<3, 3>(0, 0);
-  double position_uncertainty = std::sqrt(position_cov.determinant());
-  
-  // 计算姿态不确定性（方向协方差矩阵的行列式的平方根）
-  Eigen::Matrix3d orientation_cov = covariance.block<3, 3>(3, 3);
-  double orientation_uncertainty = std::sqrt(orientation_cov.determinant());
-  
-  // 计算协方差矩阵的条件数（可观测性指标）
-  Eigen::JacobiSVD<Eigen::Matrix<double, 6, 6>> svd(covariance);
-  double condition_number = svd.singularValues()(0) / 
-                           svd.singularValues()(svd.singularValues().size() - 1);
-  
-  // 归一化不确定性（假设合理的不确定性范围）
-  // 位置不确定性：0.001 m (1mm) 到 0.1 m (10cm)
-  double normalized_position_uncertainty = std::min(1.0, position_uncertainty / 0.1);
-  
-  // 姿态不确定性：0.01 rad 到 1.0 rad
-  double normalized_orientation_uncertainty = std::min(1.0, orientation_uncertainty / 1.0);
-  
-  // 基于不确定性的置信度（不确定性越小，置信度越高）
-  double position_confidence = 1.0 / (1.0 + normalized_position_uncertainty * 10.0);
-  double orientation_confidence = 1.0 / (1.0 + normalized_orientation_uncertainty * 10.0);
-  
-  // 条件数惩罚（条件数越大，可观测性越差）
-  double condition_penalty = 1.0 / (1.0 + condition_number / 1000.0);
-  
-  // 综合置信度：位置权重0.5，姿态权重0.3，条件数权重0.2
-  double confidence = 0.5 * position_confidence + 0.3 * orientation_confidence + 0.2 * condition_penalty;
-  
-  return std::max(0.0, std::min(1.0, confidence));
-}
-
-/**
  * @brief 发布姿态估计结果
  * @param pose 估计的姿态
  * @param stamp 时间戳
- * @param confidence 估计置信度 [0.0, 1.0]
  */
 void MagPoseEstimatorNode::publishPose(const geometry_msgs::Pose &pose,
-                                        const ros::Time &stamp,
-                                        double confidence) {
+                                        const ros::Time &stamp) {
   mag_core_msgs::MagnetPose msg;
   msg.header.stamp = stamp;
   msg.header.frame_id = output_frame_;
   msg.position = pose.position;
   msg.orientation = pose.orientation;
   msg.magnetic_strength = estimator_->getMagneticStrength();
-  msg.confidence = confidence;
+  msg.confidence = 1.0;  // 始终发布 1.0
   pose_pub_.publish(msg);
 
   if (enable_tf_) {
@@ -544,7 +455,7 @@ bool MagPoseEstimatorNode::querySensorTransform(const std::string &frame_id,
         query_time = stamp;
       }
     }
-    
+
     try {
       transform = tf_buffer_.lookupTransform(
           output_frame_, frame_id, query_time, ros::Duration(tf_timeout_));
@@ -563,7 +474,7 @@ bool MagPoseEstimatorNode::querySensorTransform(const std::string &frame_id,
         transform.transform.translation.z);
     return true;
   } catch (const tf2::TransformException &ex) {
-    ROS_WARN_STREAM_THROTTLE(1.0, "[mag_pose_estimator] TF 查询失败 (" << frame_id 
+    ROS_WARN_STREAM_THROTTLE(1.0, "[mag_pose_estimator] TF 查询失败 (" << frame_id
                              << " -> " << output_frame_ << "): " << ex.what());
     return false;
   }
@@ -606,7 +517,7 @@ std::unique_ptr<EstimatorBase> MagPoseEstimatorNode::createEstimator(
 int main(int argc, char **argv) {
   setlocale(LC_ALL, "zh_CN.UTF-8");
   ros::init(argc, argv, "mag_pose_estimator_node");
-  
+
   ros::NodeHandle nh;
   ros::NodeHandle pnh("~");
 

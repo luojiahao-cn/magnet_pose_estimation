@@ -11,7 +11,7 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   mag_core_msgs
   mag_core_utils
-  mag_device_arm
+  moveit_ros_planning_interface
   tf2
   tf2_ros
   tf2_geometry_msgs
@@ -27,7 +27,7 @@ catkin_package(
     roscpp
     geometry_msgs
     mag_core_msgs
-    mag_device_arm
+    moveit_ros_planning_interface
     tf2
     tf2_ros
 )

@@ -1,17 +1,18 @@
 #pragma once
 
-#include <mag_core_msgs/MagSensorBatch.h>
-#include <mag_device_arm/SetEndEffectorPose.h>
+#include <mag_core_msgs/MagSensorArray.h>
 #include <geometry_msgs/Pose.h>
 #include <ros/ros.h>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
 #include <Eigen/Dense>
+#include <moveit/move_group_interface/move_group_interface.h>
 
 #include <map>
 #include <vector>
 #include <string>
 #include <mutex>
+#include <memory>
 
 namespace mag_sensor_calibration {
 
@@ -33,8 +34,7 @@ struct CalibrationCollectConfig {
   double sample_duration;              // 每个姿态采样时长（秒）
   
   // 话题配置
-  std::string sensor_batch_topic;
-  std::string arm_service_name;
+  std::string sensor_array_topic;
   
   // 输出配置
   std::string data_file;
@@ -111,9 +111,9 @@ private:
   PoseSensorData sampleSensorData(double duration, const geometry_msgs::Pose &current_pose);
   
   /**
-   * @brief 传感器批量数据回调
+   * @brief 传感器数组数据回调
    */
-  void sensorBatchCallback(const mag_core_msgs::MagSensorBatchConstPtr &msg);
+  void sensorArrayCallback(const mag_core_msgs::MagSensorArrayConstPtr &msg);
   
   /**
    * @brief 从RPY创建姿态
@@ -137,16 +137,16 @@ private:
   CalibrationCollectConfig config_;
   
   // ROS接口
-  ros::Subscriber sensor_batch_sub_;
-  ros::ServiceClient arm_pose_client_;
+  ros::Subscriber sensor_array_sub_;
+  std::unique_ptr<moveit::planning_interface::MoveGroupInterface> move_group_;
   
   // 数据存储
   std::vector<PoseSensorData> collected_data_;
   std::mutex data_mutex_;
   
   // 临时数据缓存（用于采样）
-  mag_core_msgs::MagSensorBatchConstPtr latest_batch_;
-  std::mutex batch_mutex_;
+  mag_core_msgs::MagSensorArrayConstPtr latest_array_;
+  std::mutex array_mutex_;
   
   // TF
   tf2_ros::Buffer tf_buffer_;

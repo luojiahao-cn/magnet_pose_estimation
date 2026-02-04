@@ -11,7 +11,7 @@
  * 主要流程：
  * 1. 加载配置参数和传感器阵列描述
  * 2. 生成三维网格扫描点并优化扫描顺序
- * 3. 通过 mag_device_arm 服务控制机械臂移动
+ * 3. 通过 MoveIt MoveGroupInterface 控制机械臂移动
  * 4. 在每个扫描点采集传感器数据
  * 5. 将数据写入 CSV 并发布可视化标记
  */
@@ -35,9 +35,6 @@
 
 #include <geometry_msgs/TransformStamped.h>
 #include <geometry_msgs/Vector3Stamped.h>
-#include <mag_device_arm/SetEndEffectorPose.h>
-#include <mag_device_arm/ExecuteNamedTarget.h>
-#include <mag_device_arm/ExecuteCartesianPath.h>
 #include <ros/package.h>
 #include <ros/console.h>
 #include <tf2/LinearMath/Quaternion.h>
@@ -66,7 +63,7 @@ namespace mag_arm_scan
 	 * 2. 加载传感器阵列配置
 	 * 3. 生成扫描点网格
 	 * 4. 加载测试点（如果配置）
-	 * 5. 初始化 mag_device_arm 服务客户端
+	 * 5. 初始化 MoveIt 接口
 	 * 6. 注册 ROS 服务和话题
 	 */
 	ScanControllerNode::ScanControllerNode(ros::NodeHandle &nh, ros::NodeHandle &pnh)
@@ -88,7 +85,7 @@ namespace mag_arm_scan
 																 << " grid points plus " << test_points_.size() << " test points");
 		}
 
-		// 初始化 mag_device_arm 服务客户端
+		// 初始化 MoveIt 接口
 		initializeArmServices();
 
 		start_scan_srv_ = pnh_.advertiseService("start_scan", &ScanControllerNode::startScan, this);
@@ -520,34 +517,20 @@ namespace mag_arm_scan
 	}
 
 	/**
-	 * @brief 初始化机械臂服务客户端
+	 * @brief 初始化机械臂 MoveGroup 接口
 	 */
 	void ScanControllerNode::initializeArmServices()
 	{
 		pnh_.param("arm_name", arm_name_, std::string("arm1"));
-		const std::string arm_service_ns = "/mag_device_arm";
-
-		arm_set_pose_client_ = nh_.serviceClient<mag_device_arm::SetEndEffectorPose>(
-			arm_service_ns + "/set_end_effector_pose");
-		arm_execute_named_client_ = nh_.serviceClient<mag_device_arm::ExecuteNamedTarget>(
-			arm_service_ns + "/execute_named_target");
-		arm_cartesian_path_client_ = nh_.serviceClient<mag_device_arm::ExecuteCartesianPath>(
-			arm_service_ns + "/execute_cartesian_path");
-
-		ROS_INFO_STREAM("[scan_controller] waiting for mag_device_arm services...");
-		const ros::Duration timeout(10.0);
-
-		if (!arm_set_pose_client_.waitForExistence(timeout))
-		{
-			ROS_WARN_STREAM("[scan_controller] mag_device_arm services not available, will retry on use");
-		}
-		if (!arm_execute_named_client_.waitForExistence(timeout))
-		{
-			ROS_WARN_STREAM("[scan_controller] mag_device_arm execute_named_target service not available");
-		}
-		if (!arm_cartesian_path_client_.waitForExistence(timeout))
-		{
-			ROS_WARN_STREAM("[scan_controller] mag_device_arm execute_cartesian_path service not available");
+		
+		try {
+			move_group_ = std::make_unique<moveit::planning_interface::MoveGroupInterface>(arm_name_);
+			move_group_->setPlanningTime(10.0);
+			move_group_->setMaxVelocityScalingFactor(max_velocity_scaling_);
+			move_group_->setMaxAccelerationScalingFactor(max_acceleration_scaling_);
+			ROS_INFO_STREAM("[scan_controller] initialized MoveGroupInterface for " << arm_name_);
+		} catch (const std::exception &e) {
+			ROS_ERROR_STREAM("[scan_controller] failed to initialize MoveGroupInterface: " << e.what());
 		}
 	}
 
@@ -587,7 +570,7 @@ namespace mag_arm_scan
 	 */
 	bool ScanControllerNode::tryCartesianPath(const geometry_msgs::Pose &target_pose)
 	{
-		if (!arm_cartesian_path_client_.exists() || cartesian_path_threshold_ <= 0.0)
+		if (!move_group_ || cartesian_path_threshold_ <= 0.0)
 		{
 			return false;
 		}
@@ -607,30 +590,28 @@ namespace mag_arm_scan
 		ROS_DEBUG_STREAM("[scan_controller] Distance " << distance << " m < threshold "
 													   << cartesian_path_threshold_ << " m, using Cartesian path planning");
 
-		mag_device_arm::ExecuteCartesianPath srv;
-		srv.request.arm = arm_name_;
-		srv.request.waypoints.push_back(target_pose);
-		srv.request.step_size = 0.01;
-		srv.request.jump_threshold = 0.0;
-		srv.request.velocity_scaling = max_velocity_scaling_;
-		srv.request.acceleration_scaling = max_acceleration_scaling_;
-		srv.request.execute = true;
+		std::vector<geometry_msgs::Pose> waypoints;
+		waypoints.push_back(target_pose);
 
-		if (!arm_cartesian_path_client_.call(srv))
+		moveit_msgs::RobotTrajectory trajectory;
+		// step_size=0.01, jump_threshold=0.0
+		double fraction = move_group_->computeCartesianPath(waypoints, 0.01, 0.0, trajectory);
+
+		if (fraction < 0.9)
 		{
-			ROS_WARN_STREAM("[scan_controller] Cartesian path planning service call failed");
+			ROS_WARN_STREAM("[scan_controller] Cartesian path planning fraction too low: " << fraction);
 			return false;
 		}
 
-		if (srv.response.success)
+		moveit::planning_interface::MoveGroupInterface::Plan plan;
+		plan.trajectory_ = trajectory;
+		if (move_group_->execute(plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS)
 		{
-			ROS_DEBUG_STREAM("[scan_controller] Cartesian path planning succeeded (fraction: "
-							 << srv.response.fraction * 100.0 << "%)");
+			ROS_DEBUG_STREAM("[scan_controller] Cartesian path planning succeeded");
 			return true;
 		}
 
-		ROS_WARN_STREAM("[scan_controller] Cartesian path planning failed: " << srv.response.message
-																			 << " (fraction: " << srv.response.fraction * 100.0 << "%)");
+		ROS_WARN_STREAM("[scan_controller] Cartesian path execution failed");
 		return false;
 	}
 
@@ -641,36 +622,24 @@ namespace mag_arm_scan
 	 */
 	bool ScanControllerNode::tryJointSpacePlanning(const geometry_msgs::Pose &target_pose)
 	{
-		if (!arm_set_pose_client_.exists())
+		if (!move_group_)
 		{
-			ROS_ERROR("[scan_controller] mag_device_arm service not available");
+			ROS_ERROR("[scan_controller] MoveGroupInterface not initialized");
 			return false;
 		}
 
-		mag_device_arm::SetEndEffectorPose srv;
-		srv.request.arm = arm_name_;
-		srv.request.target = target_pose;
-		srv.request.velocity_scaling = max_velocity_scaling_;
-		srv.request.acceleration_scaling = max_acceleration_scaling_;
-		srv.request.execute = true;
-
-		if (!arm_set_pose_client_.call(srv))
+		move_group_->setPoseTarget(target_pose);
+		if (move_group_->move() == moveit::planning_interface::MoveItErrorCode::SUCCESS)
 		{
-			ROS_ERROR("[scan_controller] failed to call set_end_effector_pose service");
-			return false;
+			return true;
 		}
 
-		if (!srv.response.success)
-		{
-			ROS_WARN_STREAM("[scan_controller] set_end_effector_pose failed: " << srv.response.message);
-			return false;
-		}
-
-		return true;
+		ROS_ERROR("[scan_controller] failed to move to target pose");
+		return false;
 	}
 
 	/**
-	 * @brief 使用 mag_device_arm 服务控制机械臂移动到指定位姿
+	 * @brief 控制机械臂移动到指定位姿
 	 * @param pose 目标位姿（在 frame_id 坐标系下）
 	 * @return 成功返回 true，失败返回 false
 	 *
@@ -691,44 +660,31 @@ namespace mag_arm_scan
 	}
 
 	/**
-	 * @brief 使用 mag_device_arm 服务控制机械臂移动到命名的就绪姿态
+	 * @brief 使用 MoveIt 控制机械臂移动到命名的就绪姿态
 	 * @return 成功返回 true，失败返回 false
 	 *
 	 * 就绪姿态通常是一个安全的中间位置，用于扫描开始前和结束后的位置
 	 */
 	bool ScanControllerNode::moveToReadyPose()
 	{
-		ROS_INFO_STREAM("[scan_controller] moving to ready position using named target");
+		ROS_INFO_STREAM("[scan_controller] moving to ready position using named target: " << ready_target_name_);
 
-		if (!arm_execute_named_client_.exists())
+		if (!move_group_)
 		{
-			ROS_ERROR("[scan_controller] mag_device_arm execute_named_target service not available");
+			ROS_ERROR("[scan_controller] MoveGroupInterface not initialized");
 			return false;
 		}
 
-		// 构造服务请求
-		mag_device_arm::ExecuteNamedTarget srv;
-		srv.request.arm = arm_name_;								  // 机械臂名称
-		srv.request.target = ready_target_name_;					  // 命名目标（如 "ready"）
-		srv.request.velocity_scaling = max_velocity_scaling_;		  // 速度缩放因子
-		srv.request.acceleration_scaling = max_acceleration_scaling_; // 加速度缩放因子
-		srv.request.execute = true;									  // 执行运动
+		move_group_->setNamedTarget(ready_target_name_);
 
-		// 调用服务
-		if (!arm_execute_named_client_.call(srv))
+		// 执行运动
+		if (move_group_->move() == moveit::planning_interface::MoveItErrorCode::SUCCESS)
 		{
-			ROS_ERROR("[scan_controller] failed to call execute_named_target service");
-			return false;
+			return true;
 		}
 
-		// 检查执行结果
-		if (!srv.response.success)
-		{
-			ROS_WARN_STREAM("[scan_controller] execute_named_target failed: " << srv.response.message);
-			return false;
-		}
-
-		return true;
+		ROS_WARN_STREAM("[scan_controller] move to named target failed: " << ready_target_name_);
+		return false;
 	}
 
 	/**
@@ -869,13 +825,20 @@ namespace mag_arm_scan
 			geometry_msgs::TransformStamped transform;
 			bool did_tf = false;
 
+			// 确定源坐标系
+			std::string sensor_source_frame = sensor_entry->frame_id;
+			if (sensor_source_frame.empty())
+			{
+				sensor_source_frame = sensor_array_.arrayFrame();
+			}
+
 			// 如果需要，将传感器位姿转换到目标坐标系（frame_id_）
-			if (!frame_id_.empty() && frame_id_ != data.header.frame_id)
+			if (!frame_id_.empty() && frame_id_ != sensor_source_frame)
 			{
 				try
 				{
 					// 查询 TF 变换：从传感器坐标系到目标坐标系
-					transform = tf_buffer_.lookupTransform(frame_id_, data.header.frame_id, ros::Time(0), ros::Duration(tf_lookup_timeout_));
+					transform = tf_buffer_.lookupTransform(frame_id_, sensor_source_frame, ros::Time(0), ros::Duration(tf_lookup_timeout_));
 					tf2::doTransform(pose_w, pose_w, transform);
 					did_tf = true;
 				}
@@ -889,10 +852,11 @@ namespace mag_arm_scan
 
 			// 获取磁场向量并转换到目标坐标系
 			geometry_msgs::Vector3Stamped mag_vec;
-			mag_vec.header = data.header;
-			mag_vec.vector.x = data.mag_x;
-			mag_vec.vector.y = data.mag_y;
-			mag_vec.vector.z = data.mag_z;
+			mag_vec.header.stamp = data.stamp;
+			mag_vec.header.frame_id = sensor_source_frame;
+			mag_vec.vector.x = data.x;
+			mag_vec.vector.y = data.y;
+			mag_vec.vector.z = data.z;
 
 			if (did_tf)
 			{
@@ -909,10 +873,10 @@ namespace mag_arm_scan
 			}
 
 			// 写入 CSV 文件
-			file << data.header.stamp.toSec() << ',' << mag_vec.vector.x << ',' << mag_vec.vector.y << ',' << mag_vec.vector.z << ','
+			file << mag_vec.header.stamp.toSec() << ',' << mag_vec.vector.x << ',' << mag_vec.vector.y << ',' << mag_vec.vector.z << ','
 				 << pose_w.position.x << ',' << pose_w.position.y << ',' << pose_w.position.z << ','
 				 << pose_w.orientation.x << ',' << pose_w.orientation.y << ',' << pose_w.orientation.z << ',' << pose_w.orientation.w << ','
-				 << data.sensor_id << ',' << data.header.frame_id << '\n';
+				 << data.sensor_id << ',' << mag_vec.header.frame_id << '\n';
 
 			// 累加磁场向量用于计算平均值（用于可视化）
 			auto &acc = averaged_data[data.sensor_id];
@@ -1192,16 +1156,28 @@ namespace mag_arm_scan
 	 * - 按传感器 ID 分别存储到缓冲区
 	 * - 每个传感器缓冲区最多保存 max_samples_per_sensor_ 个样本（FIFO）
 	 */
-	void ScanControllerNode::magDataCallback(const mag_core_msgs::MagSensorData::ConstPtr &msg)
+	void ScanControllerNode::magDataCallback(const mag_core_msgs::MagSensorArray::ConstPtr &msg)
 	{
 		std::lock_guard<std::mutex> lock(data_mutex_);
-		// 根据传感器 ID 获取对应的缓冲区
-		auto &queue = sensor_samples_buffer_[msg->sensor_id];
-		queue.push_back(*msg);
-		// 如果缓冲区超过最大容量，移除最旧的样本（FIFO）
-		while (queue.size() > max_samples_per_sensor_)
-		{
-			queue.pop_front();
+		
+		for (size_t i = 0; i < msg->sensor_ids.size(); ++i) {
+			uint32_t sensor_id = msg->sensor_ids[i];
+			auto &queue = sensor_samples_buffer_[sensor_id];
+			
+			SensorSample sample;
+			sample.stamp = msg->header.stamp;
+			sample.sensor_id = sensor_id;
+			sample.x = msg->mag_x[i];
+			sample.y = msg->mag_y[i];
+			sample.z = msg->mag_z[i];
+			
+			queue.push_back(sample);
+			
+			// 如果缓冲区超过最大容量，移除最旧的样本（FIFO）
+			while (queue.size() > static_cast<size_t>(max_samples_per_sensor_))
+			{
+				queue.pop_front();
+			}
 		}
 	}
 
@@ -1294,7 +1270,7 @@ namespace mag_arm_scan
 			return false;
 		}
 
-		const auto check_sensor = [this](std::uint32_t sensor_id, const std::deque<mag_core_msgs::MagSensorData> &samples)
+		const auto check_sensor = [this](std::uint32_t sensor_id, const std::deque<SensorSample> &samples)
 		{
 			return static_cast<int>(samples.size()) >= frames_per_sensor_;
 		};
@@ -1336,7 +1312,7 @@ namespace mag_arm_scan
 	 * - 如果 best_effort=true：每个传感器提取所有可用样本
 	 * - 优先提取最新的样本（从队列末尾开始）
 	 */
-	void ScanControllerNode::extractSamplesLocked(std::vector<mag_core_msgs::MagSensorData> &out,
+	void ScanControllerNode::extractSamplesLocked(std::vector<SensorSample> &out,
 												  bool best_effort)
 	{
 		out.clear();
@@ -1345,7 +1321,7 @@ namespace mag_arm_scan
 		std::map<std::uint32_t, std::size_t> per_sensor_counts;
 
 		// Lambda 函数：从队列中提取样本
-		auto append_from_queue = [&](const std::deque<mag_core_msgs::MagSensorData> &queue) -> std::size_t
+		auto append_from_queue = [&](const std::deque<SensorSample> &queue) -> std::size_t
 		{
 			const std::size_t target = static_cast<std::size_t>(frames_per_sensor_);
 			const std::size_t available = queue.size();
@@ -1488,15 +1464,8 @@ namespace mag_arm_scan
 		// 如果配置了自动启动，等待服务就绪后自动开始扫描
 		if (autostart_)
 		{
-			ROS_INFO_STREAM("[scan_controller] waiting for mag_device_arm services to become ready...");
-			// 等待服务可用
-			if (!arm_set_pose_client_.waitForExistence(ros::Duration(10.0)))
-			{
-				ROS_ERROR("[scan_controller] mag_device_arm services not available for autostart");
-				return;
-			}
-
-			ROS_INFO_STREAM("[scan_controller] Services ready. Waiting additional stabilization time...");
+			ROS_INFO_STREAM("[scan_controller] Autostarting scan...");
+			ROS_INFO_STREAM("[scan_controller] Waiting additional stabilization time...");
 			ros::Duration(3.0).sleep(); // 额外等待 3 秒确保系统稳定
 
 			// 调用开始扫描服务

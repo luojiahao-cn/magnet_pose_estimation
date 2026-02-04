@@ -23,16 +23,12 @@ config:
       max_movement_per_step: 0.02  # 每步最大移动距离 (米)
   
   # 机械臂配置
-  sensor_arm_name: arm1  # 传感器机械臂名称（用于调用 mag_device_arm 服务）
+  sensor_arm_name: arm1  # 传感器机械臂名称（MoveIt 组名）
   
   # 话题配置
   topics:
     magnet_pose: /magnetic/pose_estimated  # 磁铁位姿估计话题
     target_pose: tracking_control/target_pose  # 目标位姿发布话题（用于可视化）
-  
-  # 服务配置
-  services:
-    arm_service: /mag_device_arm/set_end_effector_pose  # 机械臂服务名称
   
   # 坐标系配置
   frames:

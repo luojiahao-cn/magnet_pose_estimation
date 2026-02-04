@@ -12,7 +12,7 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   mag_core_msgs
   mag_core_utils
-  mag_device_arm
+  moveit_ros_planning_interface
   rosparam_shortcuts
   tf2
   tf2_ros
@@ -24,7 +24,7 @@ find_package(Eigen3 REQUIRED)
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES mag_sensor_calibration_core
-  CATKIN_DEPENDS mag_core_msgs mag_core_utils mag_device_arm
+  CATKIN_DEPENDS mag_core_msgs mag_core_utils moveit_ros_planning_interface
 )
 
 include_directories(

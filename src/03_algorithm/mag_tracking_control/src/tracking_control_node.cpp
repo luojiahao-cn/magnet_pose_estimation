@@ -55,48 +55,19 @@ TrackingControlNode::TrackingControlNode(ros::NodeHandle nh, ros::NodeHandle pnh
     );
     init_items.emplace_back("发布目标位姿话题", config_.target_pose_topic);
     
-    // 初始化机械臂服务客户端
-    arm_service_client_ = nh_.serviceClient<mag_device_arm::SetEndEffectorPose>(
-        config_.arm_service_name
-    );
-    bool arm_service_available = arm_service_client_.waitForExistence(ros::Duration(5.0));
-    if (arm_service_available) {
-        init_items.emplace_back("机械臂服务", config_.arm_service_name + " (可用)");
-    } else {
-        // 服务暂时不可用，记录状态并继续等待（不阻塞）
-        init_items.emplace_back("机械臂服务", config_.arm_service_name + " (等待中...)");
-        ROS_INFO_STREAM("[tracking_control] 等待机械臂服务: " << config_.arm_service_name);
-        // 在后台等待服务可用（不阻塞构造函数）
-        std::thread([this, name = config_.arm_service_name]() {
-            arm_service_client_.waitForExistence();
-            ROS_INFO_STREAM("[tracking_control] 机械臂服务已可用: " << name);
-        }).detach();
+    // 初始化 MoveGroupInterface
+    try {
+        move_group_ = std::make_unique<moveit::planning_interface::MoveGroupInterface>(config_.sensor_arm_name);
+        move_group_->setMaxVelocityScalingFactor(config_.velocity_scaling);
+        move_group_->setMaxAccelerationScalingFactor(config_.acceleration_scaling);
+        init_items.emplace_back("机械臂组名", config_.sensor_arm_name + " (MoveIt)");
+    } catch (const std::exception& e) {
+        ROS_ERROR_STREAM("[tracking_control] 初始化 MoveGroupInterface 失败: " << e.what());
+        // 即使失败也继续，可能是因为控制器还没启动，但在执行时会检查
     }
     
-    // 根据配置选择使用连续轨迹模式还是服务模式
+    // 根据配置选择是否启动轨迹执行轨迹
     if (config_.use_continuous_trajectory) {
-        // 初始化笛卡尔路径服务客户端
-        cartesian_path_service_name_ = config_.cartesian_path_service_name;
-        
-        cartesian_path_client_ = nh_.serviceClient<mag_device_arm::ExecuteCartesianPath>(
-            cartesian_path_service_name_
-        );
-        bool cartesian_service_available = cartesian_path_client_.waitForExistence(ros::Duration(5.0));
-        if (cartesian_service_available) {
-            init_items.emplace_back("笛卡尔路径服务", cartesian_path_service_name_ + " (可用)");
-            init_items.emplace_back("连续轨迹模式", "已启用（通过服务接口）");
-        } else {
-            // 服务暂时不可用，记录状态并继续等待（不阻塞）
-            init_items.emplace_back("笛卡尔路径服务", cartesian_path_service_name_ + " (等待中...)");
-            ROS_INFO_STREAM("[tracking_control] 等待笛卡尔路径服务: " << cartesian_path_service_name_);
-            // 在后台等待服务可用（不阻塞构造函数）
-            std::thread([this, name = cartesian_path_service_name_]() {
-                cartesian_path_client_.waitForExistence();
-                ROS_INFO_STREAM("[tracking_control] 笛卡尔路径服务已可用: " << name);
-            }).detach();
-            init_items.emplace_back("连续轨迹模式", "已启用（通过服务接口）");
-        }
-        
         // 启动轨迹执行线程
         should_stop_thread_ = false;
         trajectory_execution_thread_ = std::thread(&TrackingControlNode::trajectoryExecutionThread, this);
@@ -309,26 +280,18 @@ bool TrackingControlNode::getCurrentSensorPose(geometry_msgs::Pose &pose) {
 }
 
 bool TrackingControlNode::executePose(const geometry_msgs::Pose &target_pose) {
-    if (!arm_service_client_.exists()) {
+    if (!move_group_) {
+        ROS_WARN_STREAM_THROTTLE(1.0, "[tracking_control] MoveGroup未初始化");
         return false;
     }
     
-    mag_device_arm::SetEndEffectorPose srv;
-    srv.request.arm = config_.sensor_arm_name;
-    srv.request.target = target_pose;
-    srv.request.velocity_scaling = config_.velocity_scaling;
-    srv.request.acceleration_scaling = config_.acceleration_scaling;
-    srv.request.execute = true;
+    move_group_->setPoseTarget(target_pose);
+    moveit::planning_interface::MoveItErrorCode res = move_group_->move();
     
-    if (arm_service_client_.call(srv)) {
-        if (srv.response.success) {
-            return true;
-        } else {
-            ROS_WARN_STREAM_THROTTLE(1.0, "[tracking_control] 机械臂执行失败: " << srv.response.message);
-            return false;
-        }
+    if (res == moveit::planning_interface::MoveItErrorCode::SUCCESS) {
+        return true;
     } else {
-        ROS_WARN_STREAM_THROTTLE(1.0, "[tracking_control] 调用机械臂服务失败");
+        ROS_WARN_STREAM_THROTTLE(1.0, "[tracking_control] MoveIt运动执行失败，代码: " << res);
         return false;
     }
 }
@@ -346,7 +309,7 @@ void TrackingControlNode::addToTrajectoryBuffer(const geometry_msgs::Pose &targe
 }
 
 void TrackingControlNode::executeContinuousTrajectory() {
-    if (!cartesian_path_client_.exists() || is_executing_trajectory_.load()) {
+    if (!move_group_ || is_executing_trajectory_.load()) {
         return;
     }
     
@@ -371,28 +334,28 @@ void TrackingControlNode::executeContinuousTrajectory() {
         return;
     }
     
-    // 调用笛卡尔路径服务
+    // 调用 MoveIt 笛卡尔路径规划
     is_executing_trajectory_.store(true);
     
-    mag_device_arm::ExecuteCartesianPath srv;
-    srv.request.arm = config_.sensor_arm_name;
-    srv.request.waypoints = waypoints;
-    srv.request.step_size = config_.cartesian_path_step_size;
-    srv.request.jump_threshold = config_.cartesian_path_jump_threshold;
-    srv.request.velocity_scaling = config_.velocity_scaling;
-    srv.request.acceleration_scaling = config_.acceleration_scaling;
-    srv.request.execute = true;
+    moveit_msgs::RobotTrajectory trajectory;
+    double fraction = move_group_->computeCartesianPath(
+        waypoints, 
+        config_.cartesian_path_step_size, 
+        config_.cartesian_path_jump_threshold, 
+        trajectory
+    );
     
-    if (cartesian_path_client_.call(srv)) {
-        if (srv.response.success) {
+    if (fraction > 0.0) {
+        moveit::planning_interface::MoveItErrorCode res = move_group_->execute(trajectory);
+        if (res == moveit::planning_interface::MoveItErrorCode::SUCCESS) {
             ROS_DEBUG_STREAM("[tracking_control] 成功执行连续轨迹，包含 " << waypoints.size() 
-                            << " 个点，完成度: " << srv.response.fraction * 100.0 << "%");
+                            << " 个点，完成度: " << fraction * 100.0 << "%");
         } else {
-            ROS_WARN_STREAM("[tracking_control] 笛卡尔路径执行失败: " << srv.response.message 
-                           << " (完成度: " << srv.response.fraction * 100.0 << "%)");
+            ROS_WARN_STREAM("[tracking_control] MoveIt轨迹执行失败，代码: " << res 
+                           << " (完成度: " << fraction * 100.0 << "%)");
         }
     } else {
-        ROS_WARN_STREAM_THROTTLE(1.0, "[tracking_control] 调用笛卡尔路径服务失败");
+        ROS_WARN_STREAM_THROTTLE(1.0, "[tracking_control] MoveIt笛卡尔路径规划失败");
     }
     
     is_executing_trajectory_.store(false);
@@ -411,7 +374,12 @@ void TrackingControlNode::trajectoryExecutionThread() {
 
 void TrackingControlNode::run() {
     ROS_INFO_STREAM("[tracking_control] 节点已启动，开始控制循环");
-    ros::spin();
+    
+    // 使用异步 Spinner 以支持 MoveIt 的回调处理
+    ros::AsyncSpinner spinner(2);
+    spinner.start();
+    
+    ros::waitForShutdown();
     // 析构函数会处理线程清理
 }
 

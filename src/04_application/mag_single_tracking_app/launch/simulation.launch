@@ -2,7 +2,7 @@
 <launch>
   <!-- 设置全局日志级别为 WARN，减少终端输出 -->
   <env name="ROSCONSOLE_MIN_SEVERITY" value="WARN"/>
-  
+
   <!-- 参数配置 -->
   <arg name="sensor_array_config" default="$(find mag_single_tracking_app)/config/sensor_array.yaml"/>
   <arg name="arm_config" default="$(find mag_single_tracking_app)/config/arm_config.yaml"/>
@@ -18,18 +18,14 @@
   <arg name="use_rviz" default="true"/>
 
   <!-- 启动 Gazebo 和 MoveIt 配置 -->
-  <include file="$(find mag_device_arm)/launch/single_arm_gazebo.launch">
+  <include file="$(find zlab_robots_bringup)/launch/fr5/single/fr5_single_gazebo.launch">
     <arg name="tool_name" value="bracket" />
   </include>
 
-  <!-- 机械臂控制节点 -->
-  <node pkg="mag_device_arm" type="arm_node" name="mag_device_arm" output="screen">
-    <!-- 方式1：通过环境变量设置日志级别（全局，优先级较低） -->
-    <env name="ROSCONSOLE_MIN_SEVERITY" value="WARN"/>
-    <!-- 方式2：通过rosparam设置日志级别（节点级别，优先级更高，会覆盖YAML配置） -->
-    <!-- <rosparam param="logging_level">DEBUG</rosparam> -->
-    <rosparam command="load" file="$(arg arm_config)"/>
-  </node>
+  <!-- 磁场描述与 TF 发布器 -->
+  <include file="$(find mag_core_description)/launch/mag_description.launch">
+    <arg name="array_file" value="$(arg sensor_array_config)" />
+  </include>
 
   <!-- 磁体设备节点：生成磁体运动轨迹和 TF -->
   <node pkg="mag_device_magnet" type="magnet_main" name="mag_device_magnet" output="screen">
@@ -37,18 +33,11 @@
     <rosparam command="load" file="$(arg magnet_config)"/>
   </node>
 
-  <!-- 传感器仿真节点：根据 TF 生成磁传感器数据，并发布传感器阵列的静态 TF -->
-  <!-- 注意：sensor_sim_node 会发布从 bracket_tcp_link 到 sensor_array 的静态 TF（根据 sensor_array.yaml 配置） -->
+  <!-- 传感器仿真节点：根据 TF 生成磁传感器数据 -->
   <node pkg="mag_device_sensor" type="sensor_sim_node" name="mag_device_sensor_sim" output="screen">
     <env name="ROSCONSOLE_MIN_SEVERITY" value="WARN"/>
     <rosparam command="load" file="$(arg sensor_array_config)" ns="array"/>
     <rosparam command="load" file="$(arg sensor_sim_config)"/>
-  </node>
-
-  <!-- 传感器批量打包节点：将单个传感器消息打包成批量数据 -->
-  <node pkg="mag_device_sensor" type="sensor_array_batcher_node" name="sensor_array_batcher" output="screen">
-    <env name="ROSCONSOLE_MIN_SEVERITY" value="WARN"/>
-    <rosparam command="load" file="$(arg sensor_batcher_config)"/>
   </node>
 
   <!-- 姿态估计节点：估计磁体姿态 -->
@@ -88,7 +77,7 @@
   <!-- RViz 可视化 -->
   <group if="$(arg use_rviz)">
     <!-- 将 rviz 输出重定向到 log，不在终端显示 -->
-    <node pkg="rviz" type="rviz" name="magnet_viz_rviz" 
+    <node pkg="rviz" type="rviz" name="magnet_viz_rviz"
           args="-d $(find mag_single_tracking_app)/rviz/magnet_viz.rviz" output="log">
       <!-- 设置 rviz 相关日志级别为 WARN，过滤 INFO 信息 -->
       <env name="ROSCONSOLE_MIN_SEVERITY" value="WARN"/>
