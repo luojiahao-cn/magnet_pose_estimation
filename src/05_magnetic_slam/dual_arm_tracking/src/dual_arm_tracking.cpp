@@ -12,6 +12,7 @@
 #include <vector>
 #include <string>
 #include <fstream>
+#include <iomanip>
 #include <mutex>
 #include <ros/package.h>
 
@@ -93,7 +94,16 @@ public:
         }
 
         // 等待一小段时间以确保稳定
+        {
+            std::lock_guard<std::mutex> lock(data_mutex_);
+            mag_buffer_.clear();
+            is_collecting_ = true;
+        }
         ros::Duration(1.0).sleep();
+        {
+            std::lock_guard<std::mutex> lock(data_mutex_);
+            is_collecting_ = false;
+        }
 
         // 保存起始点数据 (Step 0)
         saveSensorData(0);
@@ -101,6 +111,8 @@ public:
         // 2. 同步移动到终止位置
         ROS_INFO("3. Starting Synchronized Movement...");
         performSyncMove(d7_end, a2_end);
+
+        closeOutputFile();
     }
 
 private:
@@ -110,6 +122,8 @@ private:
 
     ros::Subscriber mag_sub_;
     mag_core_msgs::MagSensorArray latest_mag_data_;
+    std::vector<mag_core_msgs::MagSensorArray> mag_buffer_;
+    bool is_collecting_ = false;
     std::mutex data_mutex_;
 
     std::unique_ptr<moveit::planning_interface::MoveGroupInterface> arm1_group_;
@@ -117,10 +131,15 @@ private:
     std::unique_ptr<moveit::planning_interface::MoveGroupInterface> diana7_group_;
     std::unique_ptr<moveit::planning_interface::MoveGroupInterface> sync_group_;
 
+    bool first_entry_ = true;
+
     void magCallback(const mag_core_msgs::MagSensorArray::ConstPtr& msg)
     {
         std::lock_guard<std::mutex> lock(data_mutex_);
         latest_mag_data_ = *msg;
+        if (is_collecting_) {
+            mag_buffer_.push_back(*msg);
+        }
     }
 
     void loadParams()
@@ -147,11 +166,11 @@ private:
         pnh.param<double>("acceleration_scaling", config_.acceleration_scaling, 0.1);
         pnh.param<int>("num_steps", config_.num_steps, 20);
         pnh.param<double>("step_wait_time", config_.step_wait_time, 0.5);
-        pnh.param<std::string>("output_file", config_.output_file, "scan_results.csv");
+        pnh.param<std::string>("output_file", config_.output_file, "scan_results.json");
 
         // 如果路径不是绝对路径，则将其相对于包路径
         if (!config_.output_file.empty() && config_.output_file[0] != '/') {
-            std::string pkg_path = ros::package::getPath("magnetic_slam_app");
+            std::string pkg_path = ros::package::getPath("dual_arm_tracking");
             config_.output_file = pkg_path + "/" + config_.output_file;
         }
     }
@@ -159,36 +178,24 @@ private:
     void initOutputFile()
     {
         ROS_INFO("Initializing output file: %s", config_.output_file.c_str());
-        ROS_INFO("Waiting for sensor data on /mag_device_sensor/data_mT topic to initialize file header...");
-        mag_core_msgs::MagSensorArray::ConstPtr first_msg =
-            ros::topic::waitForMessage<mag_core_msgs::MagSensorArray>("/mag_device_sensor/data_mT", nh_, ros::Duration(10.0));
-
         std::ofstream ofs(config_.output_file, std::ios::out);
         if (ofs.is_open()) {
-            ROS_INFO("File opened successfully for writing header.");
-            ofs << "step,timestamp,"
-                << "arm1_x,arm1_y,arm1_z,arm1_qx,arm1_qy,arm1_qz,arm1_qw,"
-                << "arm2_x,arm2_y,arm2_z,arm2_qx,arm2_qy,arm2_qz,arm2_qw,"
-                << "diana7_x,diana7_y,diana7_z,diana7_qx,diana7_qy,diana7_qz,diana7_qw";
-
-            if (first_msg) {
-                for (size_t i = 0; i < first_msg->mag_x.size(); ++i) {
-                    ofs << ",mag_x_" << (i+1) << ",mag_y_" << (i+1) << ",mag_z_" << (i+1);
-                }
-            } else {
-                ROS_WARN("No sensor data received for header, using default 25 columns.");
-                for (int i = 1; i <= 25; ++i) {
-                    ofs << ",mag_x_" << i << ",mag_y_" << i << ",mag_z_" << i;
-                }
-            }
-            ofs << "\n";
+            ofs << "[\n";
             ofs.close();
-            ROS_INFO("==============================================================");
-            ROS_INFO("SUCCESS: Output file initialized at: %s", config_.output_file.c_str());
-            ROS_INFO("==============================================================");
+            first_entry_ = true;
+            ROS_INFO("Output file initialized as JSON array.");
         } else {
             ROS_ERROR("CRITICAL ERROR: Could not open file for writing: %s", config_.output_file.c_str());
-            ROS_ERROR("Please check if the directory exists and is writable.");
+        }
+    }
+
+    void closeOutputFile()
+    {
+        std::ofstream ofs(config_.output_file, std::ios::app);
+        if (ofs.is_open()) {
+            ofs << "\n]\n";
+            ofs.close();
+            ROS_INFO("JSON file finalized.");
         }
     }
 
@@ -201,6 +208,37 @@ private:
             return;
         }
 
+        // 计算平均值
+        size_t num_sensors = latest_mag_data_.mag_x.size();
+        std::vector<double> avg_x(num_sensors, 0.0);
+        std::vector<double> avg_y(num_sensors, 0.0);
+        std::vector<double> avg_z(num_sensors, 0.0);
+        double avg_timestamp = latest_mag_data_.header.stamp.toSec();
+
+        if (!mag_buffer_.empty()) {
+            double ts_sum = 0;
+            for (const auto& msg : mag_buffer_) {
+                ts_sum += msg.header.stamp.toSec();
+                for (size_t i = 0; i < num_sensors && i < msg.mag_x.size(); ++i) {
+                    avg_x[i] += msg.mag_x[i];
+                    avg_y[i] += msg.mag_y[i];
+                    avg_z[i] += msg.mag_z[i];
+                }
+            }
+            double count = static_cast<double>(mag_buffer_.size());
+            avg_timestamp = ts_sum / count;
+            for (size_t i = 0; i < num_sensors; ++i) {
+                avg_x[i] /= count;
+                avg_y[i] /= count;
+                avg_z[i] /= count;
+            }
+            ROS_INFO("Averaged over %zu samples for step %d", mag_buffer_.size(), step);
+        } else {
+            avg_x = latest_mag_data_.mag_x;
+            avg_y = latest_mag_data_.mag_y;
+            avg_z = latest_mag_data_.mag_z;
+        }
+
         // 获取当前各臂末端位姿
         geometry_msgs::PoseStamped arm1_pose = arm1_group_->getCurrentPose(config_.arm1_link);
         geometry_msgs::PoseStamped arm2_pose = arm2_group_->getCurrentPose(config_.arm2_link);
@@ -208,21 +246,39 @@ private:
 
         std::ofstream ofs(config_.output_file, std::ios::app);
         if (ofs.is_open()) {
-            // 将所有传感器数据保存在同一行中，匹配 single_arm_scan 的格式
-            ofs << step << "," << latest_mag_data_.header.stamp.toSec() << ","
-                << arm1_pose.pose.position.x << "," << arm1_pose.pose.position.y << "," << arm1_pose.pose.position.z << ","
-                << arm1_pose.pose.orientation.x << "," << arm1_pose.pose.orientation.y << "," << arm1_pose.pose.orientation.z << "," << arm1_pose.pose.orientation.w << ","
-                << arm2_pose.pose.position.x << "," << arm2_pose.pose.position.y << "," << arm2_pose.pose.position.z << ","
-                << arm2_pose.pose.orientation.x << "," << arm2_pose.pose.orientation.y << "," << arm2_pose.pose.orientation.z << "," << arm2_pose.pose.orientation.w << ","
-                << diana7_pose.pose.position.x << "," << diana7_pose.pose.position.y << "," << diana7_pose.pose.position.z << ","
-                << diana7_pose.pose.orientation.x << "," << diana7_pose.pose.orientation.y << "," << diana7_pose.pose.orientation.z << "," << diana7_pose.pose.orientation.w;
-
-            for (size_t i = 0; i < latest_mag_data_.mag_x.size(); ++i) {
-                ofs << "," << latest_mag_data_.mag_x[i] << "," << latest_mag_data_.mag_y[i] << "," << latest_mag_data_.mag_z[i];
+            if (!first_entry_) {
+                ofs << ",\n";
             }
-            ofs << "\n";
+            first_entry_ = false;
+
+            ofs << "  {\n";
+            ofs << "    \"step\": " << step << ",\n";
+            ofs << "    \"timestamp\": " << std::fixed << std::setprecision(6) << avg_timestamp << ",\n";
+
+            auto write_pose = [&](const std::string& name, const geometry_msgs::Pose& p, bool last = false) {
+                ofs << "    \"" << name << "\": {\n";
+                ofs << "      \"position\": {\"x\": " << p.position.x << ", \"y\": " << p.position.y << ", \"z\": " << p.position.z << "},\n";
+                ofs << "      \"orientation\": {\"x\": " << p.orientation.x << ", \"y\": " << p.orientation.y << ", \"z\": " << p.orientation.z << ", \"w\": " << p.orientation.w << "}\n";
+                ofs << "    }" << (last ? "" : ",") << "\n";
+            };
+
+            ofs << "    \"poses\": {\n";
+            write_pose("arm1", arm1_pose.pose);
+            write_pose("arm2", arm2_pose.pose);
+            write_pose("diana7", diana7_pose.pose, true);
+            ofs << "    },\n";
+
+            ofs << "    \"magnetic_data\": [\n";
+            for (size_t i = 0; i < num_sensors; ++i) {
+                ofs << "      {\"id\": " << (i + 1) << ", \"x\": " << avg_x[i]
+                    << ", \"y\": " << avg_y[i] << ", \"z\": " << avg_z[i] << "}"
+                    << (i == num_sensors - 1 ? "" : ",") << "\n";
+            }
+            ofs << "    ]\n";
+            ofs << "  }";
+
             ofs.close();
-            ROS_INFO("Saved sensor data row (step %d)", step);
+            ROS_INFO("Saved JSON entry (step %d)", step);
         } else {
             ROS_ERROR("Failed to open output file: %s", config_.output_file.c_str());
         }
@@ -314,8 +370,19 @@ private:
             moveit::planning_interface::MoveGroupInterface::Plan plan;
             if (sync_group_->plan(plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS) {
                 sync_group_->execute(plan);
-                ROS_INFO("Step %d/%d completed. Waiting %.2fs...", i, config_.num_steps, config_.step_wait_time);
+                ROS_INFO("Step %d/%d completed. Waiting %.2fs for data collection...", i, config_.num_steps, config_.step_wait_time);
+
+                {
+                    std::lock_guard<std::mutex> lock(data_mutex_);
+                    mag_buffer_.clear();
+                    is_collecting_ = true;
+                }
                 ros::Duration(config_.step_wait_time).sleep();
+                {
+                    std::lock_guard<std::mutex> lock(data_mutex_);
+                    is_collecting_ = false;
+                }
+
                 saveSensorData(i);
             } else {
                 ROS_ERROR("Failed to plan to step %d", i);

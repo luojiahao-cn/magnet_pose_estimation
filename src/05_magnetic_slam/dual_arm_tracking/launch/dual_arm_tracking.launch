@@ -12,13 +12,18 @@
         <arg name="arm1_tool" value="none"/>
         <arg name="arm2_tool" value="tool300"/>
         <arg name="diana7_tool" value="bracket"/>
+        <arg name="use_rviz" value="false"/>
     </include>
 
     <include file="$(find zlab_robots_bringup)/launch/triple_arm/triple_arm_bringup.launch" unless="$(arg sim)">
         <arg name="arm1_tool" value="none"/>
         <arg name="arm2_tool" value="tool300"/>
         <arg name="diana7_tool" value="bracket"/>
+        <arg name="use_rviz" value="false"/>
     </include>
+
+    <!-- Start RViz -->
+    <node name="rviz" pkg="rviz" type="rviz" args="-d $(find dual_arm_tracking)/config/dual_arm_tracking.rviz" />
 
     <!-- Start Sensor Driver -->
     <include file="$(find mag_device_sensor)/launch/hardware.launch"/>

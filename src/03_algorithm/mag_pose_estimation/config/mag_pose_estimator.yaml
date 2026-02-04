@@ -5,7 +5,7 @@ logging_level: INFO
 config:
   # 坐标系配置
   frames:
-    output_frame: world
+    output_frame: sensor_array
     magnet_frame: magnet_estimated
     enable_tf: true
 

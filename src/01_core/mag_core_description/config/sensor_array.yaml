@@ -1,6 +1,6 @@
 config:
   frames:
-    parent: world
+    parent: diana7_bracket_tcp_link
     array: sensor_array
     sensor_frame_prefix: sensor_
     pose:
