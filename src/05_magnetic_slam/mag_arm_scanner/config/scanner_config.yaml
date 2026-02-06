@@ -16,15 +16,15 @@ estimated_pose_topic: "/magnetic/pose_estimated"
 # 1. Diana7 Planar Grid Scan (planar_grid_scan)
 # ==============================================================================
 plane_scan:
-  velocity_scaling: 0.01
-  acceleration_scaling: 0.01
+  velocity_scaling: 0.03
+  acceleration_scaling: 0.03
   settle_time: 1.0
   step_wait_time: 1.0
 
-  plane_width: 0.3
+  plane_width: 0.35
   plane_height: 0.4
-  steps_x: 30
-  steps_y: 30
+  steps_x: 10
+  steps_y: 11
   origin_pose: [0.50, -0.22, 1.0, 0, 3.14159, 1.5708]
   output_file: "data/01_planar_grid_scan.json"
 
@@ -36,7 +36,7 @@ single_arm:
   acceleration_scaling: 0.01
   settle_time: 1.0
   step_wait_time: 1.0
-  num_steps: 50
+  num_steps: 100
   output_file: "data/02_linear_scan.json"
 
   diana7_start_pose: [0.52, -0.22, 1.0, 0.0, 3.14159, 1.5708]
@@ -55,6 +55,7 @@ dual_arm:
 
   diana7_start_pose: [0.52, -0.22, 1.0, 0.0, 3.14159, 1.5708]
   diana7_end_pose: [0.77, 0.12, 1.0, 0.0, 3.14159, 1.5708]
+  arm2_intermediate_pose: [0.359, -0.636, 0.930, -1.654, 0.003, 1.619]
   arm2_start_pose: [0.50, -0.23, 0.97, -1.5708, 0.0, 0.7]
   arm2_end_pose: [0.75, 0.11, 0.97, -1.5708, 0.0, 0.7]
 

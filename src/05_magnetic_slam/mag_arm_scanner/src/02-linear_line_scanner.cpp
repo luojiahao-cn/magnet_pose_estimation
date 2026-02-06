@@ -63,8 +63,15 @@ public:
         // 0. 将 Arm2 移动到避让位置 (up)
         ROS_INFO("0. Moving Arm2 to 'up' position for clearance...");
         arm2_group_->setNamedTarget("up");
-        if (!arm2_group_->move()) {
-            ROS_WARN("Failed to move Arm2 to 'up'. Proceeding with caution...");
+        for (int retry = 1; retry <= 3; ++retry) {
+            if (arm2_group_->move()) {
+                break;
+            }
+            ROS_WARN("Attempt %d/3: Failed to move Arm2 to 'up'. Retrying in 1s...", retry);
+            ros::Duration(1.0).sleep();
+            if (retry == 3) {
+                ROS_ERROR("Failed to move Arm2 to 'up' after 3 attempts. Proceeding with caution...");
+            }
         }
 
         // 初始化输出文件头
@@ -97,7 +104,7 @@ public:
 
         // 2. 步进移动到终止位置并采集数据
         ROS_INFO("2. Starting Stepped Movement...");
-        performSteppedMove(d7_end);
+        performSteppedMove(d7_end, ros::Time::now());
 
         closeOutputFile();
     }
@@ -264,10 +271,13 @@ private:
 
     void setupGroup(moveit::planning_interface::MoveGroupInterface& group)
     {
+        ros::param::set("/move_group/allow_start_state_max_bounds_error", 0.01);
         group.setMaxVelocityScalingFactor(config_.velocity_scaling);
         group.setMaxAccelerationScalingFactor(config_.acceleration_scaling);
         group.setPlanningTime(5.0);
         group.setNumPlanningAttempts(5);
+        group.setGoalPositionTolerance(0.001);
+        group.setGoalOrientationTolerance(0.005);
     }
 
     geometry_msgs::Pose vectorToPose(const std::vector<double>& v)
@@ -299,22 +309,42 @@ private:
 
     bool moveToPose(moveit::planning_interface::MoveGroupInterface& group, const geometry_msgs::Pose& target_pose, const std::string& link_name)
     {
-        group.setPoseTarget(target_pose, link_name);
-        moveit::planning_interface::MoveGroupInterface::Plan plan;
-        if (group.plan(plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS) {
-            group.execute(plan);
-            return true;
+        for (int retry = 1; retry <= 3; ++retry) {
+            group.setStartStateToCurrentState();
+            ROS_INFO("Attempt %d/3 to move...", retry);
+            group.setPoseTarget(target_pose, link_name);
+            moveit::planning_interface::MoveGroupInterface::Plan plan;
+            if (group.plan(plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS) {
+                if (group.execute(plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS) {
+                    return true;
+                }
+            }
+            ros::Duration(0.5).sleep();
         }
         return false;
     }
 
-    void performSteppedMove(const geometry_msgs::Pose& target_pose)
+    void performSteppedMove(const geometry_msgs::Pose& target_pose, ros::Time start_time)
     {
         geometry_msgs::Pose start_pose = diana7_group_->getCurrentPose(config_.diana7_link).pose;
 
         for (int i = 1; i <= config_.num_steps; ++i) {
             double fraction = static_cast<double>(i) / config_.num_steps;
             geometry_msgs::Pose waypoint = interpolatePose(start_pose, target_pose, fraction);
+
+            ros::Duration elapsed = ros::Time::now() - start_time;
+            double avg_time_per_step = elapsed.toSec() / i;
+            double remaining_time = avg_time_per_step * (config_.num_steps - i);
+
+            int e_min = (int)elapsed.toSec() / 60;
+            int e_sec = (int)elapsed.toSec() % 60;
+            int r_min = (int)remaining_time / 60;
+            int r_sec = (int)remaining_time % 60;
+
+            ROS_INFO("---------------------------------------------------------");
+            ROS_INFO("Progress: [%d/%d] steps (%.1f%%)", i, config_.num_steps, (double)i/config_.num_steps*100.0);
+            ROS_INFO("Time: Elapsed: %dm %ds | Est. Remaining: %dm %ds", e_min, e_sec, r_min, r_sec);
+            ROS_INFO("---------------------------------------------------------");
 
             if (moveToPose(*diana7_group_, waypoint, config_.diana7_link)) {
                 // 1. 等待机械臂稳定 (settle time)

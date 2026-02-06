@@ -1,4 +1,7 @@
 <launch>
+    <!-- 日志配置 -->
+    <env name="ROSCONSOLE_CONFIG_FILE" value="$(find mag_arm_scanner)/config/rosconsole.conf"/>
+
     <!-- 平面扫描参数 -->
     <arg name="scan_config" default="$(find mag_arm_scanner)/config/scanner_config.yaml" />
     <arg name="sim" default="false"/>

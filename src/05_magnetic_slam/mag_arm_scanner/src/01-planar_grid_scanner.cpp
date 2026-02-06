@@ -59,13 +59,6 @@ public:
     {
         ROS_INFO("Starting Planar Scan (Based on dual_arm_tracking's robust logic)...");
 
-        // 0. 将 Arm2 移动到避让位置 (up)
-        ROS_INFO("0. Moving Arm2 to 'up' position for clearance...");
-        arm2_group_->setNamedTarget("up");
-        if (!arm2_group_->move()) {
-            ROS_WARN("Failed to move Arm2 to 'up'. Proceeding with caution...");
-        }
-
         initOutputFile();
 
         geometry_msgs::Pose origin = vectorToPose(config_.origin_pose);
@@ -80,9 +73,24 @@ public:
             return;
         }
 
-        // 2. 网格扫描 (S型路径)
+        // 2. 将 Arm2 移动到避让位置 (up)
+        ROS_INFO("2. Moving Arm2 to 'up' position for clearance...");
+        arm2_group_->setNamedTarget("up");
+        for (int retry = 1; retry <= 3; ++retry) {
+            if (arm2_group_->move()) {
+                break;
+            }
+            ROS_WARN("Attempt %d/3: Failed to move Arm2 to 'up'. Retrying in 1s...", retry);
+            ros::Duration(1.0).sleep();
+            if (retry == 3) {
+                ROS_ERROR("Failed to move Arm2 to 'up' after 3 attempts. Proceeding with caution...");
+            }
+        }
+
+        // 3. 网格扫描 (S型路径)
         int total_points = config_.steps_x * config_.steps_y;
         int current_point = 0;
+        ros::Time start_time = ros::Time::now();
 
         for (int j = 0; j < config_.steps_y; ++j) {
             double y_offset = (config_.steps_y > 1) ? (j * config_.plane_height / (config_.steps_y - 1)) : 0;
@@ -98,7 +106,22 @@ public:
                 waypoint.position.x += x_offset;
                 waypoint.position.y += y_offset;
 
-                ROS_INFO("Grid [%d, %d] - Point %d/%d", x_idx, j, ++current_point, total_points);
+                current_point++;
+                ros::Duration elapsed = ros::Time::now() - start_time;
+                double avg_time_per_point = elapsed.toSec() / (current_point > 1 ? current_point - 1 : 1);
+                double remaining_time = avg_time_per_point * (total_points - current_point + 1);
+                if (current_point == 1) remaining_time = 0;
+
+                int e_min = (int)elapsed.toSec() / 60;
+                int e_sec = (int)elapsed.toSec() % 60;
+                int r_min = (int)remaining_time / 60;
+                int r_sec = (int)remaining_time % 60;
+
+                ROS_INFO("---------------------------------------------------------");
+                ROS_INFO("Progress: [%d/%d] points (%.1f%%)", current_point, total_points, (double)current_point/total_points*100.0);
+                ROS_INFO("Grid Index: [%d, %d]", x_idx, j);
+                ROS_INFO("Time: Elapsed: %dm %ds | Est. Remaining: %dm %ds", e_min, e_sec, r_min, r_sec);
+                ROS_INFO("---------------------------------------------------------");
 
                 if (moveToPoseIK(waypoint)) {
                     // 1. 等待机械臂稳定 (settle time)
@@ -186,12 +209,13 @@ private:
     }
 
     void setupGroup(moveit::planning_interface::MoveGroupInterface& group) {
+        ros::param::set("/move_group/allow_start_state_max_bounds_error", 0.01);
         group.setMaxVelocityScalingFactor(config_.velocity_scaling);
         group.setMaxAccelerationScalingFactor(config_.acceleration_scaling);
         group.setPlanningTime(5.0);
         group.setNumPlanningAttempts(5);
-        group.setGoalPositionTolerance(0.005);
-        group.setGoalOrientationTolerance(0.01);
+        group.setGoalPositionTolerance(0.001);
+        group.setGoalOrientationTolerance(0.005);
     }
 
     void initOutputFile() {
@@ -206,27 +230,33 @@ private:
 
     // 与 dual_arm_tracking 核心逻辑一致：手动解算 IK，并设置为关节空间目标
     bool moveToPoseIK(const geometry_msgs::Pose& target) {
-        diana7_group_->setStartStateToCurrentState();
-        diana7_group_->clearPoseTargets();
+        for (int retry = 1; retry <= 3; ++retry) {
+            ROS_INFO("Attempt %d/3 to move to pose...", retry);
+            diana7_group_->setStartStateToCurrentState();
+            diana7_group_->clearPoseTargets();
 
-        // 确保应用参数中的速度/加速度限制
-        diana7_group_->setMaxVelocityScalingFactor(config_.velocity_scaling);
-        diana7_group_->setMaxAccelerationScalingFactor(config_.acceleration_scaling);
+            // 确保应用参数中的速度/加速度限制
+            diana7_group_->setMaxVelocityScalingFactor(config_.velocity_scaling);
+            diana7_group_->setMaxAccelerationScalingFactor(config_.acceleration_scaling);
 
-        moveit::core::RobotStatePtr kinematic_state = diana7_group_->getCurrentState();
-        const moveit::core::JointModelGroup* joint_model_group = kinematic_state->getJointModelGroup(config_.diana7_group);
+            moveit::core::RobotStatePtr kinematic_state = diana7_group_->getCurrentState();
+            const moveit::core::JointModelGroup* joint_model_group = kinematic_state->getJointModelGroup(config_.diana7_group);
 
-        // 使用 IK 求解
-        bool found_ik = kinematic_state->setFromIK(joint_model_group, target, config_.diana7_link, 10, 0.1);
+            // 使用 IK 求解
+            bool found_ik = kinematic_state->setFromIK(joint_model_group, target, config_.diana7_link, 10, 0.1);
 
-        if (found_ik) {
-            diana7_group_->setJointValueTarget(*kinematic_state);
-            moveit::planning_interface::MoveGroupInterface::Plan plan;
-            if (diana7_group_->plan(plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS) {
-                return (diana7_group_->execute(plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
+            if (found_ik) {
+                diana7_group_->setJointValueTarget(*kinematic_state);
+                moveit::planning_interface::MoveGroupInterface::Plan plan;
+                if (diana7_group_->plan(plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS) {
+                    if (diana7_group_->execute(plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS) {
+                        return true;
+                    }
+                }
+            } else {
+                ROS_ERROR("Failed to compute IK solution for target pose.");
             }
-        } else {
-            ROS_ERROR("Failed to compute IK solution for target pose.");
+            ros::Duration(0.5).sleep();
         }
         return false;
     }

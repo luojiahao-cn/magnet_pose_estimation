@@ -30,6 +30,7 @@ struct MoveConfig {
 
     std::vector<double> diana7_start_pose;
     std::vector<double> diana7_end_pose;
+    std::vector<double> arm2_intermediate_pose;
     std::vector<double> arm2_start_pose;
     std::vector<double> arm2_end_pose;
 
@@ -69,8 +70,8 @@ public:
 
         // 规划组设置
         sync_group_->setPlanningTime(10.0);
-        sync_group_->setGoalPositionTolerance(0.01);
-        sync_group_->setGoalOrientationTolerance(0.05);
+        sync_group_->setGoalPositionTolerance(0.001);
+        sync_group_->setGoalOrientationTolerance(0.005);
     }
 
     void run()
@@ -82,19 +83,25 @@ public:
 
         geometry_msgs::Pose d7_start = vectorToPose(config_.diana7_start_pose);
         geometry_msgs::Pose d7_end = vectorToPose(config_.diana7_end_pose);
+        geometry_msgs::Pose a2_inter = vectorToPose(config_.arm2_intermediate_pose);
         geometry_msgs::Pose a2_start = vectorToPose(config_.arm2_start_pose);
         geometry_msgs::Pose a2_end = vectorToPose(config_.arm2_end_pose);
 
         // 1. 分别将机械臂移动到起始位置
-        ROS_INFO("1. Moving Diana7 to Start Position...");
-        if (!moveToPose(*diana7_group_, d7_start, config_.diana7_link)) {
-            ROS_ERROR("Failed to move Diana7 to start pose.");
-            return;
+        ROS_INFO("1. Moving Arm2 to Intermediate Position...");
+        if (!moveToPose(*arm2_group_, a2_inter, config_.arm2_link)) {
+            ROS_WARN("Failed to move Arm2 to intermediate pose. Attempting start pose anyway...");
         }
 
         ROS_INFO("2. Moving Arm2 to Start Position...");
         if (!moveToPose(*arm2_group_, a2_start, config_.arm2_link)) {
             ROS_ERROR("Failed to move Arm2 to start pose.");
+            return;
+        }
+
+        ROS_INFO("3. Moving Diana7 to Start Position...");
+        if (!moveToPose(*diana7_group_, d7_start, config_.diana7_link)) {
+            ROS_ERROR("Failed to move Diana7 to start pose.");
             return;
         }
 
@@ -176,6 +183,7 @@ private:
         std::vector<double> zero_pose = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
         mnh.param<std::vector<double>>("diana7_start_pose", config_.diana7_start_pose, zero_pose);
         mnh.param<std::vector<double>>("diana7_end_pose", config_.diana7_end_pose, zero_pose);
+        mnh.param<std::vector<double>>("arm2_intermediate_pose", config_.arm2_intermediate_pose, zero_pose);
         mnh.param<std::vector<double>>("arm2_start_pose", config_.arm2_start_pose, zero_pose);
         mnh.param<std::vector<double>>("arm2_end_pose", config_.arm2_end_pose, zero_pose);
 
@@ -317,10 +325,13 @@ private:
 
     void setupGroup(moveit::planning_interface::MoveGroupInterface& group)
     {
+        ros::param::set("/move_group/allow_start_state_max_bounds_error", 0.01);
         group.setMaxVelocityScalingFactor(config_.velocity_scaling);
         group.setMaxAccelerationScalingFactor(config_.acceleration_scaling);
         group.setPlanningTime(5.0);
         group.setNumPlanningAttempts(5);
+        group.setGoalPositionTolerance(0.001);
+        group.setGoalOrientationTolerance(0.005);
     }
 
     geometry_msgs::Pose vectorToPose(const std::vector<double>& v)
@@ -373,6 +384,7 @@ private:
 
         // 2. 遍历执行每一个插值点
         ROS_INFO("Executing stepped Cartesian synchronized movement (steps: %d)...", config_.num_steps);
+        ros::Time start_time = ros::Time::now();
 
         for (int i = 1; i <= config_.num_steps; ++i) {
             double fraction = static_cast<double>(i) / config_.num_steps;
@@ -380,27 +392,56 @@ private:
             geometry_msgs::Pose d7_waypoint = interpolatePose(d7_start, d7_target, fraction);
             geometry_msgs::Pose a2_waypoint = interpolatePose(a2_start, a2_target, fraction);
 
-            // 重新获取当前状态，因为上一步可能已经改变了状态
-            moveit::core::RobotStatePtr current_state = sync_group_->getCurrentState();
-            const moveit::core::JointModelGroup* arm2_jmg = current_state->getJointModelGroup(config_.arm2_group);
-            const moveit::core::JointModelGroup* d7_jmg = current_state->getJointModelGroup(config_.diana7_group);
+            ros::Duration elapsed = ros::Time::now() - start_time;
+            double avg_time_per_step = elapsed.toSec() / (i > 1 ? i - 1 : 1);
+            double remaining_time = avg_time_per_step * (config_.num_steps - i + 1);
+            if (i == 1) remaining_time = 0;
 
-            moveit::core::RobotStatePtr waypoint_state(new moveit::core::RobotState(*current_state));
+            int e_min = (int)elapsed.toSec() / 60;
+            int e_sec = (int)elapsed.toSec() % 60;
+            int r_min = (int)remaining_time / 60;
+            int r_sec = (int)remaining_time % 60;
 
-            bool ok = true;
-            if (!waypoint_state->setFromIK(arm2_jmg, a2_waypoint, config_.arm2_link)) ok = false;
-            if (!waypoint_state->setFromIK(d7_jmg, d7_waypoint, config_.diana7_link)) ok = false;
+            ROS_INFO("---------------------------------------------------------");
+            ROS_INFO("Progress: [%d/%d] steps (%.1f%%)", i, config_.num_steps, (double)i/config_.num_steps*100.0);
+            ROS_INFO("Time: Elapsed: %dm %ds | Est. Remaining: %dm %ds", e_min, e_sec, r_min, r_sec);
+            ROS_INFO("---------------------------------------------------------");
 
-            if (!ok) {
-                ROS_ERROR("Failed to compute IK for Cartesian waypoint %d/%d", i, config_.num_steps);
-                return;
+            bool step_success = false;
+            for (int retry = 1; retry <= 3; ++retry) {
+                sync_group_->setStartStateToCurrentState();
+                ROS_INFO("Attempt %d/3 to move to step %d...", retry, i);
+
+                // 重新获取当前状态，因为上一步可能已经改变了状态
+                moveit::core::RobotStatePtr current_state = sync_group_->getCurrentState();
+                const moveit::core::JointModelGroup* arm2_jmg = current_state->getJointModelGroup(config_.arm2_group);
+                const moveit::core::JointModelGroup* d7_jmg = current_state->getJointModelGroup(config_.diana7_group);
+
+                moveit::core::RobotStatePtr waypoint_state(new moveit::core::RobotState(*current_state));
+
+                bool ok = true;
+                if (!waypoint_state->setFromIK(arm2_jmg, a2_waypoint, config_.arm2_link)) ok = false;
+                if (!waypoint_state->setFromIK(d7_jmg, d7_waypoint, config_.diana7_link)) ok = false;
+
+                if (!ok) {
+                    ROS_ERROR("Failed to compute IK for Cartesian waypoint %d/%d (attempt %d)", i, config_.num_steps, retry);
+                    ros::Duration(0.5).sleep();
+                    continue;
+                }
+
+                // 执行移动到当前点
+                sync_group_->setJointValueTarget(*waypoint_state);
+                moveit::planning_interface::MoveGroupInterface::Plan plan;
+                if (sync_group_->plan(plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS) {
+                    if (sync_group_->execute(plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS) {
+                        step_success = true;
+                        break;
+                    }
+                }
+                ros::Duration(0.5).sleep();
             }
 
-            // 执行移动到当前点
-            sync_group_->setJointValueTarget(*waypoint_state);
-            moveit::planning_interface::MoveGroupInterface::Plan plan;
-            if (sync_group_->plan(plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS) {
-                sync_group_->execute(plan);
+            if (step_success) {
 
                 // 1. 等待机械臂稳定 (settle time)
                 if (config_.settle_time > 0) {
@@ -422,7 +463,7 @@ private:
 
                 saveSensorData(i);
             } else {
-                ROS_ERROR("Failed to plan to step %d", i);
+                ROS_ERROR("Failed to plan to step %d after 3 attempts.", i);
                 return;
             }
         }
