@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(dual_arm_tracking)
+project(mag_arm_scanner)
 
 add_compile_options(-Wall -Wextra -Wpedantic)
 set(CMAKE_CXX_STANDARD 17)
@@ -22,9 +22,19 @@ catkin_package(
   CATKIN_DEPENDS roscpp geometry_msgs moveit_ros_planning_interface tf2 tf2_geometry_msgs mag_core_msgs
 )
 
-add_executable(dual_arm_tracking_node src/dual_arm_tracking.cpp)
+add_executable(01_planar_grid_scanner_node src/01-planar_grid_scanner.cpp)
+add_executable(02_linear_line_scanner_node src/02-linear_line_scanner.cpp)
+add_executable(03_dual_sync_tracker_node src/03-dual_sync_tracker.cpp)
 
-target_link_libraries(dual_arm_tracking_node
+target_link_libraries(01_planar_grid_scanner_node
+  ${catkin_LIBRARIES}
+)
+
+target_link_libraries(02_linear_line_scanner_node
+  ${catkin_LIBRARIES}
+)
+
+target_link_libraries(03_dual_sync_tracker_node
   ${catkin_LIBRARIES}
 )
 

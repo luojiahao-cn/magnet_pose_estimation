@@ -9,6 +9,7 @@
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <mag_core_msgs/MagSensorArray.h>
+#include <mag_core_msgs/MagnetPose.h>
 #include <vector>
 #include <string>
 #include <fstream>
@@ -35,8 +36,10 @@ struct MoveConfig {
     double velocity_scaling;
     double acceleration_scaling;
     int num_steps;
+    double settle_time;
     double step_wait_time;
     std::string output_file;
+    std::string estimated_pose_topic;
 };
 
 class DualArmScan
@@ -51,6 +54,8 @@ public:
 
         // 订阅传感器数据
         mag_sub_ = nh_.subscribe("/mag_device_sensor/data_mT", 10, &DualArmScan::magCallback, this);
+        // 订阅估计位姿数据
+        mag_pose_sub_ = nh_.subscribe(config_.estimated_pose_topic, 10, &DualArmScan::estimatedPoseCallback, this);
 
         // 初始化MoveGroups
         arm1_group_ = std::make_unique<moveit::planning_interface::MoveGroupInterface>(config_.arm1_group);
@@ -121,10 +126,13 @@ private:
     std::unique_ptr<ros::AsyncSpinner> spinner_;
 
     ros::Subscriber mag_sub_;
+    ros::Subscriber mag_pose_sub_;
     mag_core_msgs::MagSensorArray latest_mag_data_;
+    mag_core_msgs::MagnetPose latest_estimated_pose_;
     std::vector<mag_core_msgs::MagSensorArray> mag_buffer_;
     bool is_collecting_ = false;
     std::mutex data_mutex_;
+    std::mutex pose_mutex_;
 
     std::unique_ptr<moveit::planning_interface::MoveGroupInterface> arm1_group_;
     std::unique_ptr<moveit::planning_interface::MoveGroupInterface> arm2_group_;
@@ -142,6 +150,12 @@ private:
         }
     }
 
+    void estimatedPoseCallback(const mag_core_msgs::MagnetPose::ConstPtr& msg)
+    {
+        std::lock_guard<std::mutex> lock(pose_mutex_);
+        latest_estimated_pose_ = *msg;
+    }
+
     void loadParams()
     {
         ros::NodeHandle pnh("~");
@@ -154,23 +168,27 @@ private:
         pnh.param<std::string>("arm1_link", config_.arm1_link, "arm1_ee_link");
         pnh.param<std::string>("arm2_link", config_.arm2_link, "arm2_tool300_tcp_link");
         pnh.param<std::string>("diana7_link", config_.diana7_link, "diana7_bracket_tcp_link");
+        pnh.param<std::string>("estimated_pose_topic", config_.estimated_pose_topic, "/magnetic/pose_estimated");
 
-        // 默认姿态 (0s) - 用户应通过launch文件或参数服务器提供这些参数
+        // 任务特定参数从 dual_arm 子命名空间读取
+        ros::NodeHandle mnh("~dual_arm");
+
         std::vector<double> zero_pose = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
-        pnh.param<std::vector<double>>("diana7_start_pose", config_.diana7_start_pose, zero_pose);
-        pnh.param<std::vector<double>>("diana7_end_pose", config_.diana7_end_pose, zero_pose);
-        pnh.param<std::vector<double>>("arm2_start_pose", config_.arm2_start_pose, zero_pose);
-        pnh.param<std::vector<double>>("arm2_end_pose", config_.arm2_end_pose, zero_pose);
+        mnh.param<std::vector<double>>("diana7_start_pose", config_.diana7_start_pose, zero_pose);
+        mnh.param<std::vector<double>>("diana7_end_pose", config_.diana7_end_pose, zero_pose);
+        mnh.param<std::vector<double>>("arm2_start_pose", config_.arm2_start_pose, zero_pose);
+        mnh.param<std::vector<double>>("arm2_end_pose", config_.arm2_end_pose, zero_pose);
 
-        pnh.param<double>("velocity_scaling", config_.velocity_scaling, 0.1);
-        pnh.param<double>("acceleration_scaling", config_.acceleration_scaling, 0.1);
-        pnh.param<int>("num_steps", config_.num_steps, 20);
-        pnh.param<double>("step_wait_time", config_.step_wait_time, 0.5);
-        pnh.param<std::string>("output_file", config_.output_file, "scan_results.json");
+        mnh.param<double>("velocity_scaling", config_.velocity_scaling, 0.05);
+        mnh.param<double>("acceleration_scaling", config_.acceleration_scaling, 0.05);
+        mnh.param<int>("num_steps", config_.num_steps, 50);
+        mnh.param<double>("settle_time", config_.settle_time, 0.2);
+        mnh.param<double>("step_wait_time", config_.step_wait_time, 1.0);
+        mnh.param<std::string>("output_file", config_.output_file, "scan_results.json");
 
         // 如果路径不是绝对路径，则将其相对于包路径
         if (!config_.output_file.empty() && config_.output_file[0] != '/') {
-            std::string pkg_path = ros::package::getPath("dual_arm_tracking");
+            std::string pkg_path = ros::package::getPath("mag_arm_scanner");
             config_.output_file = pkg_path + "/" + config_.output_file;
         }
     }
@@ -202,6 +220,12 @@ private:
     void saveSensorData(int step)
     {
         std::lock_guard<std::mutex> lock(data_mutex_);
+
+        mag_core_msgs::MagnetPose est_pose;
+        {
+            std::lock_guard<std::mutex> lock(pose_mutex_);
+            est_pose = latest_estimated_pose_;
+        }
 
         if (latest_mag_data_.mag_x.empty()) {
             ROS_WARN("No sensor data received yet, skipping save for step %d", step);
@@ -266,6 +290,13 @@ private:
             write_pose("arm1", arm1_pose.pose);
             write_pose("arm2", arm2_pose.pose);
             write_pose("diana7", diana7_pose.pose, true);
+            ofs << "    },\n";
+
+            ofs << "    \"estimated_pose\": {\n";
+            ofs << "      \"position\": {\"x\": " << est_pose.position.x << ", \"y\": " << est_pose.position.y << ", \"z\": " << est_pose.position.z << "},\n";
+            ofs << "      \"orientation\": {\"x\": " << est_pose.orientation.x << ", \"y\": " << est_pose.orientation.y << ", \"z\": " << est_pose.orientation.z << ", \"w\": " << est_pose.orientation.w << "},\n";
+            ofs << "      \"strength\": " << est_pose.magnetic_strength << ",\n";
+            ofs << "      \"confidence\": " << est_pose.confidence << "\n";
             ofs << "    },\n";
 
             ofs << "    \"magnetic_data\": [\n";
@@ -370,7 +401,13 @@ private:
             moveit::planning_interface::MoveGroupInterface::Plan plan;
             if (sync_group_->plan(plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS) {
                 sync_group_->execute(plan);
-                ROS_INFO("Step %d/%d completed. Waiting %.2fs for data collection...", i, config_.num_steps, config_.step_wait_time);
+
+                // 1. 等待机械臂稳定 (settle time)
+                if (config_.settle_time > 0) {
+                    ros::Duration(config_.settle_time).sleep();
+                }
+
+                ROS_INFO("Step %d/%d completed. Collecting data for %.2fs...", i, config_.num_steps, config_.step_wait_time);
 
                 {
                     std::lock_guard<std::mutex> lock(data_mutex_);

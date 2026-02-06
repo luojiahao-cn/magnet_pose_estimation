@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>dual_arm_tracking</name>
+  <name>mag_arm_scanner</name>
   <version>0.0.0</version>
-  <description>The dual_arm_tracking package</description>
+  <description>The mag_arm_scanner package for magnetic pose estimation and arm scanning</description>
 
   <!-- One maintainer tag required, multiple allowed, one person per tag -->
   <!-- Example:  -->

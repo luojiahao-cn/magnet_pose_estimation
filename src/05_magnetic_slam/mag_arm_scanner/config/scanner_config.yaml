@@ -1,0 +1,60 @@
+# ==============================================================================
+# Common Hardware & Group Configuration
+# ==============================================================================
+arm1_group: "arm1"
+arm2_group: "arm2"
+diana7_group: "diana7"
+sync_group: "triple_arms"
+
+arm1_link: "arm1_ee_link"
+arm2_link: "arm2_tool300_tcp_link"
+diana7_link: "diana7_bracket_tcp_link"
+
+estimated_pose_topic: "/magnetic/pose_estimated"
+
+# ==============================================================================
+# 1. Diana7 Planar Grid Scan (planar_grid_scan)
+# ==============================================================================
+plane_scan:
+  velocity_scaling: 0.01
+  acceleration_scaling: 0.01
+  settle_time: 1.0
+  step_wait_time: 1.0
+
+  plane_width: 0.3
+  plane_height: 0.4
+  steps_x: 30
+  steps_y: 30
+  origin_pose: [0.50, -0.22, 1.0, 0, 3.14159, 1.5708]
+  output_file: "data/01_planar_grid_scan.json"
+
+# ==============================================================================
+# 2. Diana7 Single Arm Line Scan (linear_line_scan)
+# ==============================================================================
+single_arm:
+  velocity_scaling: 0.01
+  acceleration_scaling: 0.01
+  settle_time: 1.0
+  step_wait_time: 1.0
+  num_steps: 50
+  output_file: "data/02_linear_scan.json"
+
+  diana7_start_pose: [0.52, -0.22, 1.0, 0.0, 3.14159, 1.5708]
+  diana7_end_pose: [0.77, 0.12, 1.0, 0.0, 3.14159, 1.5708]
+
+# ==============================================================================
+# 3. Dual Arm Synchronized Scan (dual_sync_track)
+# ==============================================================================
+dual_arm:
+  velocity_scaling: 0.01
+  acceleration_scaling: 0.01
+  settle_time: 1.0
+  step_wait_time: 1.0
+  num_steps: 100
+  output_file: "data/03_dual_sync_scan.json"
+
+  diana7_start_pose: [0.52, -0.22, 1.0, 0.0, 3.14159, 1.5708]
+  diana7_end_pose: [0.77, 0.12, 1.0, 0.0, 3.14159, 1.5708]
+  arm2_start_pose: [0.50, -0.23, 0.97, -1.5708, 0.0, 0.7]
+  arm2_end_pose: [0.75, 0.11, 0.97, -1.5708, 0.0, 0.7]
+

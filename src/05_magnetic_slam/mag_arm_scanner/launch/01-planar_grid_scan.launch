@@ -1,0 +1,32 @@
+<launch>
+    <!-- 平面扫描参数 -->
+    <arg name="scan_config" default="$(find mag_arm_scanner)/config/scanner_config.yaml" />
+    <arg name="sim" default="false"/>
+
+    <!-- 扫描范围设置 (单位: 米) -->
+    <arg name="plane_width" default="0.35"/>
+    <arg name="plane_height" default="0.4"/>
+    <arg name="steps_x" default="15"/>
+    <arg name="steps_y" default="15"/>
+
+    <!-- 加载环境与驱动 -->
+    <include file="$(find zlab_environment)/launch/load_environment.launch"/>
+    <include file="$(find zlab_robots_bringup)/launch/triple_arm/triple_arm_bringup.launch" unless="$(arg sim)">
+        <arg name="arm1_tool" value="none"/>
+        <arg name="arm2_tool" value="tool300"/>
+        <arg name="diana7_tool" value="bracket"/>
+        <arg name="use_rviz" value="false"/>
+    </include>
+
+    <!-- 传感器与位姿估计 -->
+    <include file="$(find mag_device_sensor)/launch/hardware.launch"/>
+    <include file="$(find mag_pose_estimator)/launch/mag_pose_estimator.launch"/>
+
+    <!-- Start The Planar Scan Node -->
+    <node pkg="mag_arm_scanner" type="01_planar_grid_scanner_node" name="planar_grid_scan" output="screen">
+        <rosparam command="load" file="$(arg scan_config)" />
+    </node>
+
+    <!-- 可视化 -->
+    <node name="rviz" pkg="rviz" type="rviz" args="-d $(find mag_arm_scanner)/config/scanner_view.rviz" />
+</launch>
